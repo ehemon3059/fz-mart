@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/admin/products", label: "Products" },
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/banners", label: "Banners" },
+  { href: "/admin/flash-sales", label: "Flash Sales" },
   { href: "/admin/pages", label: "Pages" },
   { href: "/admin/faq", label: "FAQ" },
   { href: "/admin/orders", label: "Orders" },

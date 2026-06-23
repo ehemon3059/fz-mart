@@ -1,79 +1,87 @@
 import Link from "next/link";
+import { FacebookIcon, InstagramIcon, YoutubeIcon } from "./icons";
 
-const INFO_LINKS = [
-  { href: "/pages/about-us", label: "About us" },
-  { href: "/pages/contact-us", label: "Contact us" },
-  { href: "/pages/company-information", label: "Company Information" },
-  { href: "/pages/terms-and-conditions", label: "Terms & Conditions" },
-  { href: "/pages/privacy-policy", label: "Privacy Policy" },
-];
-
-const SUPPORT_LINKS = [
-  { href: "/pages/support-center", label: "Support Center" },
-  { href: "/pages/how-to-order", label: "How to Order" },
-  { href: "/pages/order-tracking", label: "Order Tracking" },
-  { href: "/pages/payment", label: "Payment" },
-  { href: "/pages/shipping", label: "Shipping" },
-  { href: "/pages/faq", label: "FAQ" },
-];
-
-const CONSUMER_POLICY_LINKS = [
-  { href: "/pages/happy-return", label: "Happy Return" },
-  { href: "/pages/refund-policy", label: "Refund Policy" },
-  { href: "/pages/exchange", label: "Exchange" },
-  { href: "/pages/cancellation", label: "Cancellation" },
-  { href: "/pages/pre-order", label: "Pre-Order" },
-  { href: "/pages/extra-discount", label: "Extra Discount" },
+const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
+  {
+    heading: "Shop",
+    links: [
+      { label: "Electronics", href: "/products" },
+      { label: "Fashion", href: "/products" },
+      { label: "Home & Living", href: "/products" },
+      { label: "Grocery", href: "/products" },
+      { label: "Beauty", href: "/products" },
+    ],
+  },
+  {
+    heading: "Customer Care",
+    links: [
+      { label: "Track Order", href: "/track" },
+      { label: "Returns & Refunds", href: "/pages/shipping" },
+      { label: "Shipping Info", href: "/pages/shipping" },
+      { label: "FAQ", href: "/pages/faq" },
+      { label: "Support Center", href: "/pages/support-center" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About Us", href: "/pages/about-us" },
+      { label: "Contact Us", href: "/pages/contact-us" },
+      { label: "Company Information", href: "/pages/company-information" },
+      { label: "How to Order", href: "/pages/how-to-order" },
+    ],
+  },
+  {
+    heading: "Policies",
+    links: [
+      { label: "Terms & Conditions", href: "/pages/terms-and-conditions" },
+      { label: "Privacy Policy", href: "/pages/privacy-policy" },
+      { label: "Payment", href: "/pages/payment" },
+      { label: "Order Tracking", href: "/pages/order-tracking" },
+    ],
+  },
 ];
 
 export default function Footer() {
   return (
-    <footer className="border-t mt-12 py-8">
-      <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
-        <div>
-          <p className="font-bold text-lg">fz-mart</p>
-          <p className="mt-2 text-sm text-gray-500">Cash on Delivery only.</p>
+    <footer className="ft">
+      <div className="wrap">
+        <div className="ft-top">
+          <div className="ft-brand">
+            <Link href="/" className="logo">
+              <span className="mark"><span>FZ</span></span>
+              <span><b>FZ</b><i>Mart</i></span>
+            </Link>
+            <p>
+              Bangladesh&apos;s friendly online marketplace. Quality products, honest prices
+              and reliable cash-on-delivery to your doorstep.
+            </p>
+            <div className="ft-pay">
+              {["bKash", "Nagad", "Rocket", "VISA", "COD"].map((p) => (
+                <span className="pay" key={p}>{p}</span>
+              ))}
+            </div>
+          </div>
+
+          {COLS.map((col) => (
+            <div className="ft-col" key={col.heading}>
+              <h4>{col.heading}</h4>
+              {col.links.map((l) => (
+                <Link key={l.label} href={l.href}>{l.label}</Link>
+              ))}
+            </div>
+          ))}
         </div>
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2">Information</h3>
-          <ul className="space-y-1 text-sm text-gray-600">
-            {INFO_LINKS.map((link) => (
-              <li key={link.href}>
-                <Link href={link.href} className="hover:underline">
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2">Support</h3>
-          <ul className="space-y-1 text-sm text-gray-600">
-            {SUPPORT_LINKS.map((link) => (
-              <li key={link.href}>
-                <Link href={link.href} className="hover:underline">
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2">Consumer Policy</h3>
-          <ul className="space-y-1 text-sm text-gray-600">
-            {CONSUMER_POLICY_LINKS.map((link) => (
-              <li key={link.href}>
-                <Link href={link.href} className="hover:underline">
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
+
+        <div className="ft-bot">
+          <span>© {new Date().getFullYear()} FZ Mart. All rights reserved.</span>
+          <div className="ft-social">
+            <a href="#" aria-label="Facebook"><FacebookIcon /></a>
+            <a href="#" aria-label="Instagram"><InstagramIcon /></a>
+            <a href="#" aria-label="YouTube"><YoutubeIcon /></a>
+          </div>
         </div>
       </div>
-      <p className="text-center text-sm text-gray-500 mt-8">
-        © {new Date().getFullYear()} fz-mart
-      </p>
     </footer>
   );
 }

@@ -16,6 +16,27 @@ interface Props {
 export default function BannerForm({ banner }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [imageUrl, setImageUrl] = useState(banner?.imageUrl ?? "/placeholder.svg");
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setImageUrl(data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function handleSubmit(formData: FormData) {
     setError(null);
@@ -28,16 +49,19 @@ export default function BannerForm({ banner }: Props) {
   return (
     <form action={handleSubmit} className="space-y-4 max-w-md">
       <div>
-        <label className="block text-sm font-medium mb-1">Image URL</label>
+        <label className="block text-sm font-medium mb-1">Banner Image</label>
+        {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt="" className="w-full h-32 object-cover rounded border mb-2" />
+        )}
         <input
-          name="imageUrl"
-          required
-          defaultValue={banner?.imageUrl ?? "/placeholder.svg"}
-          className="w-full border rounded px-3 py-2"
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="w-full border rounded px-3 py-2 text-sm"
         />
-        <p className="text-xs text-gray-500 mt-1">
-          Use a path under /public (e.g. /placeholder.svg) until an upload flow exists.
-        </p>
+        {uploading && <p className="text-xs text-gray-500 mt-1">Uploading...</p>}
+        <input type="hidden" name="imageUrl" value={imageUrl} required />
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">Link (optional)</label>
@@ -64,7 +88,7 @@ export default function BannerForm({ banner }: Props) {
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || uploading}
         className="bg-black text-white px-4 py-2 rounded font-medium disabled:opacity-50"
       >
         {pending ? "Saving..." : "Save"}

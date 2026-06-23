@@ -65,6 +65,7 @@ model Product {
   subcategory   Subcategory    @relation(fields: [subcategoryId], references: [id])
   images        ProductImage[]
   orderItems    OrderItem[]
+  flashSales    FlashSaleProduct[]
 
   @@index([subcategoryId, status])
   @@index([isFeatured, status])
@@ -95,6 +96,38 @@ model Banner {
   createdAt DateTime @default(now())
 
   @@index([isActive, sortOrder])
+}
+
+// A scheduled campaign with a curated product list. "Active" on the
+// storefront means isActive=true AND now is within [startsAt, endsAt] —
+// the boolean lets an admin pause a campaign without losing its dates.
+model FlashSale {
+  id        Int               @id @default(autoincrement())
+  name      String
+  startsAt  DateTime
+  endsAt    DateTime
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  products  FlashSaleProduct[]
+
+  @@index([isActive, startsAt, endsAt])
+}
+
+model FlashSaleProduct {
+  id          Int       @id @default(autoincrement())
+  flashSaleId Int
+  productId   Int
+  // Optional override price (paisa) for the duration of the sale, distinct
+  // from the product's own discountPrice so the same product can carry a
+  // deeper, time-boxed cut without permanently changing its catalog price.
+  salePrice   Int?
+  sortOrder   Int       @default(0)
+  flashSale   FlashSale @relation(fields: [flashSaleId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([flashSaleId, productId])
+  @@index([flashSaleId, sortOrder])
 }
 
 // ─────────────────────────────────────────────────────────────

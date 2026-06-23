@@ -2,55 +2,71 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatTaka } from "@/lib/money";
 import type { ProductWithImages } from "@/server/products";
+import { HeartIcon } from "./icons";
 
-export default function ProductCard({ product }: { product: ProductWithImages }) {
+type Badge = "sale" | "new";
+
+export default function ProductCard({
+  product,
+  badge,
+}: {
+  product: ProductWithImages;
+  /** Optional corner ribbon. Falls back to the product's own promoBadge. */
+  badge?: Badge;
+}) {
   const primaryImage =
     product.images.find((img) => img.isPrimary)?.url ??
     product.images[0]?.url ??
-    "/placeholder.svg";
+    null;
 
   const hasDiscount =
     product.discountPrice != null && product.discountPrice < product.price;
+  const price = hasDiscount ? product.discountPrice! : product.price;
+  const discountPct = hasDiscount
+    ? Math.round((1 - product.discountPrice! / product.price) * 100)
+    : 0;
   const outOfStock = product.stock <= 0;
 
   return (
-    <Link
-      href={`/products/${product.slug}`}
-      className="group block border rounded-lg bg-white overflow-hidden hover:shadow-md transition-shadow"
-    >
-      <div className="relative aspect-square bg-gray-100">
-        <Image
-          src={primaryImage}
-          alt={product.name}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 50vw, 25vw"
-        />
-        {product.promoBadge && (
-          <span className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded">
-            {product.promoBadge}
-          </span>
+    <Link className="card" href={`/products/${product.slug}`}>
+      <div className="c-img">
+        {badge === "sale" && <span className="badge sale">SALE</span>}
+        {badge === "new" && <span className="badge new">NEW</span>}
+        {!badge && product.promoBadge && (
+          <span className="badge promo">{product.promoBadge}</span>
         )}
-        {outOfStock && (
-          <span className="absolute inset-0 bg-white/70 flex items-center justify-center text-sm font-semibold text-gray-700">
-            Out of Stock
-          </span>
+        {hasDiscount && <span className="disc-pill">-{discountPct}%</span>}
+
+        {primaryImage ? (
+          <Image
+            src={primaryImage}
+            alt={product.name}
+            fill
+            sizes="(max-width: 760px) 50vw, 20vw"
+            style={{ objectFit: "cover" }}
+          />
+        ) : (
+          <div className="ph">
+            <span className="ph-lbl">product</span>
+          </div>
         )}
+
+        {outOfStock && <div className="c-oos-overlay">Out of stock</div>}
+        <span className="wish" aria-hidden>
+          <HeartIcon size={16} />
+        </span>
       </div>
-      <div className="p-3">
-        <h3 className="text-sm font-medium text-gray-900 line-clamp-2 group-hover:underline">
-          {product.name}
-        </h3>
-        <div className="mt-1 flex items-baseline gap-2">
-          <span className="text-base font-semibold text-gray-900">
-            {formatTaka(hasDiscount ? product.discountPrice! : product.price)}
-          </span>
-          {hasDiscount && (
-            <span className="text-sm text-gray-400 line-through">
-              {formatTaka(product.price)}
-            </span>
-          )}
-        </div>
+
+      <div className="c-body">
+        <div className="c-name">{product.name}</div>
+        {outOfStock ? (
+          <div className="c-oos">Out of stock</div>
+        ) : (
+          <div className="c-price">
+            <span className="now">{formatTaka(price)}</span>
+            {hasDiscount && <span className="was">{formatTaka(product.price)}</span>}
+          </div>
+        )}
       </div>
     </Link>
   );
