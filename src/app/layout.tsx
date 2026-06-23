@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Manrope, Spline_Sans_Mono } from "next/font/google";
 import { isIpBlocked } from "@/lib/ip-block";
 import { getClientIp } from "@/lib/client-ip";
 import "./globals.css";
@@ -11,6 +11,19 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+// Used only by the admin Pages screens (see tailwind.config.ts `font-sans`
+// override there) — kept separate from Geist so the rest of the site is
+// unaffected.
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+});
+
+const splineSansMono = Spline_Sans_Mono({
+  variable: "--font-spline-mono",
   subsets: ["latin"],
 });
 
@@ -35,7 +48,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${splineSansMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-gray-50">
         {blocked ? (

@@ -42,6 +42,34 @@ export const PAGE_FALLBACK_TITLES: Record<(typeof PAGE_SLUGS)[number], string> =
   "extra-discount": "Extra Discount",
 };
 
+// Static grouping for the admin list UI — not admin-editable, so it lives in
+// code rather than the database (mirrors PAGE_FALLBACK_TITLES).
+export const CATEGORY_ORDER = [
+  "Company",
+  "Help & Support",
+  "Orders & Shipping",
+  "Promotions",
+] as const;
+
+export const PAGE_CATEGORIES: Record<(typeof PAGE_SLUGS)[number], (typeof CATEGORY_ORDER)[number]> = {
+  "about-us": "Company",
+  "contact-us": "Company",
+  "company-information": "Company",
+  "terms-and-conditions": "Company",
+  "privacy-policy": "Company",
+  "support-center": "Help & Support",
+  "how-to-order": "Orders & Shipping",
+  "order-tracking": "Orders & Shipping",
+  payment: "Orders & Shipping",
+  shipping: "Orders & Shipping",
+  "happy-return": "Orders & Shipping",
+  "refund-policy": "Orders & Shipping",
+  exchange: "Orders & Shipping",
+  cancellation: "Orders & Shipping",
+  "pre-order": "Promotions",
+  "extra-discount": "Promotions",
+};
+
 export async function listAllPages() {
   return prisma.page.findMany({
     where: { slug: { in: PAGE_SLUGS as unknown as string[] } },
@@ -56,13 +84,14 @@ export async function getPageBySlugForAdmin(slug: string) {
 export interface PageInput {
   title: string;
   content: string;
+  status: "PUBLISHED" | "DRAFT";
 }
 
 export async function upsertPage(slug: string, input: PageInput) {
   const page = await prisma.page.upsert({
     where: { slug },
-    update: { title: input.title, content: input.content },
-    create: { slug, title: input.title, content: input.content },
+    update: { title: input.title, content: input.content, status: input.status },
+    create: { slug, title: input.title, content: input.content, status: input.status },
   });
   await invalidatePageCache(slug);
   return page;

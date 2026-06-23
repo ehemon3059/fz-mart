@@ -294,16 +294,22 @@ model Setting {
   @@unique([group, key])
 }
 
+enum PageStatus {
+  PUBLISHED
+  DRAFT
+}
+
 // Fixed set of footer/legal/support pages (About Us, Contact Us, Company
 // Information, Terms & Conditions, Privacy Policy, Support Center, How to
 // Order, Order Tracking, Payment, Shipping). Slugs are seeded once and never
-// created/deleted from the admin UI — admins only edit title/content.
+// created/deleted from the admin UI — admins only edit title/content/status.
 model Page {
-  id        Int      @id @default(autoincrement())
-  slug      String   @unique
+  id        Int        @id @default(autoincrement())
+  slug      String     @unique
   title     String
-  content   String   @db.Text
-  updatedAt DateTime @updatedAt
+  content   String     @db.Text
+  status    PageStatus @default(PUBLISHED)
+  updatedAt DateTime   @updatedAt
 }
 
 // FAQ entries shown on the FAQ page. Unlike Page, this is a real list the

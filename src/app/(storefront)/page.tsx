@@ -46,7 +46,7 @@ export default async function HomePage() {
         <FlashSale
           title={flashSale.name}
           products={flashProducts}
-          endsAt={flashSale.endsAt.toISOString()}
+          endsAt={new Date(flashSale.endsAt).toISOString()}
         />
       )}
       <ProductSection

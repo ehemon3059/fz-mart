@@ -6,7 +6,9 @@ import { pageCacheKeys } from "./cache";
 const PAGE_TTL_SECONDS = 300;
 
 export async function getPageBySlug(slug: string) {
-  return getOrSetCache(pageCacheKeys.bySlug(slug), PAGE_TTL_SECONDS, () =>
+  const page = await getOrSetCache(pageCacheKeys.bySlug(slug), PAGE_TTL_SECONDS, () =>
     prisma.page.findUnique({ where: { slug } }),
   );
+  if (!page || page.status === "DRAFT") return null;
+  return page;
 }

@@ -1,0 +1,79 @@
+/*
+ * FZ-Mart prose styles
+ * Paste into your globals.css (or @import this file from globals.css).
+ * Used by .prose-editor (RichEditor) and .prose-article (storefront page).
+ */
+
+/* ── shared base ──────────────────────────────────────────────── */
+.prose-editor h2,
+.prose-article h2 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #23211e;
+  margin: 1.6em 0 0.5em;
+  line-height: 1.25;
+}
+.prose-editor h2:first-child,
+.prose-article h2:first-child { margin-top: 0; }
+
+.prose-editor h3,
+.prose-article h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #2d2b27;
+  margin: 1.5em 0 0.4em;
+}
+
+.prose-editor p,
+.prose-article p { margin: 0.7em 0; color: #44413c; }
+
+.prose-editor ul,
+.prose-editor ol,
+.prose-article ul,
+.prose-article ol {
+  margin: 0.7em 0;
+  padding-left: 1.4em;
+  color: #44413c;
+}
+.prose-editor li,
+.prose-article li { margin: 0.35em 0; }
+
+.prose-editor ul li,
+.prose-article ul li { list-style: disc; }
+
+.prose-editor ol li,
+.prose-article ol li { list-style: decimal; }
+
+.prose-editor a,
+.prose-article a {
+  color: #0a7d57;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose-editor blockquote,
+.prose-article blockquote {
+  border-left: 3px solid #0d9f6e;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #5c5852;
+  font-style: italic;
+}
+
+/* ── storefront overrides (larger text) ───────────────────────── */
+.prose-article {
+  font-size: 16.5px;
+  line-height: 1.72;
+}
+.prose-article h2 { font-size: 26px; margin-top: 1.4em; }
+.prose-article h3 { font-size: 19px; }
+.prose-article p,
+.prose-article li { font-size: 16.5px; }
+
+/* ── editor UX ────────────────────────────────────────────────── */
+.prose-editor:focus { outline: none; }
+.prose-editor:empty::before {
+  content: "Start writing the page content…";
+  color: #a8a39b;
+}
