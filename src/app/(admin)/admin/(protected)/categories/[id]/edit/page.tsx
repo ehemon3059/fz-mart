@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getCategoryById } from "@/server/categories/admin";
 import CategoryForm from "../../CategoryForm";
 
+export const metadata = { title: "Edit Category — FZ-Mart Admin" };
+
 export default async function EditCategoryPage({
   params,
 }: {
@@ -11,10 +13,5 @@ export default async function EditCategoryPage({
   const category = await getCategoryById(Number(id));
   if (!category) notFound();
 
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Edit Category</h1>
-      <CategoryForm category={category} />
-    </div>
-  );
+  return <CategoryForm category={category} />;
 }

@@ -18,11 +18,37 @@ const productWithImages = {
   images: { orderBy: { sortOrder: "asc" } },
 } satisfies Prisma.ProductInclude;
 
+const productWithDetails = {
+  images: { orderBy: { sortOrder: "asc" } },
+  colors: { orderBy: { sortOrder: "asc" } },
+  specifications: { orderBy: { sortOrder: "asc" } },
+  features: { orderBy: { sortOrder: "asc" } },
+  variants: { orderBy: { sortOrder: "asc" } },
+  // Needed for breadcrumbs + SEO on the product page.
+  subcategory: { include: { category: true } },
+} satisfies Prisma.ProductInclude;
+
 export async function getProductBySlug(slug: string) {
   return getOrSetCache(productCacheKeys.bySlug(slug), CATALOG_TTL_SECONDS, () =>
     prisma.product.findUnique({
       where: { slug, status: "ACTIVE" },
+      include: productWithDetails,
+    }),
+  );
+}
+
+/** Same subcategory, excludes the current product — powers "Recommended for you". */
+export async function listRelatedProducts(productId: number, subcategoryId: number, limit = 4) {
+  return getOrSetCache(productCacheKeys.related(productId), CATALOG_TTL_SECONDS, () =>
+    prisma.product.findMany({
+      where: {
+        status: "ACTIVE",
+        subcategoryId,
+        id: { not: productId },
+      },
       include: productWithImages,
+      orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+      take: limit,
     }),
   );
 }
@@ -36,6 +62,57 @@ export async function listFeaturedProducts(limit = 8) {
       take: limit,
     }),
   );
+}
+
+export async function listNewArrivals(limit = 20) {
+  return getOrSetCache(productCacheKeys.newArrivals(), CATALOG_TTL_SECONDS, () =>
+    prisma.product.findMany({
+      where: { status: "ACTIVE" },
+      include: productWithImages,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+  );
+}
+
+/** Ranked by total quantity sold (all-time). Falls back to newest if no sales yet. */
+export async function listBestSellers(limit = 20) {
+  return getOrSetCache(productCacheKeys.bestSellers(), CATALOG_TTL_SECONDS, async () => {
+    const ranked = await prisma.orderItem.groupBy({
+      by: ["productId"],
+      where: { productId: { not: null } },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: limit,
+    });
+
+    const ids = ranked.map((r) => r.productId).filter((id): id is number => id != null);
+    if (ids.length === 0) {
+      return prisma.product.findMany({
+        where: { status: "ACTIVE" },
+        include: productWithImages,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      });
+    }
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: ids }, status: "ACTIVE" },
+      include: productWithImages,
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    // Re-apply the sales-ranked order (findMany with `in` doesn't preserve it).
+    return ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => p != null);
+  });
+}
+
+export type ProductSort = "new" | "bestsellers" | "featured";
+
+/** Generic catalog listing for the /products page, sorted by the given mode. */
+export async function listProducts(sort: ProductSort = "new", limit = 60) {
+  if (sort === "bestsellers") return listBestSellers(limit);
+  if (sort === "featured") return listFeaturedProducts(limit);
+  return listNewArrivals(limit);
 }
 
 export async function listProductsBySubcategorySlug(subcategorySlug: string) {
@@ -70,6 +147,12 @@ export async function listProductsByCategorySlug(categorySlug: string) {
   );
 }
 
-export type ProductWithImages = NonNullable<
+// Keyword/filtered search moved to server/products/search.ts in Phase 2 —
+// it uses the MySQL FULLTEXT index for relevance ranking plus the full
+// filter/sort matrix, which this simple `contains` scan couldn't express.
+
+export type ProductWithImages = Awaited<ReturnType<typeof listFeaturedProducts>>[number];
+
+export type ProductWithDetails = NonNullable<
   Awaited<ReturnType<typeof getProductBySlug>>
 >;

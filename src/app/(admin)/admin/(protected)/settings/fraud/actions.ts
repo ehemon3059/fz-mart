@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getFraudConfig, saveFraudConfig } from "@/server/settings/fraud";
+import { requirePermission } from "@/server/admin/guard";
 
 export interface ActionResult {
   error?: string;
@@ -9,6 +10,7 @@ export interface ActionResult {
 }
 
 export async function saveFraudSettings(formData: FormData): Promise<ActionResult> {
+  await requirePermission("settings");
   const apiUrl = String(formData.get("apiUrl") ?? "").trim();
   const apiKeyInput = String(formData.get("apiKey") ?? "");
 

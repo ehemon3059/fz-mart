@@ -9,7 +9,14 @@ import { savePage } from "./actions";
 
 interface Props {
   slug: string;
-  page?: { title: string; content: string; status: "PUBLISHED" | "DRAFT"; updatedAt: Date } | null;
+  page?: {
+    title: string;
+    content: string;
+    status: "PUBLISHED" | "DRAFT";
+    metaTitle: string | null;
+    metaDescription: string | null;
+    updatedAt: Date;
+  } | null;
   fallbackTitle: string;
 }
 
@@ -25,6 +32,8 @@ export default function PageForm({ slug, page, fallbackTitle }: Props) {
   const [title, setTitle] = useState(page?.title ?? fallbackTitle);
   const [content, setContent] = useState(page?.content ?? "");
   const [status, setStatus] = useState<"PUBLISHED" | "DRAFT">(page?.status ?? "PUBLISHED");
+  const [metaTitle, setMetaTitle] = useState(page?.metaTitle ?? "");
+  const [metaDescription, setMetaDescription] = useState(page?.metaDescription ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -34,6 +43,8 @@ export default function PageForm({ slug, page, fallbackTitle }: Props) {
     formData.set("title", title);
     formData.set("content", content);
     formData.set("status", status);
+    formData.set("metaTitle", metaTitle);
+    formData.set("metaDescription", metaDescription);
 
     startTransition(async () => {
       const result = await savePage(slug, formData);
@@ -159,6 +170,31 @@ export default function PageForm({ slug, page, fallbackTitle }: Props) {
                 </div>
               </>
             )}
+          </div>
+
+          <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-soft">
+            <h3 className="mb-4 text-[13px] font-bold uppercase tracking-wider text-stone-500">
+              SEO (optional)
+            </h3>
+            <label className="mb-1.5 block text-[12.5px] font-medium text-stone-500">Meta title</label>
+            <input
+              value={metaTitle}
+              onChange={(e) => setMetaTitle(e.target.value)}
+              maxLength={70}
+              placeholder="Defaults to the page title"
+              className="w-full rounded-lg border border-stone-200 px-3 py-2.5 text-[13.5px] text-stone-800 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
+            />
+            <label className="mb-1.5 mt-4 block text-[12.5px] font-medium text-stone-500">
+              Meta description
+            </label>
+            <textarea
+              value={metaDescription}
+              onChange={(e) => setMetaDescription(e.target.value)}
+              maxLength={200}
+              rows={3}
+              placeholder="Short summary for search results. Blank = auto from content."
+              className="w-full resize-y rounded-lg border border-stone-200 px-3 py-2.5 text-[13.5px] text-stone-800 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
+            />
           </div>
 
           {error && (

@@ -1,13 +1,15 @@
+import type { BannerSlot } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { invalidateBannerCache } from "./cache";
 
 export async function listAllBanners() {
-  return prisma.banner.findMany({ orderBy: { sortOrder: "asc" } });
+  return prisma.banner.findMany({ orderBy: [{ slot: "asc" }, { sortOrder: "asc" }] });
 }
 
 export interface BannerInput {
   imageUrl: string;
   link?: string | null;
+  slot?: BannerSlot;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -17,6 +19,7 @@ export async function createBanner(input: BannerInput) {
     data: {
       imageUrl: input.imageUrl,
       link: input.link ?? null,
+      slot: input.slot ?? "MAIN",
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     },
@@ -31,6 +34,7 @@ export async function updateBanner(id: number, input: BannerInput) {
     data: {
       imageUrl: input.imageUrl,
       link: input.link ?? null,
+      slot: input.slot ?? "MAIN",
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     },

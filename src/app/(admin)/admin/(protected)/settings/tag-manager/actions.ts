@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { setGtmId } from "@/server/settings/tracking";
+import { requirePermission } from "@/server/admin/guard";
 
 export interface ActionResult {
   error?: string;
@@ -9,6 +10,7 @@ export interface ActionResult {
 }
 
 export async function saveGtmId(formData: FormData): Promise<ActionResult> {
+  await requirePermission("settings");
   const gtmId = String(formData.get("gtmId") ?? "").trim();
 
   if (gtmId && !/^GTM-[A-Z0-9]+$/i.test(gtmId)) {

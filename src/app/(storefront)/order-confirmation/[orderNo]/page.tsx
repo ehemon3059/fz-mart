@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getOrderByOrderNo } from "@/server/orders/getOrder";
+import { returnWindowOpen } from "@/server/orders/self-service";
 import { formatTaka } from "@/lib/money";
 import { ORDER_STATUS_LABELS } from "@/config/order-status";
 import PurchaseTracker from "@/components/storefront/PurchaseTracker";
+import CustomerOrderActions from "@/components/storefront/CustomerOrderActions";
 
 export default async function OrderConfirmationPage({
   params,
@@ -13,6 +15,8 @@ export default async function OrderConfirmationPage({
   const { orderNo } = await params;
   const order = await getOrderByOrderNo(orderNo);
   if (!order) notFound();
+
+  const canReturn = order.status === "DELIVERED" ? await returnWindowOpen(order.id) : false;
 
   return (
     <div className="max-w-xl mx-auto space-y-6 text-center">
@@ -47,6 +51,15 @@ export default async function OrderConfirmationPage({
           <span>Total (Cash on Delivery)</span>
           <span>{formatTaka(order.total)}</span>
         </div>
+      </div>
+
+      <div className="text-left">
+        <CustomerOrderActions
+          orderNo={order.orderNo}
+          phone={order.customerPhone}
+          status={order.status}
+          returnWindowOpen={canReturn}
+        />
       </div>
 
       <div className="flex justify-center gap-4 text-sm">

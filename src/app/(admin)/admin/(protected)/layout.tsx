@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getCurrentAdmin } from "@/lib/auth";
+import { requireAdminUser } from "@/server/admin/guard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
 export default async function AdminLayout({
@@ -7,18 +6,18 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Authoritative check: middleware only verified a cookie exists; this is
-  // where the session id is actually validated against Redis. Runs on every
-  // admin page since they all nest under this layout.
-  const admin = await getCurrentAdmin();
-  if (!admin) {
-    redirect("/admin/login");
-  }
+  // Authoritative base check: middleware only verified a cookie exists; this
+  // validates the session against Redis AND confirms the admin is still active
+  // (re-read from the DB). Per-AREA permission checks live in each section's
+  // own layout (orders/, settings/, …) via requirePermission.
+  const admin = await requireAdminUser();
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      <AdminSidebar username={admin.username} />
-      <main className="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto">{children}</main>
+      <AdminSidebar username={admin.username} role={admin.role} />
+      <main className="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto print:p-0 print:bg-white print:overflow-visible">
+        {children}
+      </main>
     </div>
   );
 }

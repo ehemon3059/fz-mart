@@ -12,7 +12,17 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: [".next/**", "out/**", "build/**", "next-env.d.ts"],
+    // src-homepage is a static design reference (already excluded from
+    // tsconfig) — not shipped code, so not linted either.
+    ignores: [
+      ".next/**",
+      "out/**",
+      "build/**",
+      "next-env.d.ts",
+      "src-homepage/**",
+      "test-results/**",
+      "playwright-report/**",
+    ],
   },
 ];
 

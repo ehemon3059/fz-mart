@@ -1,0 +1,28 @@
+-- AlterTable
+ALTER TABLE `order` ADD COLUMN `paidAmount` INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN `paymentMethod` ENUM('COD', 'ONLINE', 'PARTIAL') NOT NULL DEFAULT 'COD',
+    MODIFY `status` ENUM('PENDING_PAYMENT', 'PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED') NOT NULL DEFAULT 'PENDING';
+
+-- AlterTable
+ALTER TABLE `orderstatuslog` MODIFY `fromStatus` ENUM('PENDING_PAYMENT', 'PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED') NULL,
+    MODIFY `toStatus` ENUM('PENDING_PAYMENT', 'PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED') NOT NULL;
+
+-- CreateTable
+CREATE TABLE `Payment` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `orderId` INTEGER NOT NULL,
+    `provider` VARCHAR(191) NOT NULL,
+    `amount` INTEGER NOT NULL,
+    `status` ENUM('INITIATED', 'SUCCESS', 'FAILED', 'REFUNDED') NOT NULL DEFAULT 'INITIATED',
+    `providerTxnId` VARCHAR(191) NULL,
+    `rawPayload` JSON NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `Payment_orderId_idx`(`orderId`),
+    INDEX `Payment_provider_providerTxnId_idx`(`provider`, `providerTxnId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `Payment` ADD CONSTRAINT `Payment_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `Order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

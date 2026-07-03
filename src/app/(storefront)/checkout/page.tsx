@@ -1,18 +1,30 @@
 import { listActiveShippingZones } from "@/server/settings/shipping";
+import { getCheckoutPaymentOptions } from "@/server/settings/payments";
+import { getCurrentCustomer } from "@/lib/customer-session";
 import CheckoutForm from "./CheckoutForm";
 
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buyNow?: string }>;
+  searchParams: Promise<{ buyNow?: string; variant?: string }>;
 }) {
-  const { buyNow } = await searchParams;
-  const zones = await listActiveShippingZones();
+  const { buyNow, variant } = await searchParams;
+  const [zones, paymentOptions, customer] = await Promise.all([
+    listActiveShippingZones(),
+    getCheckoutPaymentOptions(),
+    getCurrentCustomer(),
+  ]);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
-      <CheckoutForm zones={zones} buyNowProductId={buyNow ? Number(buyNow) : null} />
+    <div className="co-wrap">
+      <h1 className="co-title">Checkout</h1>
+      <CheckoutForm
+        zones={zones}
+        paymentOptions={paymentOptions}
+        buyNowProductId={buyNow ? Number(buyNow) : null}
+        buyNowVariantId={variant ? Number(variant) : null}
+        loggedIn={customer != null}
+      />
     </div>
   );
 }

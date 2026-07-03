@@ -42,6 +42,20 @@ const config: Config = {
       boxShadow: {
         soft: "0 1px 2px rgba(20,18,14,.04), 0 6px 18px -10px rgba(20,18,14,.12)",
       },
+      keyframes: {
+        "fz-pop": {
+          from: { opacity: "0", transform: "translate(-50%, 12px)" },
+          to: { opacity: "1", transform: "translate(-50%, 0)" },
+        },
+        "fz-fade-img": {
+          from: { opacity: "0", transform: "scale(1.04)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+      },
+      animation: {
+        "fz-pop": "fz-pop .25s ease",
+        "fz-fade-img": "fz-fade-img .35s ease",
+      },
     },
   },
   plugins: [typography],

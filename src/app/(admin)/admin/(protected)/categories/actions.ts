@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { requirePermission } from "@/server/admin/guard";
 import {
   createCategory,
   updateCategory,
@@ -19,24 +19,28 @@ export async function saveCategory(
   id: number | null,
   formData: FormData,
 ): Promise<ActionResult> {
+  await requirePermission("categories");
   const name = String(formData.get("name") ?? "").trim();
   const sortOrder = Number(formData.get("sortOrder") ?? 0);
   const isActive = formData.get("isActive") === "on";
+  const metaTitle = String(formData.get("metaTitle") ?? "").trim() || null;
+  const metaDescription = String(formData.get("metaDescription") ?? "").trim() || null;
 
   if (!name) return { error: "Name is required." };
 
   if (id) {
-    await updateCategory(id, { name, sortOrder, isActive });
+    await updateCategory(id, { name, sortOrder, isActive, metaTitle, metaDescription });
   } else {
-    await createCategory({ name, sortOrder, isActive });
+    await createCategory({ name, sortOrder, isActive, metaTitle, metaDescription });
   }
 
   revalidatePath("/admin/categories");
   revalidatePath("/category");
-  redirect("/admin/categories");
+  return {};
 }
 
 export async function removeCategory(id: number): Promise<ActionResult> {
+  await requirePermission("categories");
   try {
     await deleteCategory(id);
   } catch {
@@ -53,6 +57,7 @@ export async function saveSubcategory(
   id: number | null,
   formData: FormData,
 ): Promise<ActionResult> {
+  await requirePermission("categories");
   const name = String(formData.get("name") ?? "").trim();
   const categoryId = Number(formData.get("categoryId"));
   const sortOrder = Number(formData.get("sortOrder") ?? 0);
@@ -72,6 +77,7 @@ export async function saveSubcategory(
 }
 
 export async function removeSubcategory(id: number): Promise<ActionResult> {
+  await requirePermission("categories");
   try {
     await deleteSubcategory(id);
   } catch {

@@ -1,6 +1,6 @@
 import { listActiveCategories } from "@/server/categories";
 import { listActiveBanners } from "@/server/banners";
-import { listFeaturedProducts } from "@/server/products";
+import { listFeaturedProducts, listNewArrivals, listBestSellers } from "@/server/products";
 import { getActiveFlashSale } from "@/server/flash-sales";
 
 import Hero from "@/components/storefront/Hero";
@@ -11,22 +11,14 @@ import ProductSection from "@/components/storefront/ProductSection";
 import Newsletter from "@/components/storefront/Newsletter";
 
 export default async function HomePage() {
-  // NOTE: your current server layer only ships `listFeaturedProducts`.
-  // For distinct rows, add these alongside it in src/server/products/index.ts
-  // (see nextjs/README.md for ready-to-paste queries):
-  //   listNewArrivals()      → orderBy createdAt desc
-  //   listBestSellers()      → orderBy orderItems _count desc
-  // Until then we fan the featured list out so the page renders end-to-end.
-  const [categories, banners, featured, flashSale] = await Promise.all([
+  const [categories, banners, newArrivals, bestSellers, featuredGrid, flashSale] = await Promise.all([
     listActiveCategories(),
     listActiveBanners(),
-    listFeaturedProducts(20),
+    listNewArrivals(5),
+    listBestSellers(5),
+    listFeaturedProducts(10),
     getActiveFlashSale(),
   ]);
-
-  const newArrivals = featured.slice(0, 5);
-  const bestSellers = featured.slice(5, 10);
-  const featuredGrid = featured.slice(0, 10);
 
   // A campaign's curated picks override discountPrice with their salePrice
   // (when set) so ProductCard renders the time-boxed price without needing
@@ -52,17 +44,20 @@ export default async function HomePage() {
       <ProductSection
         title="New arrivals"
         subtitle="Fresh picks added this week"
+        href="/products"
         products={newArrivals}
         badge="new"
       />
       <ProductSection
         title="Best sellers"
         subtitle="Most loved by FZ Mart shoppers"
+        href="/products?sort=bestsellers"
         products={bestSellers}
       />
       <ProductSection
         title="Featured products"
         subtitle="Hand-picked for you"
+        href="/products?sort=featured"
         products={featuredGrid}
         grid
       />

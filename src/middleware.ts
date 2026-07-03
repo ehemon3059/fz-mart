@@ -17,7 +17,13 @@ import { SESSION_COOKIE } from "@/lib/session-cookie";
 // — same constraint applies, so that check will likely move to the layout
 // too, or use an edge-compatible Redis REST client.
 
-const PUBLIC_ADMIN_PATHS = ["/admin/login"];
+// Auth screens reachable WITHOUT a session — a user resetting a forgotten
+// password is by definition signed out, so these must be public too.
+const PUBLIC_ADMIN_PATHS = [
+  "/admin/login",
+  "/admin/forgot-password",
+  "/admin/reset-password",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

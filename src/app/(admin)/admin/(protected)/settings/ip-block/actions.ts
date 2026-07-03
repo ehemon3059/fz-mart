@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { blockIp, unblockIp } from "@/lib/ip-block";
+import { requirePermission } from "@/server/admin/guard";
 
 export interface ActionResult {
   error?: string;
@@ -10,6 +11,7 @@ export interface ActionResult {
 const IP_PATTERN = /^(\d{1,3}\.){3}\d{1,3}$/;
 
 export async function addBlockedIp(formData: FormData): Promise<ActionResult> {
+  await requirePermission("settings");
   const ip = String(formData.get("ip") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
 
@@ -23,6 +25,7 @@ export async function addBlockedIp(formData: FormData): Promise<ActionResult> {
 }
 
 export async function removeBlockedIp(ip: string): Promise<ActionResult> {
+  await requirePermission("settings");
   await unblockIp(ip);
   revalidatePath("/admin/settings/ip-block");
   return {};

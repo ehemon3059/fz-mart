@@ -18,6 +18,11 @@ export const productCacheKeys = {
   featured: () => "products:featured",
   bySubcategorySlug: (slug: string) => `products:subcategory:${slug}`,
   byCategorySlug: (slug: string) => `products:category:${slug}`,
+  newArrivals: () => "products:new-arrivals",
+  // Order-driven (sums OrderItem quantities), not product-write-driven —
+  // relies solely on its own short TTL rather than invalidateProductCaches.
+  bestSellers: () => "products:best-sellers",
+  related: (productId: number) => `products:related:${productId}`,
 };
 
 /**
@@ -27,6 +32,7 @@ export const productCacheKeys = {
  * is cleared as well.
  */
 export async function invalidateProductCaches(params: {
+  productId?: number;
   slug?: string;
   previousSlug?: string;
   subcategorySlug?: string;
@@ -39,6 +45,7 @@ export async function invalidateProductCaches(params: {
 
   if (params.slug) keys.add(productCacheKeys.bySlug(params.slug));
   if (params.previousSlug) keys.add(productCacheKeys.bySlug(params.previousSlug));
+  if (params.productId) keys.add(productCacheKeys.related(params.productId));
 
   if (params.subcategorySlug) {
     keys.add(productCacheKeys.bySubcategorySlug(params.subcategorySlug));

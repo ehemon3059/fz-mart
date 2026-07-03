@@ -16,10 +16,12 @@ async function main() {
   // ── Admin user ────────────────────────────────────────────
   const adminPassword = "admin123"; // ⚠️  change after first login
   const passwordHash = await bcrypt.hash(adminPassword, 12);
+  const adminEmail = "no.one3059@gmail.com"; // recovery address for password resets
   await prisma.adminUser.upsert({
     where: { username: "admin" },
-    update: {},
-    create: { username: "admin", passwordHash, role: "admin" },
+    // Backfill the recovery email on existing installs too, so forgot-password works.
+    update: { email: adminEmail },
+    create: { username: "admin", email: adminEmail, passwordHash, role: "OWNER" },
   });
 
   // ── Shipping zones ────────────────────────────────────────

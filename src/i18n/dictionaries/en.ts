@@ -1,0 +1,75 @@
+// English storefront strings. This object's shape IS the Dictionary type —
+// bn.ts must mirror every key (enforced by `satisfies Dictionary`).
+
+export const en = {
+  common: {
+    search: "Search",
+    searchPlaceholder: "Search for products, brands and more…",
+    allCategories: "All Categories",
+    trackOrder: "Track Order",
+    helpCenter: "Help Center",
+    account: "Account",
+    cart: "Cart",
+    wishlist: "Wishlist",
+    signIn: "Sign in",
+    freeDeliveryNote: "Free delivery on orders over ৳2,000 · Cash on Delivery available nationwide",
+    outOfStock: "Out of stock",
+    inStock: "In stock",
+    addToCart: "Add to Cart",
+    buyNow: "Buy Now",
+    from: "From",
+    reviews: "Reviews",
+    viewAll: "View all",
+    apply: "Apply",
+    remove: "remove",
+    loading: "Loading…",
+  },
+  product: {
+    addToWishlist: "Add to wishlist",
+    savedToWishlist: "Saved to wishlist",
+    recommended: "Recommended for you",
+    recentlyViewed: "Recently viewed",
+    specification: "Specification",
+    feature: "Feature",
+    notifyBackInStock: "Out of stock — get notified when it's back",
+    notifyMe: "Notify me",
+  },
+  cart: {
+    title: "Your Cart",
+    empty: "Your cart is empty.",
+    subtotal: "Subtotal",
+    checkout: "Proceed to Checkout",
+    continueShopping: "Continue shopping",
+  },
+  checkout: {
+    title: "Checkout",
+    orderReview: "Order review",
+    shippingAddress: "Shipping address",
+    fullName: "Your full name *",
+    phone: "Phone",
+    address: "ex: House no. / building / street / area",
+    emailOptional: "Email (optional)",
+    paymentMethod: "Payment method",
+    cashOnDelivery: "Cash on Delivery",
+    payFullOnline: "Pay full amount online",
+    payDeliveryNow: "Pay delivery charge now",
+    payWith: "Pay with",
+    deliveryCost: "Delivery cost",
+    total: "Total",
+    couponCode: "Coupon code",
+    placeOrder: "PLACE ORDER",
+    placingOrder: "Placing order…",
+    specialNotes: "Special notes",
+    verifyPhone: "Verify your phone",
+    verifyCode: "Verify & place order",
+    resendCode: "Resend code",
+  },
+  footer: {
+    tagline: "Order online, pay on delivery.",
+    allRightsReserved: "All rights reserved.",
+  },
+};
+
+// Value types are widened to `string` (no `as const`), so the Bangla
+// dictionary can `satisfies Dictionary` with its own strings.
+export type Dictionary = typeof en;

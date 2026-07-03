@@ -1,38 +1,96 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { ArrowRight, BoltIcon } from "./icons";
 
-type Banner = { id: number; imageUrl: string; link: string | null };
+type Banner = { id: number; imageUrl: string; link: string | null; slot: string };
 
-// The hero adapts to your real Banner data:
-//   • banners[0]  → main banner (image if present)
-//   • banners[1], banners[2] → the two stacked side cards
-// With no banners at all it falls back to the designed gradient promo so the
-// homepage never looks empty before an admin uploads artwork.
+// Designed fallback slides shown only when an admin hasn't uploaded a big
+// banner yet, so the homepage never looks empty.
+const FALLBACK_SLIDES = [
+  {
+    kicker: "Mega Eid Sale · Limited time",
+    title: (<>Up to <em>60% off</em> on everything you love</>),
+    text: "Thousands of deals across electronics, fashion & home. Pay cash on delivery.",
+    cta: "Shop the sale",
+    href: "/products",
+  },
+  {
+    kicker: "Fresh & fast",
+    title: (<>Daily grocery, <em>delivered</em> in hours</>),
+    text: "Stock up on everyday essentials at unbeatable prices. Free shipping over ৳499.",
+    cta: "Order fresh",
+    href: "/products",
+  },
+] as const;
+
+const ROTATE_MS = 5000;
+
+// The hero has three slot-based areas:
+//   • MAIN          → big left banner, a carousel of every MAIN image
+//   • RIGHT_TOP     → upper right card
+//   • RIGHT_BOTTOM  → lower right card
 export default function Hero({ banners = [] }: { banners?: Banner[] }) {
-  const [main, side1, side2] = banners;
+  const mainBanners = banners.filter((b) => b.slot === "MAIN");
+  const rightTop = banners.find((b) => b.slot === "RIGHT_TOP");
+  const rightBottom = banners.find((b) => b.slot === "RIGHT_BOTTOM");
+
+  const slideCount = mainBanners.length > 0 ? mainBanners.length : FALLBACK_SLIDES.length;
+  const [idx, setIdx] = useState(0);
+
+  // Keep the index valid if the banner set changes, then auto-rotate.
+  useEffect(() => {
+    setIdx((i) => (i >= slideCount ? 0 : i));
+  }, [slideCount]);
+  useEffect(() => {
+    if (slideCount <= 1) return;
+    const id = setInterval(() => setIdx((i) => (i + 1) % slideCount), ROTATE_MS);
+    return () => clearInterval(id);
+  }, [slideCount]);
+
+  const go = (n: number) => setIdx((i) => (i + n + slideCount) % slideCount);
 
   return (
     <section className="hero">
       <div className="hero-grid">
-        {main ? (
-          <MainBanner banner={main} />
+        {mainBanners.length > 0 ? (
+          <div className="banner has-img">
+            {mainBanners.map((b, i) => (
+              <BannerSlide key={b.id} banner={b} on={i === idx} />
+            ))}
+            {mainBanners.length > 1 && (
+              <>
+                <button type="button" className="hero-nav prev" aria-label="Previous" onClick={() => go(-1)}>
+                  <ArrowRight size={18} style={{ transform: "rotate(180deg)" }} />
+                </button>
+                <button type="button" className="hero-nav next" aria-label="Next" onClick={() => go(1)}>
+                  <ArrowRight size={18} />
+                </button>
+                <Dots count={mainBanners.length} idx={idx} onPick={setIdx} />
+              </>
+            )}
+          </div>
         ) : (
           <div className="banner">
-            <div className="b-copy">
-              <span className="b-kicker"><BoltIcon size={13} /> Mega Eid Sale · Limited time</span>
-              <h1>Up to <em>60% off</em> on everything you love</h1>
-              <p>Thousands of deals across electronics, fashion &amp; home. Pay cash on delivery.</p>
-              <Link href="/products" className="b-cta">Shop the sale <ArrowRight size={17} /></Link>
-            </div>
-            <div className="b-art ph"><span className="ph-lbl">hero product shot · 640×420</span></div>
-            <div className="dots"><i className="on" /><i /><i /><i /></div>
+            {FALLBACK_SLIDES.map((s, i) => (
+              <div key={i} className={`hero-slide${i === idx ? " is-on" : ""}`}>
+                <div className="b-copy">
+                  <span className="b-kicker"><BoltIcon size={13} /> {s.kicker}</span>
+                  <h1>{s.title}</h1>
+                  <p>{s.text}</p>
+                  <Link href={s.href} className="b-cta">{s.cta} <ArrowRight size={17} /></Link>
+                </div>
+              </div>
+            ))}
+            <Dots count={FALLBACK_SLIDES.length} idx={idx} onPick={setIdx} />
           </div>
         )}
 
         <div className="promo-col">
           <SidePromo
-            banner={side1}
+            banner={rightTop}
             cls="p1"
             kicker="New season"
             title={<>Fashion week<br />drops are here</>}
@@ -40,7 +98,7 @@ export default function Hero({ banners = [] }: { banners?: Banner[] }) {
             artTint="#f6e4cd"
           />
           <SidePromo
-            banner={side2}
+            banner={rightBottom}
             cls="p2"
             kicker="Free shipping"
             title={<>Daily grocery<br />under ৳499</>}
@@ -53,15 +111,40 @@ export default function Hero({ banners = [] }: { banners?: Banner[] }) {
   );
 }
 
-function MainBanner({ banner }: { banner: Banner }) {
-  const inner = (
-    <div className="banner has-img">
-      <div className="b-fill">
-        <Image src={banner.imageUrl} alt="Promotional banner" fill priority style={{ objectFit: "cover" }} />
-      </div>
+function BannerSlide({ banner, on }: { banner: Banner; on: boolean }) {
+  const img = (
+    <div className="b-fill">
+      <Image
+        src={banner.imageUrl}
+        alt="Promotional banner"
+        fill
+        priority
+        sizes="(max-width: 768px) 100vw, 66vw"
+        style={{ objectFit: "cover" }}
+      />
     </div>
   );
-  return banner.link ? <Link href={banner.link}>{inner}</Link> : inner;
+  return (
+    <div className={`hero-slide${on ? " is-on" : ""}`}>
+      {banner.link ? <Link href={banner.link}>{img}</Link> : img}
+    </div>
+  );
+}
+
+function Dots({ count, idx, onPick }: { count: number; idx: number; onPick: (i: number) => void }) {
+  return (
+    <div className="dots">
+      {Array.from({ length: count }).map((_, i) => (
+        <i
+          key={i}
+          className={i === idx ? "on" : ""}
+          role="button"
+          aria-label={`Go to slide ${i + 1}`}
+          onClick={() => onPick(i)}
+        />
+      ))}
+    </div>
+  );
 }
 
 function SidePromo({
@@ -78,7 +161,13 @@ function SidePromo({
     const inner = (
       <div className="promo" style={{ padding: 0 }}>
         <div className="b-fill">
-          <Image src={banner.imageUrl} alt="Promotional banner" fill style={{ objectFit: "cover" }} />
+          <Image
+            src={banner.imageUrl}
+            alt="Promotional banner"
+            fill
+            sizes="(max-width: 768px) 100vw, 34vw"
+            style={{ objectFit: "cover" }}
+          />
         </div>
       </div>
     );

@@ -1,6 +1,31 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPageBySlug } from "@/server/pages";
+import { SITE_NAME, absoluteUrl, pageTitle, stripHtml, truncate } from "@/lib/seo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const page = await getPageBySlug(slug);
+  if (!page) return { title: pageTitle("Page not found") };
+
+  const title = pageTitle(page.metaTitle || page.title);
+  const description =
+    page.metaDescription || truncate(stripHtml(page.content) || `${page.title} — ${SITE_NAME}`);
+  const url = absoluteUrl(`/pages/${page.slug}`);
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: "article", siteName: SITE_NAME },
+    twitter: { card: "summary", title, description },
+  };
+}
 
 // page.updatedAt is a real Date on a cache miss but an ISO string on a cache
 // hit (getOrSetCache round-trips values through JSON) — normalize here.

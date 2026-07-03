@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { takaToPaisa } from "@/lib/money";
+import { requirePermission } from "@/server/admin/guard";
 import {
   createShippingZone,
   updateShippingZone,
@@ -17,6 +18,7 @@ export async function saveShippingZone(
   id: number | null,
   formData: FormData,
 ): Promise<ActionResult> {
+  await requirePermission("settings");
   const name = String(formData.get("name") ?? "").trim();
   const chargeTaka = Number(formData.get("charge"));
   const sortOrder = Number(formData.get("sortOrder") ?? 0);
@@ -41,6 +43,7 @@ export async function saveShippingZone(
 }
 
 export async function removeShippingZone(id: number): Promise<ActionResult> {
+  await requirePermission("settings");
   try {
     await deleteShippingZone(id);
   } catch {

@@ -1,6 +1,7 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateOrderNo } from "./orderNo";
+import { redeemCoupon } from "@/server/coupons";
 
 // Checkout is the riskiest code in the app. Everything the browser sends
 // (price, product name, displayed totals) is for UI only — this function
@@ -9,16 +10,29 @@ import { generateOrderNo } from "./orderNo";
 
 export interface CheckoutItemInput {
   productId: number;
+  /** Chosen size/option — required when the product has variants. */
+  variantId?: number | null;
   quantity: number;
 }
 
 export interface CreateOrderInput {
+  customerId?: string;
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
   address: string;
+  customerNote?: string;
   shippingZoneId: number;
   items: CheckoutItemInput[];
+  /**
+   * COD (default) starts the order at PENDING. ONLINE/PARTIAL start at
+   * PENDING_PAYMENT: stock is reserved by the same atomic decrement, and the
+   * payment webhook (or the expiry job) decides whether the order becomes
+   * real or the reservation is released.
+   */
+  paymentMethod?: PaymentMethod;
+  /** Optional coupon code; re-validated + redeemed inside the checkout txn. */
+  couponCode?: string;
 }
 
 export class CheckoutError extends Error {
@@ -46,6 +60,7 @@ export async function createOrder(input: CreateOrderInput) {
     const productIds = input.items.map((i) => i.productId);
     const products = await tx.product.findMany({
       where: { id: { in: productIds }, status: "ACTIVE" },
+      include: { variants: true },
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
 
@@ -60,6 +75,57 @@ export async function createOrder(input: CreateOrderInput) {
       if (item.quantity <= 0) {
         throw new CheckoutError(`Invalid quantity for ${product.name}.`);
       }
+
+      const hasVariants = product.variants.length > 0;
+
+      if (hasVariants) {
+        // Sized/colour product: a valid variant MUST be chosen, and that
+        // variant's own price + stock are authoritative for the line.
+        const variant = product.variants.find((v) => v.id === item.variantId);
+        if (!variant) {
+          throw new CheckoutError(`Please choose an option for ${product.name}.`);
+        }
+        // Combine the chosen colour + size into one human label, e.g. "Navy / M".
+        const variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ");
+        const labelSuffix = variantLabel ? ` (${variantLabel})` : "";
+
+        if (variant.stock < item.quantity) {
+          throw new CheckoutError(
+            `${product.name}${labelSuffix} only has ${variant.stock} unit(s) left in stock.`,
+          );
+        }
+
+        const unitPrice = variant.price;
+        subtotal += unitPrice * item.quantity;
+        orderItemsData.push({
+          productId: product.id,
+          variantId: variant.id,
+          variantLabel: variantLabel || null,
+          // Bake the option into the snapshot name so every order view (emails,
+          // admin, confirmation) shows it without extra plumbing.
+          productName: variantLabel ? `${product.name} — ${variantLabel}` : product.name,
+          unitPrice,
+          // Snapshot the sourcing cost for COGS. A variant may carry its own
+          // cost; 0 means "inherit the product's" (see schema), so fall back.
+          purchaseCost: variant.purchaseCost || product.purchaseCost,
+          quantity: item.quantity,
+        });
+
+        // Atomic conditional decrement on the VARIANT row — same anti-oversell
+        // guard as products, scoped to the chosen option.
+        const decremented = await tx.productVariant.updateMany({
+          where: { id: variant.id, stock: { gte: item.quantity } },
+          data: { stock: { decrement: item.quantity } },
+        });
+        if (decremented.count === 0) {
+          throw new CheckoutError(
+            `${product.name}${labelSuffix} just sold out. Please update your cart.`,
+          );
+        }
+        continue;
+      }
+
+      // Unsized product: original product-level price + stock path.
       if (product.stock < item.quantity) {
         throw new CheckoutError(
           `${product.name} only has ${product.stock} unit(s) left in stock.`,
@@ -79,6 +145,8 @@ export async function createOrder(input: CreateOrderInput) {
         // when products are later edited or deleted.
         productName: product.name,
         unitPrice,
+        // Snapshot the sourcing cost now — the COGS basis for this line.
+        purchaseCost: product.purchaseCost,
         quantity: item.quantity,
       });
 
@@ -97,29 +165,37 @@ export async function createOrder(input: CreateOrderInput) {
     }
 
     const deliveryCharge = zone.charge;
-    const total = subtotal + deliveryCharge;
+    const baseTotal = subtotal + deliveryCharge;
+    const paymentMethod = input.paymentMethod ?? "COD";
+    const initialStatus = paymentMethod === "COD" ? "PENDING" : "PENDING_PAYMENT";
 
+    let created: Prisma.OrderGetPayload<{ include: { items: true } }> | null = null;
     let lastError: unknown;
     for (let attempt = 0; attempt < ORDER_NO_MAX_ATTEMPTS; attempt++) {
       const orderNo = generateOrderNo();
       try {
-        const order = await tx.order.create({
+        created = await tx.order.create({
           data: {
             orderNo,
+            customerId: input.customerId,
             customerName: input.customerName,
             customerPhone: input.customerPhone,
             customerEmail: input.customerEmail || null,
             address: input.address,
+            customerNote: input.customerNote || null,
             shippingZoneId: zone.id,
             deliveryCharge,
             subtotal,
-            total,
-            status: "PENDING",
+            total: baseTotal,
+            paymentMethod,
+            status: initialStatus,
             items: { createMany: { data: orderItemsData } },
+            // Seed the audit trail so the timeline starts at "order placed".
+            statusLogs: { create: { toStatus: initialStatus, changedBy: null } },
           },
           include: { items: true },
         });
-        return order;
+        break;
       } catch (err) {
         // Unique constraint collision on orderNo — extremely rare, retry.
         if (
@@ -132,8 +208,31 @@ export async function createOrder(input: CreateOrderInput) {
         throw err;
       }
     }
-    throw lastError instanceof Error
-      ? lastError
-      : new CheckoutError("Could not generate a unique order number.");
+    if (!created) {
+      throw lastError instanceof Error
+        ? lastError
+        : new CheckoutError("Could not generate a unique order number.");
+    }
+
+    // Coupon: re-validate + redeem atomically inside this transaction, then
+    // fold the snapshotted discount into the order total. A limit hit here
+    // rolls back the whole checkout (no half-placed order).
+    if (input.couponCode) {
+      const { code, discount } = await redeemCoupon(
+        tx,
+        input.couponCode,
+        subtotal,
+        created.id,
+        input.customerPhone,
+        input.customerId ?? null,
+      );
+      created = await tx.order.update({
+        where: { id: created.id },
+        data: { couponCode: code, couponDiscount: discount, total: baseTotal - discount },
+        include: { items: true },
+      });
+    }
+
+    return created;
   });
 }

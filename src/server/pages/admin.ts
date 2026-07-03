@@ -85,13 +85,28 @@ export interface PageInput {
   title: string;
   content: string;
   status: "PUBLISHED" | "DRAFT";
+  metaTitle?: string | null;
+  metaDescription?: string | null;
 }
 
 export async function upsertPage(slug: string, input: PageInput) {
   const page = await prisma.page.upsert({
     where: { slug },
-    update: { title: input.title, content: input.content, status: input.status },
-    create: { slug, title: input.title, content: input.content, status: input.status },
+    update: {
+      title: input.title,
+      content: input.content,
+      status: input.status,
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
+    },
+    create: {
+      slug,
+      title: input.title,
+      content: input.content,
+      status: input.status,
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
+    },
   });
   await invalidatePageCache(slug);
   return page;

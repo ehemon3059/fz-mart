@@ -1,14 +1,35 @@
 import Link from "next/link";
 import { listActiveCategories } from "@/server/categories";
+import { prisma } from "@/lib/prisma";
+import { getCurrentCustomer } from "@/lib/customer-session";
+import { getDictionary } from "@/i18n/server";
 import HeaderCart from "./HeaderCart";
+import HeaderAccount from "./HeaderAccount";
 import CategoryNav from "./CategoryNav";
-import { SearchIcon, UserIcon, ChevronDown, PinIcon } from "./icons";
+import HeaderSearch from "./HeaderSearch";
+import LocaleSwitcher from "./LocaleSwitcher";
+import { PinIcon } from "./icons";
 
 // Server component — fetches the category list once and renders the full
 // masthead: utility bar, main bar (logo + search + account + cart) and the
 // sticky category nav beneath it.
 export default async function Header() {
-  const categories = await listActiveCategories();
+  const [categories, session, dict] = await Promise.all([
+    listActiveCategories(),
+    getCurrentCustomer(),
+    getDictionary(),
+  ]);
+
+  let displayName: string | null = null;
+  if (session) {
+    const customer = await prisma.customer.findUnique({
+      where: { id: session.customerId },
+      select: { name: true },
+    });
+    // Fall back to the email's local-part when the customer has no name yet
+    // (e.g. signed in via magic link, which captures email only).
+    displayName = customer?.name || session.email.split("@")[0];
+  }
 
   return (
     <>
@@ -17,16 +38,14 @@ export default async function Header() {
         <div className="wrap">
           <div className="util-left">
             <span className="util-dot" />
-            <span className="hide-sm">
-              Free delivery on orders over ৳2,000 · <b>Cash on Delivery</b> available nationwide
-            </span>
+            <span className="hide-sm">{dict.common.freeDeliveryNote}</span>
           </div>
           <div className="util-right">
+            <LocaleSwitcher />
             <Link href="/track">
-              <PinIcon size={14} /> Track Order
+              <PinIcon size={14} /> {dict.common.trackOrder}
             </Link>
-            <Link href="/pages/support-center" className="hide-sm">Help Center</Link>
-            <Link href="/pages/contact-us" className="hide-sm">Become a Seller</Link>
+            <Link href="/pages/support-center" className="hide-sm">{dict.common.helpCenter}</Link>
           </div>
         </div>
       </div>
@@ -39,17 +58,12 @@ export default async function Header() {
             <span><b>FZ</b><i>Mart</i></span>
           </Link>
 
-          <form className="search" action="/products" method="get" role="search">
-            <span className="cat-sel">All Categories <ChevronDown size={12} /></span>
-            <input name="q" type="text" placeholder="Search for products, brands and more…" />
-            <button type="submit"><SearchIcon size={17} /> Search</button>
-          </form>
+          <HeaderSearch
+            categories={categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
+          />
 
           <div className="hdr-actions">
-            <Link href="/track" className="icon-btn">
-              <UserIcon size={22} />
-              <span className="ib-txt"><small>Account</small><b>Sign in</b></span>
-            </Link>
+            <HeaderAccount displayName={displayName} />
             <HeaderCart />
           </div>
         </div>

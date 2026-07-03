@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import bcrypt from "bcrypt";
 import { redis } from "@/lib/redis";
 import { prisma } from "@/lib/prisma";
@@ -56,10 +57,49 @@ export async function destroySession(sessionId: string): Promise<void> {
   await redis.del(sessionKey(sessionId));
 }
 
+// ── Pending 2FA login state ──────────────────────────────────────
+// Between a correct password and a correct TOTP code, the login is held in a
+// short-lived Redis record (NOT a full session) keyed by a random token in a
+// separate cookie. It grants nothing except the right to submit a code.
+const PENDING_2FA_TTL_SECONDS = 5 * 60;
+export const PENDING_2FA_COOKIE = "fz_admin_2fa";
+
+function pending2faKey(token: string): string {
+  return `admin_2fa_pending:${token}`;
+}
+
+export async function createPending2fa(adminId: number): Promise<string> {
+  const token = randomBytes(32).toString("hex");
+  await redis.set(pending2faKey(token), String(adminId), "EX", PENDING_2FA_TTL_SECONDS);
+  return token;
+}
+
+export async function readPending2fa(token: string): Promise<number | null> {
+  const raw = await redis.get(pending2faKey(token));
+  return raw ? Number(raw) : null;
+}
+
+export async function consumePending2fa(token: string): Promise<void> {
+  await redis.del(pending2faKey(token));
+}
+
 /** Reads the current admin session from cookies, for use in server components/actions. */
 export async function getCurrentAdmin(): Promise<SessionData | null> {
   const store = await cookies();
   const sessionId = store.get(SESSION_COOKIE)?.value;
   if (!sessionId) return null;
   return getSession(sessionId);
+}
+
+/**
+ * Auth gate for admin server actions. Middleware only checks that the session
+ * cookie EXISTS (it can't reach Redis from the Edge runtime), and layouts run
+ * during render — after a server action has already executed. So every admin
+ * action must validate the session itself; this redirects to login when it
+ * isn't valid.
+ */
+export async function requireAdmin(): Promise<SessionData> {
+  const admin = await getCurrentAdmin();
+  if (!admin) redirect("/admin/login");
+  return admin;
 }

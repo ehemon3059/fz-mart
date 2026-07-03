@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Icon } from "@/components/icons";
 import { addBlockedIp } from "./actions";
 
 export default function AddIpForm() {
@@ -23,30 +24,38 @@ export default function AddIpForm() {
   }
 
   return (
-    <form action={handleSubmit} className="flex gap-2 items-start max-w-lg">
-      <input
-        name="ip"
-        required
-        value={ip}
-        onChange={(e) => setIp(e.target.value)}
-        placeholder="203.0.113.5"
-        className="border rounded px-3 py-2 flex-1"
-      />
-      <input
-        name="reason"
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-        placeholder="Reason (optional)"
-        className="border rounded px-3 py-2 flex-1"
-      />
-      <button
-        type="submit"
-        disabled={pending}
-        className="bg-black text-white px-4 py-2 rounded font-medium disabled:opacity-50 whitespace-nowrap"
-      >
-        {pending ? "Blocking..." : "Block IP"}
-      </button>
-      {error && <span className="text-xs text-red-600">{error}</span>}
-    </form>
+    <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
+      <h2 className="text-[15px] font-bold text-stone-800">Block a new IP address</h2>
+      <p className="mt-1 text-[13px] text-stone-400">
+        Requests from this address will be rejected before they reach your storefront.
+      </p>
+
+      <form action={handleSubmit} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
+        <input
+          name="ip"
+          required
+          value={ip}
+          onChange={(e) => setIp(e.target.value)}
+          placeholder="203.0.113.5"
+          className="w-full rounded-xl border border-stone-200 px-3.5 py-2.5 text-[14px] text-stone-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:flex-1"
+        />
+        <input
+          name="reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Reason (optional)"
+          className="w-full rounded-xl border border-stone-200 px-3.5 py-2.5 text-[14px] text-stone-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:flex-1"
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 sm:w-auto"
+        >
+          <Icon name="ban" size={16} />
+          {pending ? "Blocking..." : "Block IP"}
+        </button>
+      </form>
+      {error && <p className="mt-2 text-[13px] text-red-600">{error}</p>}
+    </div>
   );
 }

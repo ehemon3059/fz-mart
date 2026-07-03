@@ -7,15 +7,35 @@ import {
   createSession,
   destroySession,
   SESSION_COOKIE,
+  createPending2fa,
+  readPending2fa,
+  consumePending2fa,
+  PENDING_2FA_COOKIE,
 } from "@/lib/auth";
+import { verifyLoginCode } from "@/server/admin/twofactor";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/client-ip";
 
 export interface LoginResult {
   error?: string;
+  /** Set when the password was correct but a TOTP code is now required. */
+  twoFactorRequired?: boolean;
 }
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // matches Redis TTL in lib/auth.ts
+const PENDING_2FA_MAX_AGE_SECONDS = 5 * 60;
+
+async function startSession(adminId: number, username: string, role: string): Promise<void> {
+  const sessionId = await createSession({ adminId, username, role });
+  const store = await cookies();
+  store.set(SESSION_COOKIE, sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
 
 // Gates every attempt (not just failures) so a credential-stuffing script
 // can't burn through guesses for a known username, or hammer the login
@@ -55,22 +75,63 @@ export async function login(formData: FormData): Promise<LoginResult> {
   if (!admin) {
     return { error: "Invalid username or password." };
   }
+  // Deactivated accounts can't sign in even with correct credentials.
+  if (!admin.isActive) {
+    return { error: "This account has been deactivated. Contact an owner." };
+  }
 
-  const sessionId = await createSession({
-    adminId: admin.id,
-    username: admin.username,
-    role: admin.role,
-  });
+  // 2FA enabled: hold the login in a pending state and ask for a code instead
+  // of issuing a session now.
+  if (admin.twoFactorEnabled) {
+    const token = await createPending2fa(admin.id);
+    const store = await cookies();
+    store.set(PENDING_2FA_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: PENDING_2FA_MAX_AGE_SECONDS,
+    });
+    return { twoFactorRequired: true };
+  }
 
+  await startSession(admin.id, admin.username, admin.role);
+  redirect("/admin/dashboard");
+}
+
+export async function verifyTwoFactorLogin(formData: FormData): Promise<LoginResult> {
+  const code = String(formData.get("code") ?? "").trim();
   const store = await cookies();
-  store.set(SESSION_COOKIE, sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
+  const token = store.get(PENDING_2FA_COOKIE)?.value;
+  if (!token) {
+    return { error: "Your login attempt expired. Please sign in again." };
+  }
 
+  const adminId = await readPending2fa(token);
+  if (!adminId) {
+    return { error: "Your login attempt expired. Please sign in again." };
+  }
+
+  // Rate-limit code guesses per pending login.
+  const limit = await rateLimit("login:2fa", String(adminId), 6, 5 * 60);
+  if (!limit.allowed) {
+    return { error: "Too many attempts. Please sign in again." };
+  }
+
+  const ok = await verifyLoginCode(adminId, code);
+  if (!ok) {
+    return { error: "Invalid code. Try again." };
+  }
+
+  const { prisma } = await import("@/lib/prisma");
+  const admin = await prisma.adminUser.findUnique({ where: { id: adminId } });
+  if (!admin || !admin.isActive) {
+    return { error: "Account unavailable. Contact an owner." };
+  }
+
+  await consumePending2fa(token);
+  store.delete(PENDING_2FA_COOKIE);
+  await startSession(admin.id, admin.username, admin.role);
   redirect("/admin/dashboard");
 }
 

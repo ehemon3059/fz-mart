@@ -6,6 +6,10 @@ import { ORDER_STATUS_LABELS } from "@/config/order-status";
 import type { SmsJob } from "./types";
 
 function messageFor(job: SmsJob): string {
+  // Generic jobs carry a pre-rendered body; order-status jobs are templated here.
+  if (job.type !== "order-status") {
+    return job.message;
+  }
   const label = ORDER_STATUS_LABELS[job.status];
   return `fz-mart: Your order ${job.orderNo} is now ${label}.`;
 }

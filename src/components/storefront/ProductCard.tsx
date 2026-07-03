@@ -1,16 +1,27 @@
 import Image from "next/image";
 import Link from "next/link";
-import { formatTaka } from "@/lib/money";
-import type { ProductWithImages } from "@/server/products";
+import Price from "./Price";
 import { HeartIcon } from "./icons";
 
 type Badge = "sale" | "new";
+
+// Structural subset every card needs — satisfied by both the full catalog
+// product (ProductWithImages) and the leaner search result (ProductSearchCard).
+export interface ProductCardData {
+  slug: string;
+  name: string;
+  price: number;
+  discountPrice: number | null;
+  stock: number;
+  promoBadge: string | null;
+  images: { url: string; isPrimary: boolean }[];
+}
 
 export default function ProductCard({
   product,
   badge,
 }: {
-  product: ProductWithImages;
+  product: ProductCardData;
   /** Optional corner ribbon. Falls back to the product's own promoBadge. */
   badge?: Badge;
 }) {
@@ -63,8 +74,8 @@ export default function ProductCard({
           <div className="c-oos">Out of stock</div>
         ) : (
           <div className="c-price">
-            <span className="now">{formatTaka(price)}</span>
-            {hasDiscount && <span className="was">{formatTaka(product.price)}</span>}
+            <Price paisa={price} className="now" />
+            {hasDiscount && <Price paisa={product.price} className="was" />}
           </div>
         )}
       </div>

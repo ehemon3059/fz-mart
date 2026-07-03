@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Manrope, Spline_Sans_Mono } from "next/font/google";
 import { isIpBlocked } from "@/lib/ip-block";
 import { getClientIp } from "@/lib/client-ip";
+import { SITE_NAME, SITE_TAGLINE, siteUrl } from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,8 +29,16 @@ const splineSansMono = Spline_Sans_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "fz-mart — Cash on Delivery Store",
-  description: "Order online, pay on delivery.",
+  // metadataBase lets Next resolve the relative image/canonical URLs that
+  // per-page metadata produces into absolute ones for OG/Twitter/canonical.
+  metadataBase: new URL(siteUrl()),
+  title: {
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    // Page-level `title` strings already include the brand via lib/seo's
+    // pageTitle(), so the template is just "%s" (no extra suffix).
+    template: "%s",
+  },
+  description: "Order online, pay on delivery. Nationwide cash on delivery across Bangladesh.",
 };
 
 export default async function RootLayout({

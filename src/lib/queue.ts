@@ -22,6 +22,9 @@ function getConnection(): ConnectionOptions {
 export const QUEUE_NAMES = {
   mail: "mail",
   sms: "sms",
+  payments: "payments",
+  carts: "carts",
+  maintenance: "maintenance",
 } as const;
 
 const queues = globalForQueue.queues ?? new Map<string, Queue>();

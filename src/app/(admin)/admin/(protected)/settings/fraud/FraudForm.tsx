@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Icon } from "@/components/icons";
 import { saveFraudSettings } from "./actions";
 
 interface Props {
@@ -26,34 +27,50 @@ export default function FraudForm({ config }: Props) {
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4 max-w-md">
-      <div>
-        <label className="block text-sm font-medium mb-1">API URL</label>
-        <input
-          name="apiUrl"
-          defaultValue={config?.apiUrl}
-          placeholder="https://api.fraudcheck.example (leave blank to stub instead of calling)"
-          className="w-full border rounded px-3 py-2"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium mb-1">API Key</label>
-        <input
-          name="apiKey"
-          type="password"
-          placeholder={config ? "Leave blank to keep current key" : ""}
-          className="w-full border rounded px-3 py-2"
-        />
-      </div>
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      {success && <p className="text-green-700 text-sm">Saved.</p>}
-      <button
-        type="submit"
-        disabled={pending}
-        className="bg-black text-white px-4 py-2 rounded font-medium disabled:opacity-50"
-      >
-        {pending ? "Saving..." : "Save"}
-      </button>
-    </form>
+    <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
+      <h2 className="text-[15px] font-bold text-stone-800">Provider credentials</h2>
+      <p className="mt-1 text-[13px] text-stone-400">
+        Checked once per customer phone at checkout — never blocks the order, only flags risk on the order pages.
+      </p>
+
+      <form action={handleSubmit} className="mt-4 max-w-md space-y-4">
+        <div>
+          <label className="mb-1 block text-[13px] font-semibold text-stone-700">API URL</label>
+          <input
+            name="apiUrl"
+            defaultValue={config?.apiUrl}
+            placeholder="https://api.fraudcheck.example"
+            className="w-full rounded-xl border border-stone-200 px-3.5 py-2.5 text-[14px] text-stone-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+          <p className="mt-1 text-[12px] text-stone-400">Leave blank to stub a neutral, zero-risk result instead of calling.</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-[13px] font-semibold text-stone-700">API Key</label>
+          <input
+            name="apiKey"
+            type="password"
+            placeholder={config ? "Leave blank to keep current key" : "Your provider API key"}
+            className="w-full rounded-xl border border-stone-200 px-3.5 py-2.5 text-[14px] text-stone-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+        </div>
+
+        {error && <p className="text-[13px] text-red-600">{error}</p>}
+        {success && (
+          <p className="flex items-center gap-1.5 text-[13px] font-medium text-brand-600">
+            <Icon name="check" size={14} strokeWidth={2.6} /> Saved.
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50 sm:w-auto sm:px-5"
+        >
+          <Icon name="save" size={16} />
+          {pending ? "Saving..." : "Save"}
+        </button>
+      </form>
+    </div>
   );
 }

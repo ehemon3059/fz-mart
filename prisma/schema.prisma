@@ -19,14 +19,18 @@ datasource db {
 // ─────────────────────────────────────────────────────────────
 
 model Category {
-  id            Int           @id @default(autoincrement())
-  name          String
-  slug          String        @unique
-  sortOrder     Int           @default(0)
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  subcategories Subcategory[]
+  id              Int           @id @default(autoincrement())
+  name            String
+  slug            String        @unique
+  sortOrder       Int           @default(0)
+  isActive        Boolean       @default(true)
+  // Optional SEO overrides (Phase 2). When blank the storefront falls back to
+  // a sensible default derived from the name — see lib/seo.ts.
+  metaTitle       String?
+  metaDescription String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  subcategories   Subcategory[]
 
   @@index([isActive, sortOrder])
 }
@@ -47,28 +51,75 @@ model Subcategory {
 }
 
 model Product {
-  id            Int            @id @default(autoincrement())
-  subcategoryId Int
-  name          String
-  slug          String         @unique
-  description   String?        @db.Text
+  id                 Int                    @id @default(autoincrement())
+  subcategoryId      Int
+  name               String
+  slug               String                 @unique
+  description        String?                @db.Text
   // price and discountPrice are stored in the smallest currency unit (paisa)
   // as integers to avoid floating-point rounding on money.
-  price         Int
-  discountPrice Int?
-  stock         Int            @default(0)
-  isFeatured    Boolean        @default(false)
-  status        ProductStatus  @default(ACTIVE)
-  promoBadge    String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  subcategory   Subcategory    @relation(fields: [subcategoryId], references: [id])
-  images        ProductImage[]
-  orderItems    OrderItem[]
-  flashSales    FlashSaleProduct[]
+  price              Int
+  discountPrice      Int?
+  // Current sourcing/purchase cost per unit (paisa) — what it costs the shop to
+  // stock one unit. Feeds COGS: it is SNAPSHOTTED onto OrderItem at checkout so
+  // later supplier-price changes never rewrite historical margins.
+  purchaseCost       Int                    @default(0)
+  stock              Int                    @default(0)
+  // Low-stock alert threshold (Phase 5). When 0 < stock <= this, the product
+  // surfaces in the admin low-stock alert + daily digest. 0 disables it.
+  lowStockThreshold  Int                    @default(0)
+  isFeatured         Boolean                @default(false)
+  status             ProductStatus          @default(ACTIVE)
+  promoBadge         String?
+  // Optional SEO overrides (Phase 2); blank → default from name/description.
+  metaTitle          String?
+  metaDescription    String?                @db.Text
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  subcategory        Subcategory            @relation(fields: [subcategoryId], references: [id])
+  images             ProductImage[]
+  orderItems         OrderItem[]
+  flashSales         FlashSaleProduct[]
+  colors             ProductColor[]
+  specifications     ProductSpecification[]
+  features           ProductFeature[]
+  reviews            ProductReview[]
+  variants           ProductVariant[]
+  wishlistItems      WishlistItem[]
+  stockNotifications StockNotification[]
+  stockAdjustments   StockAdjustment[]
 
   @@index([subcategoryId, status])
   @@index([isFeatured, status])
+  // Full-text search over name + description. MySQL's default parser is
+  // whitespace/punctuation based, which handles space-separated Bangla words;
+  // querying is via MATCH … AGAINST in server/products/search.ts.
+  @@fulltext([name, description])
+}
+
+// Purchasable option of a product — one cell of the (color × size) matrix.
+// Either dimension may be null:
+//   • Oil:     size="1 Litre", colorName=null         (size-only)
+//   • T-shirt: size="M", colorName="Navy Blue"        (color + size combo)
+//   • Color-only good: size=null, colorName="Red"
+// When a product has any variants the customer MUST pick one; that variant's
+// own price and stock are authoritative (product price becomes a "from" only).
+// colorName links to a ProductColor by name, which supplies the swatch image.
+model ProductVariant {
+  id           Int         @id @default(autoincrement())
+  productId    Int
+  size         String? // "500 ml", "M", "XL"
+  colorName    String? // matches a ProductColor.name for the swatch/image
+  price        Int // paisa — authoritative price for this option
+  // Per-variant sourcing cost (paisa). 0 = "inherit the product's purchaseCost";
+  // checkout falls back to Product.purchaseCost when this is 0.
+  purchaseCost Int         @default(0)
+  stock        Int         @default(0)
+  sortOrder    Int         @default(0)
+  product      Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems   OrderItem[]
+
+  @@index([productId, sortOrder])
 }
 
 enum ProductStatus {
@@ -87,28 +138,93 @@ model ProductImage {
   @@index([productId, sortOrder])
 }
 
+model ProductColor {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  name      String
+  hexCode   String
+  imageUrl  String?
+  sortOrder Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+model ProductSpecification {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  label     String
+  value     String
+  sortOrder Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+model ProductFeature {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  text      String
+  sortOrder Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+// One review per customer per product — enforced by the unique constraint
+// below, so re-submitting overwrites rather than duplicates.
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  HIDDEN
+}
+
+model ProductReview {
+  id         Int          @id @default(autoincrement())
+  productId  Int
+  customerId String
+  rating     Int
+  comment    String       @db.Text
+  status     ReviewStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  product    Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer   Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, customerId])
+  @@index([productId, status, createdAt])
+}
+
 model Banner {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   imageUrl  String
   link      String?
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  // Which hero area this image fills. MAIN is the big left banner (supports
+  // several images as a carousel); the RIGHT_* slots are single cards.
+  slot      BannerSlot @default(MAIN)
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
 
-  @@index([isActive, sortOrder])
+  @@index([slot, isActive, sortOrder])
+}
+
+enum BannerSlot {
+  MAIN
+  RIGHT_TOP
+  RIGHT_BOTTOM
 }
 
 // A scheduled campaign with a curated product list. "Active" on the
 // storefront means isActive=true AND now is within [startsAt, endsAt] —
 // the boolean lets an admin pause a campaign without losing its dates.
 model FlashSale {
-  id        Int               @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   name      String
   startsAt  DateTime
   endsAt    DateTime
-  isActive  Boolean           @default(true)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
   products  FlashSaleProduct[]
 
   @@index([isActive, startsAt, endsAt])
@@ -131,35 +247,116 @@ model FlashSaleProduct {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Customers (passwordless — magic link or Google sign-in, no password)
+// ─────────────────────────────────────────────────────────────
+
+enum AuthProvider {
+  GOOGLE
+  EMAIL
+}
+
+model Customer {
+  // Custom, human-readable id of the form `fz-XXXXXX` (see lib/customer-id.ts).
+  // Generated in application code, so no @default here.
+  id        String          @id
+  email     String          @unique
+  name      String?
+  avatarUrl String?
+  provider  AuthProvider
+  createdAt DateTime        @default(now())
+  orders    Order[]
+  reviews   ProductReview[]
+  wishlist  WishlistItem[]
+}
+
+// Single-use magic-link tokens. usedAt marks consumption (kept for audit
+// rather than deleted); expiresAt enforces a short window (e.g. 15 min).
+model LoginToken {
+  id        Int       @id @default(autoincrement())
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
+// ─────────────────────────────────────────────────────────────
 // Orders
 // ─────────────────────────────────────────────────────────────
 
 model Order {
-  id             Int         @id @default(autoincrement())
+  id                 Int               @id @default(autoincrement())
   // Public, short, human-readable identifier for COD phone calls / tracking.
-  orderNo        String      @unique
-  customerName   String
-  customerPhone  String
+  orderNo            String            @unique
+  // Nullable — checkout stays guest-friendly; set when the customer was
+  // signed in at checkout time, purely to power order history.
+  customerId         String?
+  customerName       String
+  customerPhone      String
   // Optional — phone is the primary contact for COD; email is only used to
   // send an order-confirmation mail when the customer provides one.
-  customerEmail  String?
-  address        String      @db.Text
-  shippingZoneId Int?
-  deliveryCharge Int         @default(0)
-  subtotal       Int
-  total          Int
-  status         OrderStatus @default(PENDING)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  shippingZone   ShippingZone? @relation(fields: [shippingZoneId], references: [id])
-  items          OrderItem[]
-  courierShipment CourierShipment?
+  customerEmail      String?
+  address            String            @db.Text
+  // Optional free-text note from the customer at checkout ("leave at gate",
+  // delivery timing, etc.). Distinct from the admin-only `notes` relation.
+  customerNote       String?           @db.Text
+  shippingZoneId     Int?
+  deliveryCharge     Int               @default(0)
+  subtotal           Int
+  total              Int
+  // ── Financial tracking (paisa) — the real costs behind an order, entered by
+  // the admin on the order detail page and aggregated by the monthly P&L. These
+  // are the shop's OWN costs, distinct from deliveryCharge (what the CUSTOMER
+  // pays). Defaults keep historical orders valid; admins fill them in per order.
+  //
+  //   shippingCost        — outbound courier fee the shop pays to deliver.
+  //   returnShippingCost  — courier fee lost when an order comes back.
+  //   paymentGatewayFee   — COD collection / mobile-wallet processing fee.
+  //   returnRestockable   — for RETURNED orders: true = goods can be resold
+  //                         (no cost impact), false = damaged (cost → Inventory
+  //                         Loss under OpEx).
+  shippingCost       Int               @default(0)
+  returnShippingCost Int               @default(0)
+  paymentGatewayFee  Int               @default(0)
+  returnRestockable  Boolean           @default(true)
+  // ── Payment (Phase 1) ──
+  //   COD     — full cash on delivery (default, unchanged behaviour).
+  //   ONLINE  — full amount paid through a gateway before confirmation.
+  //   PARTIAL — delivery charge paid online, remainder COD (the standard BD
+  //             anti-fake-order pattern).
+  // paidAmount is the paisa actually CONFIRMED online (via IPN + validation),
+  // so COD due on delivery = total - paidAmount.
+  paymentMethod      PaymentMethod     @default(COD)
+  paidAmount         Int               @default(0)
+  // ── Coupon (Phase 4) ── snapshotted at checkout so later coupon edits never
+  // rewrite a historical order. total already has couponDiscount subtracted.
+  couponCode         String?
+  couponDiscount     Int               @default(0)
+  status             OrderStatus       @default(PENDING)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  customer           Customer?         @relation(fields: [customerId], references: [id])
+  shippingZone       ShippingZone?     @relation(fields: [shippingZoneId], references: [id])
+  items              OrderItem[]
+  courierShipment    CourierShipment?
+  statusLogs         OrderStatusLog[]
+  notes              OrderNote[]
+  payments           Payment[]
+  returnRequests     ReturnRequest[]
+  couponRedemption   CouponRedemption?
 
   @@index([status, createdAt])
   @@index([customerPhone])
+  @@index([customerId])
 }
 
 enum OrderStatus {
+  // Online-payment orders start here: stock is already reserved (decremented)
+  // but the order is not real until the gateway confirms. Auto-cancelled with
+  // stock released if payment doesn't arrive within the expiry window.
+  PENDING_PAYMENT
   PENDING
   CONFIRMED
   SHIPPED
@@ -168,19 +365,92 @@ enum OrderStatus {
   RETURNED
 }
 
-model OrderItem {
-  id          Int     @id @default(autoincrement())
-  orderId     Int
-  productId   Int?
-  // SNAPSHOTS — frozen at purchase time. Editing or deleting a product later
-  // must never change historical orders, so name + price live on the row.
-  productName String
-  unitPrice   Int
-  quantity    Int
-  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+enum PaymentMethod {
+  COD
+  ONLINE
+  PARTIAL
+}
+
+enum PaymentStatus {
+  INITIATED
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+// One gateway payment attempt. An order can have several (abandoned attempt,
+// then a successful retry), so payments are rows, not columns on Order.
+// amount is paisa like all money. rawPayload keeps the provider's verbatim
+// IPN/validation response for dispute evidence — never parsed after write.
+model Payment {
+  id            Int           @id @default(autoincrement())
+  orderId       Int
+  provider      String // "sslcommerz" | "bkash" | "mock"
+  amount        Int
+  status        PaymentStatus @default(INITIATED)
+  // Provider's transaction/reference id once known (val_id / trxID). The
+  // provider's idempotency anchor for IPN retries.
+  providerTxnId String?
+  rawPayload    Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  order         Order         @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
+  @@index([provider, providerTxnId])
+}
+
+model OrderItem {
+  id           Int             @id @default(autoincrement())
+  orderId      Int
+  productId    Int?
+  // Which size/option was bought, if the product is sized. variantLabel is a
+  // SNAPSHOT (like productName) so historical orders survive a variant edit.
+  variantId    Int?
+  variantLabel String?
+  // SNAPSHOTS — frozen at purchase time. Editing or deleting a product later
+  // must never change historical orders, so name + price live on the row.
+  productName  String
+  unitPrice    Int
+  // SNAPSHOT of the sourcing cost per unit (paisa) at purchase time — the COGS
+  // basis for this line. Frozen here so a later supplier-price edit on the
+  // product never distorts a past month's profit. See createOrder.ts.
+  purchaseCost Int             @default(0)
+  quantity     Int
+  order        Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product      Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant      ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+}
+
+// Append-only audit trail of every status transition. fromStatus is null for
+// the very first (PENDING) entry written at order creation. changedBy holds
+// the admin username, or null for system/customer-originated changes.
+model OrderStatusLog {
+  id         Int          @id @default(autoincrement())
+  orderId    Int
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  changedBy  String?
+  note       String?      @db.Text
+  createdAt  DateTime     @default(now())
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+}
+
+// Internal staff notes on an order (e.g. "called customer, confirmed address").
+// Never shown to customers; author is the admin username.
+model OrderNote {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  body      String   @db.Text
+  author    String
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -200,11 +470,63 @@ model ShippingZone {
 }
 
 model AdminUser {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  passwordHash String
-  role         String   @default("admin")
-  createdAt    DateTime @default(now())
+  id               Int                  @id @default(autoincrement())
+  username         String               @unique
+  // Recovery address for password resets. Nullable so pre-existing admins stay
+  // valid; a reset can only be requested for an admin that has one set.
+  email            String?              @unique
+  passwordHash     String
+  // RBAC (Phase 3). See lib/permissions.ts for what each role may do. The
+  // permission check re-reads role + isActive from this row on every request,
+  // so a role change or deactivation takes effect immediately (not on next login).
+  role             AdminRole            @default(STAFF)
+  // Deactivated admins keep their row (for audit-log attribution) but can't
+  // log in or hold a valid session.
+  isActive         Boolean              @default(true)
+  // Optional TOTP two-factor. Secret is encrypted at rest via lib/crypto.
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean              @default(false)
+  createdAt        DateTime             @default(now())
+  resetTokens      PasswordResetToken[]
+  activityLogs     AdminActivityLog[]
+}
+
+enum AdminRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+// Append-only audit trail of privileged admin actions — same pattern as
+// OrderStatusLog/OrderNote. actorName is a SNAPSHOT of the username so the
+// log survives an admin rename or deletion. adminId is nullable for
+// system-originated entries.
+model AdminActivityLog {
+  id        Int        @id @default(autoincrement())
+  adminId   Int?
+  actorName String
+  action    String
+  detail    String?    @db.Text
+  createdAt DateTime   @default(now())
+  admin     AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([adminId])
+}
+
+// Single-use, short-lived admin password-reset tokens. usedAt marks
+// consumption (kept for audit rather than deleted, like LoginToken) so a
+// replayed link is rejected even inside the expiry window.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  adminId   Int
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
 }
 
 // The DB row is the editable source of truth; middleware enforces against a
@@ -222,13 +544,13 @@ model BlockedIp {
 // inline with checkout. One row per attempt (including retries), so a
 // failure trail is visible even though the worker retries automatically.
 model MailLog {
-  id        Int           @id @default(autoincrement())
+  id        Int          @id @default(autoincrement())
   to        String
   subject   String
   template  String
-  status    NotifyStatus  @default(PENDING)
-  error     String?       @db.Text
-  createdAt DateTime      @default(now())
+  status    NotifyStatus @default(PENDING)
+  error     String?      @db.Text
+  createdAt DateTime     @default(now())
 
   @@index([status, createdAt])
 }
@@ -255,15 +577,15 @@ enum NotifyStatus {
 // so a duplicate callback (providers retry) is a no-op rather than a
 // double-write — see the webhook route for the idempotency check.
 model CourierShipment {
-  id             Int      @id @default(autoincrement())
-  orderId        Int      @unique
-  courierName    String
-  consignmentId  String   @unique
-  trackingCode   String?
-  courierStatus  String
-  lastSyncedAt   DateTime @default(now())
-  createdAt      DateTime @default(now())
-  order          Order    @relation(fields: [orderId], references: [id])
+  id            Int      @id @default(autoincrement())
+  orderId       Int      @unique
+  courierName   String
+  consignmentId String   @unique
+  trackingCode  String?
+  courierStatus String
+  lastSyncedAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  order         Order    @relation(fields: [orderId], references: [id])
 
   @@index([consignmentId])
 }
@@ -304,12 +626,15 @@ enum PageStatus {
 // Order, Order Tracking, Payment, Shipping). Slugs are seeded once and never
 // created/deleted from the admin UI — admins only edit title/content/status.
 model Page {
-  id        Int        @id @default(autoincrement())
-  slug      String     @unique
-  title     String
-  content   String     @db.Text
-  status    PageStatus @default(PUBLISHED)
-  updatedAt DateTime   @updatedAt
+  id              Int        @id @default(autoincrement())
+  slug            String     @unique
+  title           String
+  content         String     @db.Text
+  status          PageStatus @default(PUBLISHED)
+  // Optional SEO overrides (Phase 2); blank → default from title/content.
+  metaTitle       String?
+  metaDescription String?    @db.Text
+  updatedAt       DateTime   @updatedAt
 }
 
 // FAQ entries shown on the FAQ page. Unlike Page, this is a real list the
@@ -325,4 +650,176 @@ model FaqItem {
   updatedAt DateTime @updatedAt
 
   @@index([isActive, sortOrder])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Finance — manual operating expenses (OpEx)
+// ─────────────────────────────────────────────────────────────
+
+// Fixed / recurring overheads the admin enters by hand — marketing spend,
+// hosting, rent, salaries, etc. These are the OpEx items that don't fall out of
+// order data automatically. `incurredOn` (not createdAt) drives which month the
+// expense lands in on the P&L, so a bill can be back-dated to the month it
+// belongs to. `amount` is paisa, like every other money field.
+model Expense {
+  id          Int             @id @default(autoincrement())
+  category    ExpenseCategory @default(OTHER)
+  description String
+  amount      Int
+  incurredOn  DateTime
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([incurredOn])
+}
+
+enum ExpenseCategory {
+  MARKETING // ads, promotions, influencer spend
+  SOFTWARE // hosting, SaaS tools, domains
+  RENT // office / warehouse rent
+  SALARY // staff wages
+  UTILITIES // internet, electricity, phone
+  PACKAGING // boxes, tape, polymailers
+  OTHER
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 4 — Conversion & Anti-Fraud
+// ─────────────────────────────────────────────────────────────
+
+// Discount code. `value` is a whole-number percentage for PERCENT, or a paisa
+// amount for FIXED. maxDiscount caps a percent coupon. The discount is
+// SNAPSHOTTED onto the Order at checkout, so later edits never rewrite history.
+model Coupon {
+  id               Int                @id @default(autoincrement())
+  code             String             @unique
+  type             CouponType
+  value            Int
+  minOrder         Int                @default(0) // paisa; 0 = no minimum
+  maxDiscount      Int? // paisa cap for percent coupons
+  usageLimit       Int? // total redemptions across all customers (null = unlimited)
+  perCustomerLimit Int? // redemptions per customer (null = unlimited)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  isActive         Boolean            @default(true)
+  timesUsed        Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  redemptions      CouponRedemption[]
+
+  @@index([isActive])
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+// One row per successful coupon use. Enforces per-customer limits (by phone,
+// which every order has) and drives the "times used" counter.
+model CouponRedemption {
+  id            Int      @id @default(autoincrement())
+  couponId      Int
+  orderId       Int      @unique
+  customerId    String?
+  customerPhone String
+  amount        Int // paisa discount applied
+  createdAt     DateTime @default(now())
+  coupon        Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([couponId])
+  @@index([customerPhone])
+}
+
+// A saved cart for an identified customer, used for abandoned-cart recovery.
+// One live cart per customerId (upserted). recoveryToken powers the restore
+// link; reminderSentAt/recoveredAt drive the delayed job and the report.
+model CartSession {
+  id             Int       @id @default(autoincrement())
+  customerId     String?   @unique
+  email          String?
+  phone          String?
+  items          Json // snapshot of cart lines (productId, variantId, qty, name, price)
+  subtotal       Int
+  recoveryToken  String    @unique
+  reminderSentAt DateTime?
+  recoveredAt    DateTime?
+  orderedAt      DateTime? // set when this cart's customer places an order (no reminder needed)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([reminderSentAt, orderedAt, updatedAt])
+}
+
+// Customer-initiated return request against a delivered order. Feeds an admin
+// queue; approving it drives the existing RETURNED order workflow.
+model ReturnRequest {
+  id         Int          @id @default(autoincrement())
+  orderId    Int
+  customerId String?
+  reason     String       @db.Text
+  photoUrl   String?
+  status     ReturnStatus @default(PENDING)
+  adminNote  String?      @db.Text
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([orderId])
+}
+
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A product a customer saved to their wishlist. One row per (customer, product).
+model WishlistItem {
+  id         Int      @id @default(autoincrement())
+  customerId String
+  productId  Int
+  createdAt  DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@index([customerId])
+}
+
+// "Notify me when back in stock" subscription. notifiedAt is set once the
+// alert has been queued, so a later restock doesn't re-notify the same person.
+model StockNotification {
+  id         Int       @id @default(autoincrement())
+  productId  Int
+  variantId  Int?
+  email      String?
+  phone      String?
+  customerId String?
+  notifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, notifiedAt])
+}
+
+// Audit log of MANUAL stock corrections by an admin (received a shipment,
+// damaged units, stock-take fix, etc.). Order-driven stock changes go through
+// checkout/restock, not here — this is only for hand corrections, so who/when/
+// why is recorded. delta is signed (+ added, − removed); newStock snapshots the
+// resulting level.
+model StockAdjustment {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  variantId Int?
+  delta     Int
+  newStock  Int
+  reason    String
+  adminName String
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
 }

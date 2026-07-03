@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { takaToPaisa } from "@/lib/money";
+import { requirePermission } from "@/server/admin/guard";
 import {
   createFlashSale,
   updateFlashSale,
@@ -30,6 +31,7 @@ export async function saveFlashSale(
   id: number | null,
   formData: FormData,
 ): Promise<ActionResult> {
+  await requirePermission("flash-sales");
   const name = String(formData.get("name") ?? "").trim();
   const startsAtRaw = String(formData.get("startsAt") ?? "");
   const endsAtRaw = String(formData.get("endsAt") ?? "");
@@ -66,6 +68,7 @@ export async function saveFlashSale(
 }
 
 export async function removeFlashSale(id: number): Promise<ActionResult> {
+  await requirePermission("flash-sales");
   await deleteFlashSale(id);
   revalidatePath("/admin/flash-sales");
   revalidatePath("/");

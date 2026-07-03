@@ -18,7 +18,7 @@ export default function CategoryTiles({ categories }: { categories: Cat[] }) {
           <h2>Shop by category</h2>
           <span className="sh-sub">Browse our top departments</span>
         </div>
-        <Link className="viewall" href="/products">
+        <Link className="viewall" href="/category">
           All categories <ArrowRight size={14} />
         </Link>
       </div>

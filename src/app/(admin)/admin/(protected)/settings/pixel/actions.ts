@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { setPixelId } from "@/server/settings/tracking";
+import { requirePermission } from "@/server/admin/guard";
 
 export interface ActionResult {
   error?: string;
@@ -9,6 +10,7 @@ export interface ActionResult {
 }
 
 export async function savePixelId(formData: FormData): Promise<ActionResult> {
+  await requirePermission("settings");
   const pixelId = String(formData.get("pixelId") ?? "").trim();
 
   if (pixelId && !/^\d{10,20}$/.test(pixelId)) {

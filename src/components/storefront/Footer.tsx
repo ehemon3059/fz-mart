@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getDictionary } from "@/i18n/server";
 import { FacebookIcon, InstagramIcon, YoutubeIcon } from "./icons";
 
 const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
@@ -42,7 +43,8 @@ const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
   },
 ];
 
-export default function Footer() {
+export default async function Footer() {
+  const dict = await getDictionary();
   return (
     <footer className="ft">
       <div className="wrap">
@@ -74,7 +76,7 @@ export default function Footer() {
         </div>
 
         <div className="ft-bot">
-          <span>© {new Date().getFullYear()} FZ Mart. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} FZ Mart. {dict.footer.allRightsReserved}</span>
           <div className="ft-social">
             <a href="#" aria-label="Facebook"><FacebookIcon /></a>
             <a href="#" aria-label="Instagram"><InstagramIcon /></a>

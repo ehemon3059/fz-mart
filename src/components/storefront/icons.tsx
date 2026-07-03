@@ -70,6 +70,13 @@ export const ShieldCheck = (p: P) => (
   <Svg {...p}><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></Svg>
 );
 
+export const TrashIcon = (p: P) => (
+  <Svg {...p}><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" /><path d="M9 7V4h6v3" /></Svg>
+);
+export const CheckIcon = (p: P) => (
+  <Svg {...p} strokeWidth={2.6}><path d="M20 6 9 17l-5-5" /></Svg>
+);
+
 // ---- social ----
 export const FacebookIcon = ({ size = 16, ...rest }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" {...rest}>

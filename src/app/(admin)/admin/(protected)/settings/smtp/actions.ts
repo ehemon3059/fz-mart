@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSmtpConfig, saveSmtpConfig } from "@/server/settings/smtp";
+import { requirePermission } from "@/server/admin/guard";
 
 export interface ActionResult {
   error?: string;
@@ -9,6 +10,7 @@ export interface ActionResult {
 }
 
 export async function saveSmtpSettings(formData: FormData): Promise<ActionResult> {
+  await requirePermission("settings");
   const host = String(formData.get("host") ?? "").trim();
   const port = Number(formData.get("port") ?? 587);
   const secure = formData.get("secure") === "on";

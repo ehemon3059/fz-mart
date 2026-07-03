@@ -29,6 +29,8 @@ export interface CategoryInput {
   name: string;
   sortOrder?: number;
   isActive?: boolean;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
 }
 
 export async function createCategory(input: CategoryInput) {
@@ -38,6 +40,8 @@ export async function createCategory(input: CategoryInput) {
       slug: slugify(input.name),
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
     },
   });
   await invalidateCategoryCaches(category.slug);
@@ -53,6 +57,8 @@ export async function updateCategory(id: number, input: CategoryInput) {
       slug: slugify(input.name),
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
     },
   });
   await invalidateCategoryCaches(category.slug);
