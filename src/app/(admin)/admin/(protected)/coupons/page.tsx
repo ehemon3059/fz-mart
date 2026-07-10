@@ -53,13 +53,19 @@ export default async function CouponsPage() {
                     ? `${c.value}% off${c.maxDiscount ? ` (max ${formatTaka(c.maxDiscount)})` : ""}`
                     : `${formatTaka(c.value)} off`;
                 const min = c.minOrder > 0 ? ` · min ${formatTaka(c.minOrder)}` : "";
+                const scope =
+                  c.appliesTo === "CATEGORY"
+                    ? ` · category: ${c.category?.name ?? "—"}`
+                    : c.appliesTo === "PRODUCT"
+                      ? ` · product: ${c.product?.name ?? "—"}`
+                      : "";
                 const usage = `${c.timesUsed}${c.usageLimit != null ? ` / ${c.usageLimit}` : ""}`;
                 return (
                   <CouponRow
                     key={c.id}
                     id={c.id}
                     code={c.code}
-                    summary={value + min}
+                    summary={value + min + scope}
                     usage={usage}
                     status={statusOf(c)}
                   />

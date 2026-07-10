@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slugify";
+import { deleteImage } from "@/integrations/storage";
 import { invalidateProductCaches } from "./cache";
 import { productInStock, notifyBackInStock } from "./stock-notify";
 
@@ -309,7 +310,11 @@ export async function updateProduct(id: number, input: ProductInput) {
 export async function deleteProduct(id: number) {
   const product = await prisma.product.findUnique({
     where: { id },
-    include: { subcategory: { include: { category: true } } },
+    include: {
+      subcategory: { include: { category: true } },
+      images: { select: { url: true } },
+      colors: { select: { imageUrl: true } },
+    },
   });
 
   await prisma.product.delete({ where: { id } });
@@ -321,5 +326,11 @@ export async function deleteProduct(id: number) {
       subcategorySlug: product.subcategory.slug,
       categorySlug: product.subcategory.category.slug,
     });
+    // Best-effort cleanup of stored objects (no-ops for seed/external URLs).
+    const urls = [
+      ...product.images.map((i) => i.url),
+      ...product.colors.map((c) => c.imageUrl).filter((u): u is string => !!u),
+    ];
+    await Promise.all(urls.map((u) => deleteImage(u)));
   }
 }

@@ -1,158 +1,172 @@
 # fz-mart — Project Overview
 
-A full-stack, single-vendor **e-commerce platform** built for the Bangladesh market, with a
-**Cash-on-Delivery (COD)** first checkout, a complete storefront, and a rich admin
-panel for running the business day to day.
+A full-stack, single-vendor **e-commerce platform** built for the Bangladesh market:
+a fast, SEO-friendly storefront with **Cash-on-Delivery-first checkout** and online
+payments (bKash / SSLCommerz), plus a comprehensive **admin panel** that covers the
+entire business — catalog, orders, fulfilment, marketing, finance, and staff management.
+
+The platform is production-verified: `next build` passes cleanly and a self-provisioning
+Playwright E2E suite (checkout, coupons, payments, newsletter, and more) runs green.
 
 ---
 
-## 1. Tech Stack — Programming Languages
+## 1. Tech Stack
 
-| Language | Where it's used |
+| Layer | Technology |
 |---|---|
-| **TypeScript** | The entire application — server logic, React components, server actions, workers. Strict, end-to-end typed. |
-| **JavaScript (JSX/TSX)** | React components render as TSX; a few standalone scripts (`*.mjs`) for one-off DB tasks. |
-| **SQL** | Database migrations (`prisma/migrations/*/migration.sql`) targeting **MySQL**. |
-| **Prisma Schema Language** | `prisma/schema.prisma` — the data model definition. |
-| **CSS (Tailwind + some global CSS)** | Styling via utility classes; a little hand-written CSS for the storefront checkout. |
-| **HTML (email templates)** | Table-based, inline-styled transactional emails (Gmail/Outlook-safe). |
+| Framework | **Next.js 15** (App Router, Server Components, Server Actions, Edge middleware) |
+| UI | **React 19** + **Tailwind CSS 3.4** (+ typography plugin) |
+| Language | **TypeScript 5**, strict, typed end to end |
+| Database | **MySQL** via **Prisma 6** (SQL migrations checked in) |
+| Cache / sessions / rate limiting | **Redis** (ioredis) |
+| Background jobs | **BullMQ** worker process (email, SMS, abandoned-cart, daily maintenance) |
+| Email | **nodemailer** over admin-configurable SMTP (Gmail, Zoho, Brevo, SES…) |
+| Object storage | **Cloudflare R2 / S3-compatible** adapter for product & banner images |
+| Testing | **Playwright** E2E suite + GitHub Actions CI (lint → migrate → build → e2e) |
+| Monitoring | `/api/health` endpoint (DB + Redis), opt-in **Sentry** (server, client, worker) |
 
-**Runtime:** Node.js. **Framework:** Next.js 15 (App Router) with React 19 Server Components + Server Actions.
-
----
-
-## 2. Frameworks, Services & Libraries
-
-### Core framework & data
-- **Next.js 15.2.x** — App Router, Server Components, Server Actions, Edge middleware.
-- **React 19.2** — UI.
-- **Prisma 6.19** (ORM) + **MySQL** — relational database and type-safe queries.
-- **TypeScript 5** — language + type safety.
-- **Tailwind CSS 3.4** (+ `@tailwindcss/typography`) — styling system.
-
-### Infrastructure services
-- **Redis** (via **ioredis**) — admin **sessions**, report **caching**, **rate limiting**, fraud-result cache, and the IP-block mirror.
-- **BullMQ** — background **job queue** (Redis-backed). A separate worker process sends email/SMS asynchronously so checkout never blocks.
-- **SMTP (via nodemailer)** — transactional email. Provider is **admin-configurable** (Gmail, Zoho, Brevo, Amazon SES SMTP, etc.), not hard-coded.
-
-### Security & auth
-- **bcrypt** — admin password hashing.
-- **google-auth-library** — customer **Google Sign-In**.
-- Passwordless **magic-link** email login for customers; **encrypted-at-rest** secrets for integration settings (custom `lib/crypto`).
-
-### Front-end helpers
-- **Zustand** — client-side cart state (persisted to `localStorage`).
-- **@tiptap** — rich-text editor for CMS page content.
-- **sanitize-html** — sanitizes admin-authored HTML before storage/render.
-- **cropperjs** — in-browser image cropping/compression for product photos.
-
-### Pluggable third-party integrations (admin-configured)
-- **Courier API** — Steadfast / Pathao / RedX / eCourier / Paperfly (consignment creation + delivery-status webhooks).
-- **Fraud-check API** — customer risk scoring by phone number (cached).
-- **SMS gateway** — order-status notifications.
-- **Facebook Pixel** & **Google Tag Manager** — marketing/analytics tracking.
+**Code layout:** `app/` (routes & UI) · `server/` (business logic) · `lib/` (shared utilities)
+· `integrations/` (external-service adapters: courier, payments, fraud, SMS, mail, storage)
+· `jobs/` (background workers) · `i18n/` (translations) · `tests/e2e/` (Playwright).
 
 ---
 
-## 3. E-Commerce Features Delivered
+## 2. Storefront (Customer-Facing)
 
-### Storefront (customer-facing)
-- [x] Product catalog: **categories → subcategories → products**.
-- [x] **Product variants** — a colour × size matrix (each combo has its own price & stock).
-- [x] Product detail: image gallery, colour swatches, specifications, feature bullets, **customer reviews & ratings**.
-- [x] **Flash sales** — scheduled, time-boxed campaigns with override pricing.
-- [x] Homepage **banners** (hero slots) and featured products.
-- [x] **Cart** (add / update qty / remove) and **Buy Now** (single-item express checkout).
-- [x] **Checkout** with **Cash on Delivery**, shipping-zone delivery charges, and guest checkout.
-- [x] **Customer accounts** — passwordless **magic-link email** login + **Google Sign-In**; order history.
-- [x] **Order confirmation email** on purchase.
-- [x] **Order tracking** page.
-- [x] CMS **static pages** (About, Contact, Terms, Privacy, Refund/Return, Shipping, etc.) + **FAQ**.
+### Catalog & discovery
+- **Categories → subcategories → products**, with **product variants** (colour × size matrix, each combination carrying its own price and stock).
+- Product detail pages: image gallery, colour swatches, specifications, feature bullets, **customer reviews & ratings**.
+- **Flash sales** — scheduled, time-boxed campaigns with override pricing.
+- Homepage **hero banners** and featured products.
+- **Full-text search** (MySQL FULLTEXT, relevance-ranked, Bangla-capable) with filters, sorting, pagination, and a **live typeahead** suggestion box in the header.
+- **Wishlist** and **"Notify me when back in stock"** subscriptions (alert fires automatically on restock).
 
-### Admin panel (business operations)
-- [x] **Admin authentication** — username/password, Redis-backed sessions, rate-limited login.
-- [x] **Redesigned login** + **forgot-password / reset-password via email** *(recent work — see §4)*.
-- [x] **Dashboard** — orders today, pending, revenue, status breakdown, recent orders.
-- [x] **Product management** — full CRUD with variants, image upload/crop, colours, specs, features, and **sourcing cost**.
-- [x] **Category / banner / flash-sale management**.
-- [x] **Order management** — validated status workflow (Pending → Confirmed → Shipped → Delivered / Cancelled / Returned), **status audit log**, internal notes, **bulk status updates**, courier consignment panel, printable invoice.
-- [x] **Review moderation** (approve / hide).
-- [x] **CMS** — edit static pages (TipTap) and FAQ entries.
-- [x] **Reports** — stock report, order reports, and a full **Profit & Loss (financial) report** *(recent work — see §4)*.
-- [x] **Operating-expense tracking** *(recent work)*.
-- [x] **Settings hub** — appearance/theme, shipping zones, Tag Manager, Pixel, IP block, SMTP, Google OAuth, SMS gateway, Courier API, Fraud-check API.
+### Cart & checkout
+- Cart (add / update / remove, persisted client-side) and **Buy Now** express checkout.
+- **Guest checkout** — no account required.
+- **Cash on Delivery**, **bKash**, and **SSLCommerz** payment options, including **partial advance** ("pay the delivery charge now, rest COD").
+- Shipping-zone-based delivery charges.
+- **Coupon codes** applied at checkout (validated live, redeemed atomically inside the order transaction).
+- **Phone OTP verification** for COD orders (anti-fake-order; automatically skipped for repeat customers with a delivered order).
+- **Abandoned-cart recovery** — carts left at checkout trigger a delayed SMS/email with a one-click cart-restore link.
 
-### Cross-cutting engineering
-- [x] **Money stored as integers (paisa)** to avoid floating-point rounding on currency.
-- [x] **Snapshotting** — order items freeze product name, price, variant label, and **sourcing cost** at purchase time, so later edits never rewrite historical orders.
-- [x] **Anti-oversell** — atomic conditional stock decrements inside a DB transaction at checkout.
-- [x] **Background jobs** — mail/SMS via BullMQ, with `MailLog` / `SmsLog` audit trails and automatic retries.
-- [x] **Fraud check** + **IP blocking** (edge middleware + Redis).
-- [x] **Rate limiting** on sensitive endpoints (login, magic link, password reset).
+### Customer accounts & post-purchase
+- Passwordless **magic-link email login** and **Google Sign-In**; order history in the account area.
+- **Order tracking** page (order number + phone).
+- **Self-service cancellation** (while pending) and **return requests** within the configured return window — no login needed, authorized by order number + phone.
+- Order confirmation email; status-update SMS notifications.
+- **Newsletter signup** (footer box) with idempotent subscription storage.
+
+### Content, localization & engagement
+- CMS **static pages** (About, Terms, Privacy, Refund, Shipping…) with rich-text editing, plus **FAQ**.
+- **Bangla / English UI** — cookie-based locale switcher, translated UI chrome, optional **Bangla-digit prices**, admin-set default language.
+- **WhatsApp / Messenger chat buttons** (floating, admin-configured).
 
 ---
 
-## 4. Recent Work (This Engagement)
+## 3. Admin Panel (Business Operations)
 
-### A. Financial Reporting Module (Monthly P&L)
-A complete profit-and-loss system built on standard e-commerce accounting:
+### Access control & staff management
+- Username/password login on a branded screen, Redis-backed sessions, rate-limited, with **email-based password recovery** (single-use, 30-minute tokens, no email enumeration).
+- **Two-factor authentication (TOTP)** — per-admin opt-in, two-step login flow.
+- **Role-based access control**: OWNER / MANAGER / STAFF roles with a per-area permission map, enforced by a single guard that re-reads role and active status from the DB on every request (deactivation takes effect immediately).
+- **Admin management** (owner only): invite staff by email, change roles, activate/deactivate — with last-owner-lockout protection.
+- **Append-only activity audit log** with an in-admin viewer.
 
-- **Formula:** `Net Revenue = Gross Sales − Returns`, `Gross Profit = Net Revenue − COGS`, `Net Profit = Gross Profit − Operating Expenses`.
-- **Accurate recognition:** sales are counted on the **delivery date** and returns on the **return date** (read from the order status-change history), so a "monthly" report reflects money actually realised — correct for COD.
-- **COGS rules:** only goods **sold and kept** count; resellable returns have no cost impact; **damaged returns** become an *Inventory Loss* expense.
-- **Per-order cost capture:** outbound shipping, return shipping, and COD/gateway fees are tracked per order on the order detail page.
-- **Product sourcing cost:** entered per product, **snapshotted** onto each order line at checkout.
-- **Manual expenses:** admin-entered overheads (Marketing, Software, Rent, Salaries, Utilities, Packaging…) with a management UI.
-- **Dashboard:** summary cards (Net Revenue, COGS, Gross Profit, Total OpEx), a headline **Net Profit** card with a profit/loss indicator, and a full P&L breakdown table with a month selector.
+### Catalog management
+- Product CRUD with variants, in-browser **image crop/compress on upload**, colours, specifications, features, **sourcing cost (COGS)**, per-product **SEO title/description overrides**, and **low-stock threshold**.
+- Category, banner, flash-sale, FAQ, and CMS-page management.
+- **Review moderation** (approve / hide).
 
-*(Also fixed a caching bug where `Date` objects lost their type through the Redis JSON round-trip.)*
+### Orders & fulfilment
+- Validated status workflow (Pending → Confirmed → Shipped → Delivered / Cancelled / Returned) with a **status audit log**, internal notes, **bulk status updates**, and printable invoices.
+- **Courier integration (Steadfast, live API)** — one-click consignment creation from the order page, delivery-status **webhook** updates, and manual status refresh. The adapter is provider-generic, so additional couriers plug in without touching the service layer.
+- **Returns queue** — approve/deny customer return requests; approval drives the standard RETURNED workflow, with restockable-vs-damaged classification feeding the P&L.
+- **Fraud screening** on checkout: pluggable phone-number risk-scoring API (cached, non-blocking) plus **IP blocking** enforced in edge middleware.
 
-### B. Admin Login Redesign + Password Recovery
-- **Redesigned** the admin login into a modern, branded, dark "glassmorphic" screen (shared `AuthShell` across login/forgot/reset).
-- **Forgot-password → email recovery:** enter your email → receive a **single-use, 30-minute** secure reset link → set a new password.
-- **Modern reset email template** — table-based, inline-styled, brand-consistent, with a clear CTA, copy-paste fallback link, and a security notice.
-- **Security:** no email enumeration, per-email + per-IP rate limiting, tokens invalidated on use, `email` added to the admin account.
-- Fixed the edge middleware so the recovery routes are reachable while signed out.
+### Inventory
+- **Anti-oversell guarantee**: atomic, conditional stock decrements inside the checkout transaction (for both products and variants). Online payments reserve stock up front and **release it automatically on payment failure/expiry**.
+- **Manual stock adjustments** with a full audit trail (who, when, why, signed delta, resulting stock).
+- **Low-stock alerts** on the dashboard plus an optional **daily digest** (scheduled job).
+- Stock report with per-product valuation.
 
----
+### Marketing & growth
+- **Coupons** — CRUD with usage limits and redemption tracking.
+- **Facebook Pixel + Conversions API**: client-side PageView/AddToCart, and a **server-side Purchase event fired only when the owner phone-confirms an order** (the meaningful COD conversion) — with fbp/fbc attribution captured at checkout, event deduplication, and hashed customer data. Token stored encrypted; managed in the Pixel Manager page.
+- **Google Tag Manager** integration.
+- Token-protected **product feeds**: Facebook Catalog (CSV) and Google Merchant (XML).
+- **Newsletter subscriber list** with CSV export.
+- **Ad-spend tracking** per channel (Facebook / Google / TikTok / other) feeding **ROAS and CAC** reporting.
 
-## 5. Project Summary
+### Reports & analytics
+- **Monthly Profit & Loss** — the finance centerpiece. Revenue recognized on **delivery date** (correct for COD), COGS from sourcing costs **snapshotted at checkout**, coupon discounts netted out, returns split into restockable (no cost impact) vs. damaged (**Inventory Loss** expense), gateway fees and shipping costs as OpEx, plus manually entered operating expenses (marketing, rent, salaries…). Headline Net Profit card with a month selector.
+- **Conversion funnel** — product views → add-to-cart → checkout started → order placed, with step-to-step rates (bot- and blocked-IP-filtered, fire-and-forget event capture).
+- **Delivery performance report** — per-courier days-to-deliver, failure rate, and shipping-cost audit, computed from the order status history.
+- **Owner analytics** on the dashboard: best sellers (7/30 days), sales by category, repeat-customer rate, COD success rate per courier.
+- Stock, order, and **abandoned-cart** reports; subscriber export.
 
-**fz-mart** is a production-oriented, **single-vendor e-commerce platform** tailored to a
-**Cash-on-Delivery** business in Bangladesh. It pairs a fast, SEO-friendly **Next.js 15 /
-React 19** storefront with a comprehensive **admin panel**, backed by **MySQL (via Prisma)**
-for durable data and **Redis** for sessions, caching, and rate limiting. Money is handled as
-integer paisa, order history is immutably snapshotted, and stock is protected against
-overselling with transactional, atomic decrements.
-
-The platform covers the full commerce lifecycle: **catalog → variants → cart → COD checkout →
-courier fulfilment → returns**, with **passwordless customer auth**, **flash sales**, **reviews**,
-and a **CMS**. Notifications (email/SMS) run through a **BullMQ background-job queue** with full
-audit logging, and the system integrates pluggably with **courier**, **fraud-check**, **SMS**,
-and **marketing-pixel** providers — all configured (with secrets encrypted at rest) from the
-admin Settings hub.
-
-Most recently, the platform gained a **true monthly Profit & Loss module** — turning raw order
-data plus captured costs into real financial insight (revenue, COGS, operating expenses, and net
-profit/loss) — and a **redesigned admin login with full email-based password recovery**. The
-codebase is fully **TypeScript**, type-checked end to end, and organised into clear layers:
-`app/` (routes & UI), `server/` (business logic), `lib/` (shared utilities), `integrations/`
-(external adapters), and `jobs/` (background workers).
+### Settings hub (all admin-configurable, secrets encrypted at rest)
+Appearance/theme · shipping zones · payments (bKash / SSLCommerz with **sandbox/live mode** and an in-admin sandbox warning) · courier API · fraud-check API · SMS gateway · SMTP · Google OAuth · Pixel Manager (Pixel + CAPI) · Tag Manager · marketing feeds · conversion features (OTP, abandoned-cart delay, return window, chat buttons) · localization · inventory digest · IP block list.
 
 ---
 
-### Key Commands
+## 4. SEO & Performance
+
+- **Metadata everywhere**: `generateMetadata` on product/category/CMS pages with admin-editable overrides; canonical `metadataBase`; Open Graph tags.
+- **Structured data (JSON-LD)**: Product, BreadcrumbList, and Organization schemas.
+- **`sitemap.xml`** (Redis-cached) and **`robots.txt`** via App Router metadata routes.
+- **Image optimization**: `next/image` throughout, priority + sizes on LCP images (hero, product cards, gallery), R2/S3-hosted originals.
+- **Redis caching** on heavy storefront reads and all report queries.
+- Documented Lighthouse methodology in `PERFORMANCE.md`.
+
+---
+
+## 5. Security & Reliability Engineering
+
+- **Money as integer paisa** end to end — no floating-point currency errors; conversion to taka only at the UI edge and at external API boundaries.
+- **Immutable order snapshots** — name, price, variant label, coupon discount, and sourcing cost are frozen onto each order line at purchase; later catalog edits never rewrite history.
+- **Security headers**: nonce-based **Content-Security-Policy** (per-request nonce via middleware), HSTS with preload, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy.
+- **Rate limiting** on login, magic link, password reset, OTP, order tracking, and search suggestions.
+- **Webhook signature verification** on payment IPN and courier callbacks.
+- **Encrypted-at-rest secrets** for every integration credential (payments, courier, CAPI, SMS, SMTP).
+- **Background-job auditing**: `MailLog` / `SmsLog` trails with automatic retries; checkout never blocks on notifications.
+- **Ops tooling**: `/api/health` (DB + Redis, 200/503), backup/restore/deploy scripts, opt-in Sentry across web + worker, `DEPLOYMENT.md` runbook.
+- **CI pipeline** (GitHub Actions): lint → migrate → build → Playwright E2E against real MySQL + Redis services.
+
+---
+
+## 6. Project Summary
+
+**fz-mart** covers the complete lifecycle of a Bangladeshi COD e-commerce business in one
+codebase: **catalog → search → cart → coupon → OTP-verified COD or online payment →
+courier fulfilment → delivery → returns → monthly P&L**. Growth tooling (Pixel + server-side
+Conversions API tuned to phone-confirmed orders, product feeds, abandoned-cart recovery,
+wishlist, back-in-stock, newsletter) is built in, and the owner gets a real control room:
+conversion funnel, ROAS/CAC, delivery performance, inventory alerts, and an accountant-grade
+profit-and-loss report.
+
+The engineering underneath is deliberately conservative where it matters — atomic stock
+control, immutable order snapshots, integer money, encrypted secrets, RBAC with immediate
+revocation, audit logs on admin activity and stock changes — and pluggable where it helps:
+courier, payment, fraud, SMS, mail, and storage providers are all adapters behind stable
+interfaces, configured from the admin Settings hub.
+
+---
+
+## 7. Key Commands
 
 ```bash
-npm run dev          # start the Next.js app (http://localhost:3000)
-npm run worker       # start the background mail/SMS worker (required for emails to send)
-npm run db:migrate   # apply database migrations (development)
-npm run db:deploy    # apply migrations (production)
-npm run db:seed      # seed the database (admin user, shipping zones, sample data)
-npm run build        # production build
-npm run lint         # ESLint
+npm run dev            # start the Next.js app (http://localhost:3000)
+npm run worker         # start the background worker (email/SMS/carts/maintenance)
+npm run db:migrate     # apply database migrations (development)
+npm run db:deploy      # apply migrations (production)
+npm run db:seed        # seed the database (admin user, shipping zones, sample data)
+npm run build          # production build
+npm run lint           # ESLint
+npm run test:e2e       # Playwright end-to-end suite (self-provisioning)
 ```
 
-> **Note:** For transactional emails (order confirmation, magic link, password reset) to
-> actually send, the **worker process must be running** *and* **SMTP must be configured**
-> under **Admin → Settings → SMTP**.
+> **Notes:**
+> - Transactional email/SMS and abandoned-cart/digest jobs require the **worker process
+>   running** and the relevant provider configured under **Admin → Settings**.
+> - See `DEPLOYMENT.md` for the production runbook (env vars, migrations, backups, health checks).

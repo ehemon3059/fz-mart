@@ -14,6 +14,12 @@ interface Props {
   maxBytes: number;
   /** Friendly name of the card being customised, for the header. */
   label: string;
+  /**
+   * Output format. "jpeg" (default) is opaque and supports quality reduction —
+   * right for photos/banners. "png" preserves transparency (right for a logo),
+   * but ignores the quality slider since PNG is lossless.
+   */
+  format?: "jpeg" | "png";
   onClose: () => void;
   onDone: (file: File) => void;
 }
@@ -25,8 +31,12 @@ const REDUCTIONS = [
   { label: "30%", quality: 0.7 },
 ];
 
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", quality));
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  mime: string,
+  quality: number,
+): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), mime, quality));
 }
 
 export default function ImageCustomizer({
@@ -34,9 +44,13 @@ export default function ImageCustomizer({
   targetHeight,
   maxBytes,
   label,
+  format = "jpeg",
   onClose,
   onDone,
 }: Props) {
+  const isPng = format === "png";
+  const mime = isPng ? "image/png" : "image/jpeg";
+  const ext = isPng ? "png" : "jpg";
   const imgRef = useRef<HTMLImageElement>(null);
   const cropperRef = useRef<Cropper | null>(null);
   const [src, setSrc] = useState<string | null>(null);
@@ -126,13 +140,14 @@ export default function ImageCustomizer({
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
 
-    // Export at the chosen quality, then keep stepping down until it fits the
-    // card's weight cap (so a customised image always passes the size limit).
-    let q = quality;
-    let blob = await canvasToBlob(canvas, q);
-    while (blob && blob.size > maxBytes && q > 0.4) {
+    // PNG is lossless (quality is ignored) and keeps transparency; JPEG can be
+    // stepped down in quality until it fits the weight cap so a customised
+    // image always passes the size limit.
+    let q = isPng ? 1 : quality;
+    let blob = await canvasToBlob(canvas, mime, q);
+    while (!isPng && blob && blob.size > maxBytes && q > 0.4) {
       q = Math.round((q - 0.1) * 10) / 10;
-      blob = await canvasToBlob(canvas, q);
+      blob = await canvasToBlob(canvas, mime, q);
     }
 
     if (!blob) {
@@ -142,15 +157,15 @@ export default function ImageCustomizer({
     }
     if (blob.size > maxBytes) {
       setError(
-        `Still ${Math.round(blob.size / 1024)} KB after compression (limit ${Math.round(
-          maxBytes / 1024,
-        )} KB). Pick a higher reduction or a simpler image.`,
+        `Still ${Math.round(blob.size / 1024)} KB (limit ${Math.round(maxBytes / 1024)} KB). ${
+          isPng ? "Try a simpler image with fewer colours." : "Pick a higher reduction or a simpler image."
+        }`,
       );
       setBusy(false);
       return;
     }
 
-    const file = new File([blob], `banner-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const file = new File([blob], `image-${Date.now()}.${ext}`, { type: mime });
     onDone(file);
     setBusy(false);
   }
@@ -211,8 +226,8 @@ export default function ImageCustomizer({
                 />
               </div>
 
-              {/* quality reduction */}
-              <div className="mt-4">
+              {/* quality reduction — hidden for PNG (lossless, quality ignored) */}
+              <div className="mt-4" hidden={isPng}>
                 <p className="text-[13px] font-semibold text-stone-700">Reduce file size</p>
                 <p className="text-[12px] text-stone-500">
                   Lower quality = smaller file. We’ll auto-reduce further if needed to fit the limit.

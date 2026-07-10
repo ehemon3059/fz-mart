@@ -2,6 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Admin UI utilities ───────────────────────────────────────────
+   Small helpers shared by the admin design system. */
+@layer utilities {
+  /* Hide the scrollbar while keeping the element scrollable — used by the
+     sidebar nav so overflow doesn't paint a visible track. */
+  .scrollbar-hidden {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge legacy */
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none; /* Chromium/WebKit */
+  }
+  /* Consistent tabular figures for money/quantity columns. */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+/* Honour reduced-motion for every admin micro-interaction. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

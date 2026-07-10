@@ -1,13 +1,14 @@
 import Script from "next/script";
 
 // Conditional injection: if no GTM id is configured, render nothing at all —
-// not an empty <script> tag.
-export default function GtmScript({ gtmId }: { gtmId: string | null }) {
+// not an empty <script> tag. The `nonce` (from the per-request CSP set in
+// middleware) is applied so this inline bootstrap passes the nonce-based CSP.
+export default function GtmScript({ gtmId, nonce }: { gtmId: string | null; nonce?: string }) {
   if (!gtmId) return null;
 
   return (
     <>
-      <Script id="gtm-script" strategy="afterInteractive">
+      <Script id="gtm-script" strategy="afterInteractive" nonce={nonce}>
         {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
         new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
         j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=

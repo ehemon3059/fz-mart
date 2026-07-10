@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { enqueueMailJob, enqueueSmsJob } from "@/jobs/enqueue";
 import { absoluteUrl } from "@/lib/seo";
+import { primeSiteUrl } from "@/server/settings/site";
 
 // "Notify me when back in stock" subscriptions + the restock fan-out.
 
@@ -73,6 +74,7 @@ export async function notifyBackInStock(productId: number): Promise<void> {
   ]);
   if (!product || subs.length === 0) return;
 
+  await primeSiteUrl(); // notification link must use the admin-configured domain
   const productUrl = absoluteUrl(`/products/${product.slug}`);
   for (const sub of subs) {
     if (sub.email) {

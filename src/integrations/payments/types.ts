@@ -1,4 +1,5 @@
 import type { PaymentProviderKey } from "@/server/settings/payments";
+import { getCachedSiteUrl } from "@/server/settings/site";
 
 // Generic payment-gateway adapter interface, same philosophy as the courier
 // adapter: every provider-specific request/response shape is translated
@@ -84,8 +85,16 @@ export function takaStringToPaisa(taka: string | number): number {
   return Math.round(Number(taka) * 100);
 }
 
+// Base URL the gateways redirect customers back to. Resolves through the same
+// admin-configured Site URL as the rest of the app (Settings → Appearance),
+// so an owner can point payments at their domain from the panel without
+// editing .env or rebuilding. Falls back to the build-time env var, then
+// localhost, for installs that haven't set a domain yet.
+//
+// Served synchronously from the primed cache in server/settings/site — call
+// primeSiteUrl() before initiating a payment so the first callback is correct.
 export function appBaseUrl(): string {
-  const url = process.env.NEXT_PUBLIC_APP_URL;
-  if (!url) throw new Error("NEXT_PUBLIC_APP_URL is not set — required for payment callbacks.");
+  const configured = getCachedSiteUrl();
+  const url = configured || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return url.replace(/\/$/, "");
 }

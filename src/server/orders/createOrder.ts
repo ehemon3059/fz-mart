@@ -1,7 +1,7 @@
 import { Prisma, type PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateOrderNo } from "./orderNo";
-import { redeemCoupon } from "@/server/coupons";
+import { redeemCoupon, type CouponCartLine } from "@/server/coupons";
 
 // Checkout is the riskiest code in the app. Everything the browser sends
 // (price, product name, displayed totals) is for UI only — this function
@@ -33,6 +33,13 @@ export interface CreateOrderInput {
   paymentMethod?: PaymentMethod;
   /** Optional coupon code; re-validated + redeemed inside the checkout txn. */
   couponCode?: string;
+  /** Facebook click identifiers captured client-side, for later CAPI matching. */
+  fbp?: string | null;
+  fbc?: string | null;
+  /** First-touch marketing attribution (Google/TikTok/etc.) for ROAS/CAC. */
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
 }
 
 export class CheckoutError extends Error {
@@ -60,12 +67,15 @@ export async function createOrder(input: CreateOrderInput) {
     const productIds = input.items.map((i) => i.productId);
     const products = await tx.product.findMany({
       where: { id: { in: productIds }, status: "ACTIVE" },
-      include: { variants: true },
+      include: { variants: true, subcategory: { select: { categoryId: true } } },
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     let subtotal = 0;
     const orderItemsData: Prisma.OrderItemCreateManyOrderInput[] = [];
+    // Per-line data for coupon scoping (category/product coupons discount only
+    // the eligible lines). Built here from authoritative prices, not the client.
+    const couponLines: CouponCartLine[] = [];
 
     for (const item of input.items) {
       const product = productMap.get(item.productId);
@@ -97,6 +107,11 @@ export async function createOrder(input: CreateOrderInput) {
 
         const unitPrice = variant.price;
         subtotal += unitPrice * item.quantity;
+        couponLines.push({
+          productId: product.id,
+          categoryId: product.subcategory.categoryId,
+          lineTotal: unitPrice * item.quantity,
+        });
         orderItemsData.push({
           productId: product.id,
           variantId: variant.id,
@@ -139,6 +154,11 @@ export async function createOrder(input: CreateOrderInput) {
           : product.price;
 
       subtotal += unitPrice * item.quantity;
+      couponLines.push({
+        productId: product.id,
+        categoryId: product.subcategory.categoryId,
+        lineTotal: unitPrice * item.quantity,
+      });
       orderItemsData.push({
         productId: product.id,
         // Snapshot name + price now — historical orders must never change
@@ -183,6 +203,11 @@ export async function createOrder(input: CreateOrderInput) {
             customerEmail: input.customerEmail || null,
             address: input.address,
             customerNote: input.customerNote || null,
+            fbp: input.fbp || null,
+            fbc: input.fbc || null,
+            utmSource: input.utmSource || null,
+            utmMedium: input.utmMedium || null,
+            utmCampaign: input.utmCampaign || null,
             shippingZoneId: zone.id,
             deliveryCharge,
             subtotal,
@@ -221,7 +246,7 @@ export async function createOrder(input: CreateOrderInput) {
       const { code, discount } = await redeemCoupon(
         tx,
         input.couponCode,
-        subtotal,
+        couponLines,
         created.id,
         input.customerPhone,
         input.customerId ?? null,

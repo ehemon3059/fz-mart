@@ -27,6 +27,19 @@ export interface PasswordResetMailJob {
   username: string;
 }
 
+export interface AdminInviteMailJob {
+  type: "admin-invite";
+  to: string;
+  /** Set-password link (built from the configured site URL). */
+  setupUrl: string;
+  /** Admin username, shown so the recipient knows which account. */
+  username: string;
+  /** Human-readable role label, e.g. "Manager". */
+  roleLabel: string;
+  /** Configured company/brand name, shown in the header and copy. */
+  companyName: string;
+}
+
 export interface AbandonedCartMailJob {
   type: "abandoned-cart";
   to: string;
@@ -50,6 +63,7 @@ export type MailJob =
   | OrderConfirmationMailJob
   | MagicLinkMailJob
   | PasswordResetMailJob
+  | AdminInviteMailJob
   | AbandonedCartMailJob
   | BackInStockMailJob
   | LowStockDigestMailJob;

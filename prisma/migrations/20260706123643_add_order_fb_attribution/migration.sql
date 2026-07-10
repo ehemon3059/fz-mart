@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `order` ADD COLUMN `fbc` VARCHAR(191) NULL,
+    ADD COLUMN `fbp` VARCHAR(191) NULL;

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getMonthlyFinancialReport } from "@/server/finance/report";
+import { getMonthlyMarketingReport } from "@/server/finance/marketing";
 import { formatTaka } from "@/lib/money";
 import { EXPENSE_CATEGORY_LABELS } from "@/config/expense-category";
+import { REPORT_CHANNEL_LABELS, ORGANIC_CHANNEL } from "@/config/ad-channel";
 import { Icon } from "@/components/icons";
 
 export const metadata = { title: "Profit & Loss — FZ-Mart Admin" };
@@ -32,7 +34,10 @@ export default async function FinanceReportPage({
 }) {
   const { month: monthParam } = await searchParams;
   const { year, month, value } = resolveMonth(monthParam);
-  const report = await getMonthlyFinancialReport(year, month);
+  const [report, marketing] = await Promise.all([
+    getMonthlyFinancialReport(year, month),
+    getMonthlyMarketingReport(year, month),
+  ]);
 
   const monthLabel = new Date(year, month, 1).toLocaleDateString("en-BD", {
     month: "long",
@@ -99,6 +104,12 @@ export default async function FinanceReportPage({
             className="flex items-center gap-1.5 rounded border px-4 py-2 text-sm font-medium hover:border-black"
           >
             <Icon name="settings" size={16} /> Manage Expenses
+          </Link>
+          <Link
+            href="/admin/reports/finance/ad-spend"
+            className="flex items-center gap-1.5 rounded border px-4 py-2 text-sm font-medium hover:border-black"
+          >
+            <Icon name="settings" size={16} /> Manage Ad Spend
           </Link>
         </div>
       </div>
@@ -203,6 +214,96 @@ export default async function FinanceReportPage({
         <p className="mt-2 text-xs text-gray-400">
           Sales are recognised on the delivery date and returns on the return date (from the
           order status history), so this reflects money actually realised in {monthLabel}.
+        </p>
+      </div>
+
+      {/* Marketing — CAC & ROAS by channel */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900">Marketing — ROAS &amp; CAC by channel</h2>
+          <Link
+            href="/admin/reports/finance/ad-spend"
+            className="text-sm text-gray-500 hover:underline"
+          >
+            Manage ad spend →
+          </Link>
+        </div>
+        <div className="overflow-x-auto rounded-lg border bg-white">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="bg-gray-50 text-left text-gray-500">
+              <tr>
+                <th className="px-4 py-2">Channel</th>
+                <th className="px-4 py-2 text-right">Ad Spend</th>
+                <th className="px-4 py-2 text-right">Attributed Revenue</th>
+                <th className="px-4 py-2 text-right">Orders</th>
+                <th className="px-4 py-2 text-right">New Customers</th>
+                <th className="px-4 py-2 text-right">ROAS</th>
+                <th className="px-4 py-2 text-right">CAC</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {marketing.channels.map((c) => {
+                const organic = c.channel === ORGANIC_CHANNEL;
+                return (
+                  <tr key={c.channel} className="hover:bg-gray-50">
+                    <td className="px-4 py-2.5 font-medium text-gray-800">
+                      {REPORT_CHANNEL_LABELS[c.channel]}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                      {organic ? "—" : formatTaka(c.spend)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-900">
+                      {formatTaka(c.netRevenue)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{c.orders}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                      {c.newCustomerOrders}
+                    </td>
+                    <td
+                      className={[
+                        "px-4 py-2.5 text-right font-semibold tabular-nums",
+                        c.roas == null ? "text-gray-400" : c.roas >= 1 ? "text-green-600" : "text-red-600",
+                      ].join(" ")}
+                    >
+                      {c.roas == null ? "—" : `${c.roas.toFixed(2)}×`}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                      {c.cac == null ? "—" : formatTaka(c.cac)}
+                    </td>
+                  </tr>
+                );
+              })}
+              {marketing.channels.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                    No ad spend or attributed orders for {monthLabel}. Add spend under “Manage Ad Spend”.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            {marketing.channels.length > 0 && (
+              <tfoot>
+                <tr className="border-t bg-gray-50 font-bold">
+                  <td className="px-4 py-3">Total</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatTaka(marketing.totals.spend)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatTaka(marketing.totals.netRevenue)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{marketing.totals.orders}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{marketing.totals.newCustomerOrders}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {marketing.totals.roas == null ? "—" : `${marketing.totals.roas.toFixed(2)}×`}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {marketing.totals.cac == null ? "—" : formatTaka(marketing.totals.cac)}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          ROAS = attributed revenue ÷ spend. CAC = spend ÷ new customers (a phone&apos;s first delivered
+          order). Facebook orders are matched by pixel click id; other channels by first-touch UTM.
+          Totals for ROAS/CAC count paid revenue and acquisitions only.
         </p>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import { removeBlockedIp } from "./actions";
+import type { IpBlockCopy } from "./content";
 
 export interface BlockedIpRow {
   id: number;
@@ -13,9 +14,10 @@ export interface BlockedIpRow {
 
 interface Props {
   initialRows: BlockedIpRow[];
+  t: IpBlockCopy["list"];
 }
 
-export function BlockedIpList({ initialRows }: Props) {
+export function BlockedIpList({ initialRows, t }: Props) {
   const [rows, setRows] = useState(initialRows);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
@@ -36,10 +38,8 @@ export function BlockedIpList({ initialRows }: Props) {
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
           <Icon name="shield" size={28} />
         </div>
-        <h3 className="mt-4 text-[15px] font-bold text-stone-800">No blocked IPs</h3>
-        <p className="mt-1 text-[13.5px] text-stone-400">
-          Addresses you block will show up here.
-        </p>
+        <h3 className="mt-4 text-[15px] font-bold text-stone-800">{t.emptyTitle}</h3>
+        <p className="mt-1 text-[13.5px] text-stone-400">{t.emptyBody}</p>
       </div>
     );
   }
@@ -50,7 +50,7 @@ export function BlockedIpList({ initialRows }: Props) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-stone-100 bg-stone-50 text-left">
-              {["IP Address", "Reason", "Blocked Since", ""].map((h, i) => (
+              {[t.colIp, t.colReason, t.colSince, ""].map((h, i) => (
                 <th
                   key={i}
                   className="px-5 py-3.5 text-[11.5px] font-bold uppercase tracking-wider text-stone-400"
@@ -64,7 +64,7 @@ export function BlockedIpList({ initialRows }: Props) {
             {rows.map((row) => (
               <tr key={row.id} className="border-b border-stone-100 last:border-0">
                 <td className="px-5 py-3.5 font-mono text-[14px] text-stone-800">{row.ip}</td>
-                <td className="px-5 py-3.5 text-[14px] text-stone-500">{row.reason ?? "—"}</td>
+                <td className="px-5 py-3.5 text-[14px] text-stone-500">{row.reason ?? t.dash}</td>
                 <td className="px-5 py-3.5 text-[14px] text-stone-500">{row.createdAt}</td>
                 <td className="px-5 py-3.5 text-right">
                   {confirmId === row.id ? (
@@ -74,13 +74,13 @@ export function BlockedIpList({ initialRows }: Props) {
                         disabled={pending}
                         className="rounded-lg bg-red-600 px-3 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
                       >
-                        Confirm
+                        {t.confirm}
                       </button>
                       <button
                         onClick={() => setConfirmId(null)}
                         className="rounded-lg border border-stone-200 px-3 py-1.5 text-[12.5px] font-semibold text-stone-600"
                       >
-                        Cancel
+                        {t.cancel}
                       </button>
                     </div>
                   ) : (
@@ -88,7 +88,7 @@ export function BlockedIpList({ initialRows }: Props) {
                       onClick={() => setConfirmId(row.id)}
                       className="text-[13px] font-semibold text-red-600 hover:underline"
                     >
-                      Unblock
+                      {t.unblock}
                     </button>
                   )}
                 </td>
@@ -104,14 +104,14 @@ export function BlockedIpList({ initialRows }: Props) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-mono text-[14.5px] font-semibold text-stone-800">{row.ip}</p>
-                <p className="mt-0.5 text-[13px] text-stone-400">{row.reason ?? "No reason given"}</p>
+                <p className="mt-0.5 text-[13px] text-stone-400">{row.reason ?? t.noReason}</p>
               </div>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-500">
                 <Icon name="ban" size={16} />
               </span>
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-stone-100 pt-3">
-              <span className="text-[12.5px] text-stone-400">Blocked {row.createdAt}</span>
+              <span className="text-[12.5px] text-stone-400">{t.blockedOn(row.createdAt)}</span>
               {confirmId === row.id ? (
                 <div className="flex items-center gap-2">
                   <button
@@ -119,13 +119,13 @@ export function BlockedIpList({ initialRows }: Props) {
                     disabled={pending}
                     className="rounded-lg bg-red-600 px-3 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
                   >
-                    Confirm
+                    {t.confirm}
                   </button>
                   <button
                     onClick={() => setConfirmId(null)}
                     className="rounded-lg border border-stone-200 px-3 py-1.5 text-[12.5px] font-semibold text-stone-600"
                   >
-                    Cancel
+                    {t.cancel}
                   </button>
                 </div>
               ) : (
@@ -133,7 +133,7 @@ export function BlockedIpList({ initialRows }: Props) {
                   onClick={() => setConfirmId(row.id)}
                   className="text-[13px] font-semibold text-red-600 hover:underline"
                 >
-                  Unblock
+                  {t.unblock}
                 </button>
               )}
             </div>

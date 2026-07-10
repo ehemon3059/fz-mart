@@ -12,7 +12,7 @@ import {
   type CouponInput,
 } from "@/server/coupons/admin";
 import { takaToPaisa } from "@/lib/money";
-import type { CouponType } from "@prisma/client";
+import type { CouponType, CouponScope } from "@prisma/client";
 
 export interface ActionResult {
   error?: string;
@@ -36,6 +36,10 @@ function parseForm(formData: FormData): CouponInput {
   };
   const maxDiscountTaka = num("maxDiscount");
 
+  const scopeRaw = String(formData.get("appliesTo") ?? "ALL");
+  const appliesTo: CouponScope =
+    scopeRaw === "CATEGORY" ? "CATEGORY" : scopeRaw === "PRODUCT" ? "PRODUCT" : "ALL";
+
   return {
     code: String(formData.get("code") ?? ""),
     type,
@@ -47,6 +51,9 @@ function parseForm(formData: FormData): CouponInput {
     startsAt: date("startsAt"),
     endsAt: date("endsAt"),
     isActive: formData.get("isActive") === "on",
+    appliesTo,
+    categoryId: appliesTo === "CATEGORY" ? num("categoryId") : null,
+    productId: appliesTo === "PRODUCT" ? num("productId") : null,
   };
 }
 

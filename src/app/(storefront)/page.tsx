@@ -2,6 +2,7 @@ import { listActiveCategories } from "@/server/categories";
 import { listActiveBanners } from "@/server/banners";
 import { listFeaturedProducts, listNewArrivals, listBestSellers } from "@/server/products";
 import { getActiveFlashSale } from "@/server/flash-sales";
+import { getNewsletterCopy } from "@/server/settings/newsletter";
 
 import Hero from "@/components/storefront/Hero";
 import TrustStrip from "@/components/storefront/TrustStrip";
@@ -11,14 +12,16 @@ import ProductSection from "@/components/storefront/ProductSection";
 import Newsletter from "@/components/storefront/Newsletter";
 
 export default async function HomePage() {
-  const [categories, banners, newArrivals, bestSellers, featuredGrid, flashSale] = await Promise.all([
-    listActiveCategories(),
-    listActiveBanners(),
-    listNewArrivals(5),
-    listBestSellers(5),
-    listFeaturedProducts(10),
-    getActiveFlashSale(),
-  ]);
+  const [categories, banners, newArrivals, bestSellers, featuredGrid, flashSale, newsletter] =
+    await Promise.all([
+      listActiveCategories(),
+      listActiveBanners(),
+      listNewArrivals(5),
+      listBestSellers(5),
+      listFeaturedProducts(10),
+      getActiveFlashSale(),
+      getNewsletterCopy(),
+    ]);
 
   // A campaign's curated picks override discountPrice with their salePrice
   // (when set) so ProductCard renders the time-boxed price without needing
@@ -61,7 +64,7 @@ export default async function HomePage() {
         products={featuredGrid}
         grid
       />
-      <Newsletter />
+      <Newsletter title={newsletter.title} subtitle={newsletter.subtitle} />
     </>
   );
 }

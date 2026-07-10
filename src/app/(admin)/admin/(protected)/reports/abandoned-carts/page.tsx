@@ -21,6 +21,67 @@ export default async function AbandonedCartsPage() {
         Conversion.
       </p>
 
+      {/* What is this? explainer */}
+      <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50/70 p-5">
+        <h2 className="text-[15px] font-bold text-stone-900">What is Abandoned Carts?</h2>
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-stone-600">
+          An <span className="font-semibold text-stone-800">abandoned cart</span> is when a shopper
+          adds items and starts checkout but leaves before placing the order — a sale that was
+          almost made. The store saves that cart, waits a set delay, then automatically sends the
+          customer an SMS/email with a one-tap link to come back and finish. This page tracks those
+          reminders and whether they turned into orders.
+        </p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-stone-200 bg-white p-4">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-stone-400">
+              How it works
+            </p>
+            <ol className="mt-2 list-decimal space-y-1 pl-4 text-[13px] text-stone-600">
+              <li>Shopper enters checkout — the cart is saved with a restore link.</li>
+              <li>They leave without ordering.</li>
+              <li>
+                After the configured delay, one reminder goes out by SMS/email with the restore
+                link.
+              </li>
+              <li>If they return and order, it counts as recovered.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 bg-white p-4">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-stone-400">
+              Reading this page
+            </p>
+            <ul className="mt-2 space-y-1 text-[13px] text-stone-600">
+              <li>
+                <b>Reminders sent</b> — how many recovery messages went out.
+              </li>
+              <li>
+                <b>Carts recovered</b> — shoppers who clicked back via the link.
+              </li>
+              <li>
+                <b>Recovered → ordered</b> — of those, who actually placed an order.
+              </li>
+              <li>
+                <b>Recovery rate</b> — orders ÷ reminders sent.
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 bg-white p-4">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-stone-400">
+              Why it matters
+            </p>
+            <p className="mt-2 text-[13px] leading-relaxed text-stone-600">
+              These are warm buyers who already chose their items — recovering even a few is
+              near-free extra revenue. Tune the <b>delay</b> and <b>message</b> under{" "}
+              <span className="whitespace-nowrap">Settings → Conversion</span> to lift the recovery
+              rate.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className="rounded-xl border border-stone-200 bg-white p-4">

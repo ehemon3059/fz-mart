@@ -6,6 +6,8 @@ const CATALOG_TTL_SECONDS = 60;
 
 const productWithImages = {
   images: { orderBy: { sortOrder: "asc" as const } },
+  // Lets storefront cards decide quick-add vs. "View Details" (see ProductCard).
+  _count: { select: { variants: true, colors: true } },
 };
 
 // Returns the single currently-running campaign (isActive AND now within

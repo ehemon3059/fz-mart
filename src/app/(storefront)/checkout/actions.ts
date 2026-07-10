@@ -14,9 +14,10 @@ import {
   type PaymentProviderKey,
 } from "@/server/settings/payments";
 import { validateCoupon, CouponError } from "@/server/coupons";
-import { cartSubtotalPaisa } from "@/server/coupons/cart";
+import { cartLinesForCoupon } from "@/server/coupons/cart";
 import { getConversionConfig } from "@/server/settings/conversion";
 import { saveCartForCustomer, markCartOrdered, type SavedCartItem } from "@/server/cart";
+import { trackFunnelEvent } from "@/server/funnel";
 import { prisma } from "@/lib/prisma";
 import {
   sendOtp,
@@ -127,9 +128,9 @@ export async function applyCoupon(
   code: string,
 ): Promise<ApplyCouponResult> {
   try {
-    const subtotal = await cartSubtotalPaisa(items);
-    if (subtotal <= 0) return { error: "Your cart is empty." };
-    const result = await validateCoupon(code, subtotal, null);
+    const lines = await cartLinesForCoupon(items);
+    if (lines.length === 0) return { error: "Your cart is empty." };
+    const result = await validateCoupon(code, lines, null);
     return { code: result.code, discount: result.discount };
   } catch (err) {
     if (err instanceof CouponError) return { error: err.message };
@@ -149,6 +150,14 @@ export async function placeOrder(
   const customerNote = String(formData.get("customerNote") ?? "").trim().slice(0, 90);
   const shippingZoneId = Number(formData.get("shippingZoneId"));
   const couponCode = String(formData.get("couponCode") ?? "").trim() || undefined;
+  // Facebook click ids captured client-side (may be empty) — bounded so a
+  // crafted form can't stuff arbitrary data onto the order.
+  const fbp = String(formData.get("fbp") ?? "").trim().slice(0, 255) || undefined;
+  const fbc = String(formData.get("fbc") ?? "").trim().slice(0, 255) || undefined;
+  // First-touch marketing attribution (Google/TikTok/etc.), bounded like fbp/fbc.
+  const utmSource = String(formData.get("utmSource") ?? "").trim().slice(0, 120) || undefined;
+  const utmMedium = String(formData.get("utmMedium") ?? "").trim().slice(0, 120) || undefined;
+  const utmCampaign = String(formData.get("utmCampaign") ?? "").trim().slice(0, 120) || undefined;
 
   if (!customerName || customerName.length < 2) {
     return { error: "Please enter your full name." };
@@ -234,8 +243,20 @@ export async function placeOrder(
       items,
       paymentMethod,
       couponCode,
+      fbp,
+      fbc,
+      utmSource,
+      utmMedium,
+      utmCampaign,
     });
     orderNo = order.orderNo;
+
+    // Funnel: order placed (fire-and-forget). Use the customer id as sessionId
+    // when known so it lines up with this shopper's earlier funnel events.
+    trackFunnelEvent("ORDER_PLACED", {
+      sessionId: currentCustomer?.customerId ?? null,
+      productId: items[0]?.productId ?? null,
+    });
 
     if (paymentMethod !== "COD" && provider) {
       // Stock is now reserved; hand the customer to the gateway. Full online

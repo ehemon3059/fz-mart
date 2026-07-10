@@ -1,27 +1,12 @@
 import type { NextConfig } from "next";
 
-// Content Security Policy. Kept permissive enough for the third-party scripts
-// the storefront actually loads (Google Tag Manager, Facebook Pixel) and
-// arbitrary product-image CDNs, but locks down object/base/frame-ancestors.
-// script-src still needs 'unsafe-inline' because Next injects inline bootstrap
-// scripts without a nonce; a nonce-based CSP is a documented future hardening.
-const csp = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://connect.facebook.net",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https:",
-  "font-src 'self' data:",
-  "connect-src 'self' https://www.google-analytics.com https://*.facebook.com https://*.ingest.sentry.io",
-  "frame-src https://www.facebook.com https://td.doubleclick.net",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
-].join("; ");
-
+// Security headers. The Content-Security-Policy is NOT here — it's set
+// per-request in middleware.ts with a fresh nonce so we can drop
+// 'unsafe-inline'/'unsafe-eval' from script-src (see the comment there). Keeping
+// a second static CSP here would produce two enforced CSP headers whose
+// intersection would break the nonce flow, so this list carries only the
+// non-CSP headers, which are the same on every route.
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: csp },
   // Force HTTPS for two years incl. subdomains (ignored by browsers over
   // plain HTTP, so harmless in local dev).
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
@@ -31,16 +16,37 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
 ];
 
+// Derive the object-storage image host from R2_PUBLIC_BASE_URL so next/image
+// will optimize/serve product & banner images uploaded to R2. Falls back to
+// nothing when unset (local dev serves uploads from /public instead).
+function storageRemotePattern() {
+  const base = process.env.R2_PUBLIC_BASE_URL;
+  if (!base) return [];
+  try {
+    const { protocol, hostname } = new URL(base);
+    return [
+      {
+        protocol: protocol.replace(":", "") as "http" | "https",
+        hostname,
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
+
 const nextConfig: NextConfig = {
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
+      // Seed/demo data uses placehold.co — keep it allowed.
       {
         protocol: "https",
         hostname: "placehold.co",
       },
+      ...storageRemotePattern(),
     ],
   },
   async headers() {

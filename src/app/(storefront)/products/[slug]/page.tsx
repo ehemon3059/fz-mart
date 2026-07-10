@@ -16,6 +16,7 @@ import NotifyBackInStock from "@/components/storefront/NotifyBackInStock";
 import JsonLd from "@/components/seo/JsonLd";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { isWishlisted } from "@/server/wishlist";
+import { trackFunnelEvent } from "@/server/funnel";
 
 function primaryImageOf(product: NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>): string {
   return (
@@ -72,6 +73,11 @@ export default async function ProductPage({
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
+
+  // Funnel: record a product view (fire-and-forget, debounced to once per
+  // session/product/day so refreshes don't inflate it). Bots and blocked IPs
+  // are filtered inside trackFunnelEvent.
+  trackFunnelEvent("PRODUCT_VIEW", { productId: product.id, dedupeSeconds: 86400 });
 
   const [ratingSummary, relatedProducts, customer] = await Promise.all([
     getRatingSummary(product.id),
@@ -254,6 +260,7 @@ export default async function ProductPage({
           entirely client-side from localStorage. */}
       <RecentlyViewed
         current={{
+          id: product.id,
           slug: product.slug,
           name: product.name,
           price: product.price,

@@ -29,13 +29,17 @@ export default function WishlistButton({
     });
   }
 
+  // btn-brand-outline is themed via --brand in storefront.css so the wishlist
+  // button tracks the admin brand palette. The saved state fills solid brand.
   return (
     <button
       type="button"
       onClick={toggle}
       disabled={pending}
       aria-pressed={wishlisted}
-      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:border-black disabled:opacity-50"
+      className={`btn-brand-outline inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50${
+        wishlisted ? " is-active" : ""
+      }`}
     >
       <HeartIcon size={16} />
       {wishlisted ? "Saved to wishlist" : "Add to wishlist"}

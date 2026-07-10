@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { CouponType } from "@prisma/client";
+import type { CouponType, CouponScope } from "@prisma/client";
 import { saveCoupon } from "./actions";
 
 interface CouponData {
@@ -18,15 +18,32 @@ interface CouponData {
   startsAt: string | null; // yyyy-mm-dd
   endsAt: string | null;
   isActive: boolean;
+  appliesTo: CouponScope;
+  categoryId: number | null;
+  productId: number | null;
+}
+
+interface Option {
+  id: number;
+  name: string;
 }
 
 const input = "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-900";
 const label = "mb-1 block text-[13px] font-semibold text-stone-700";
 
-export default function CouponForm({ coupon }: { coupon?: CouponData }) {
+export default function CouponForm({
+  coupon,
+  categories,
+  products,
+}: {
+  coupon?: CouponData;
+  categories: Option[];
+  products: Option[];
+}) {
   const router = useRouter();
   const isEdit = !!coupon;
   const [type, setType] = useState<CouponType>(coupon?.type ?? "PERCENT");
+  const [scope, setScope] = useState<CouponScope>(coupon?.appliesTo ?? "ALL");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -81,6 +98,53 @@ export default function CouponForm({ coupon }: { coupon?: CouponData }) {
           <label className={label}>Max discount (৳){type === "FIXED" ? " — n/a" : ""}</label>
           <input name="maxDiscount" inputMode="decimal" defaultValue={taka(coupon?.maxDiscount)} placeholder="cap for %" className={input} />
         </div>
+      </div>
+
+      <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+        <label className={label}>Applies to</label>
+        <select
+          name="appliesTo"
+          value={scope}
+          onChange={(e) => setScope(e.target.value as CouponScope)}
+          className={input}
+        >
+          <option value="ALL">Whole cart (any product)</option>
+          <option value="CATEGORY">A specific category</option>
+          <option value="PRODUCT">A specific product</option>
+        </select>
+        <p className="mt-1 text-[12px] text-stone-500">
+          {scope === "ALL"
+            ? "The discount applies to the entire order subtotal."
+            : "The discount applies only to matching items; the min-order still checks the full cart."}
+        </p>
+
+        {scope === "CATEGORY" && (
+          <div className="mt-2">
+            <label className={label}>Category</label>
+            <select name="categoryId" defaultValue={coupon?.categoryId ?? ""} className={input}>
+              <option value="">Select a category…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {scope === "PRODUCT" && (
+          <div className="mt-2">
+            <label className={label}>Product</label>
+            <select name="productId" defaultValue={coupon?.productId ?? ""} className={input}>
+              <option value="">Select a product…</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">

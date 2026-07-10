@@ -42,7 +42,9 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/reports/finance", label: "Profit & Loss", icon: "tag", area: "reports" },
       { href: "/admin/reports/stock", label: "Stock Report", icon: "grid", area: "reports" },
       { href: "/admin/reports/orders", label: "Order Reports", icon: "grid", area: "reports" },
+      { href: "/admin/reports/delivery", label: "Delivery", icon: "box", area: "reports" },
       { href: "/admin/reports/abandoned-carts", label: "Abandoned Carts", icon: "cart", area: "reports" },
+      { href: "/admin/subscribers", label: "Subscribers", icon: "file", area: "reports" },
     ],
   },
   {
@@ -91,12 +93,12 @@ export default function AdminSidebar({ username, role }: { username: string; rol
   return (
     <>
       {/* Mobile top bar */}
-      <header className="print:hidden md:hidden sticky top-0 z-30 flex items-center justify-between bg-gray-900 text-gray-100 px-4 py-3">
+      <header className="print:hidden md:hidden sticky top-0 z-30 flex items-center justify-between bg-ink text-stone-100 px-4 py-3">
         <span className="text-lg font-bold">fz-mart Admin</span>
         <button
           onClick={() => setOpen(true)}
           aria-label="Open menu"
-          className="p-2 -mr-2 rounded hover:bg-gray-800"
+          className="p-2 -mr-2 rounded-md hover:bg-white/10"
         >
           <Icon name="grid" size={22} />
         </button>
@@ -105,7 +107,7 @@ export default function AdminSidebar({ username, role }: { username: string; rol
       {/* Overlay */}
       {open && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          className="md:hidden fixed inset-0 bg-ink/60 z-40"
           onClick={() => setOpen(false)}
           aria-hidden="true"
         />
@@ -116,45 +118,49 @@ export default function AdminSidebar({ username, role }: { username: string; rol
           print:hidden
           fixed md:sticky top-0 inset-y-0 left-0 z-50
           h-screen w-64 shrink-0
-          bg-gray-900 text-gray-100 flex flex-col
+          bg-ink text-stone-100 flex flex-col
           transform transition-transform duration-200 ease-out
           ${open ? "translate-x-0" : "-translate-x-full"} md:translate-x-0
         `}
       >
         {/* Brand */}
-        <div className="px-4 py-4 flex items-center justify-between border-b border-gray-800">
+        <div className="px-4 py-4 flex items-center justify-between border-b border-white/10">
           <span className="text-lg font-bold tracking-tight">fz-mart Admin</span>
           <button
             onClick={() => setOpen(false)}
             aria-label="Close menu"
-            className="md:hidden p-1 rounded hover:bg-gray-800"
+            className="md:hidden p-1 rounded-md hover:bg-white/10"
           >
             <Icon name="x" size={20} />
           </button>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+        {/* Nav — min-h-0 lets this flex child actually shrink so it (not the
+            whole aside) scrolls; scrollbar-hidden removes the visible track. */}
+        <nav className="flex-1 min-h-0 px-3 py-4 space-y-5 overflow-y-auto scrollbar-hidden">
           {/* Dashboard is visible to every active admin regardless of role. */}
           <div className="space-y-0.5">
             <Link
               href="/admin/dashboard"
               onClick={() => setOpen(false)}
               aria-current={isActive("/admin/dashboard") ? "page" : undefined}
-              className={`group relative flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+              className={`group relative flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
                 isActive("/admin/dashboard")
-                  ? "bg-gray-800 text-white font-medium"
-                  : "text-gray-300 hover:bg-gray-800/60 hover:text-white"
+                  ? "bg-brand-600/20 text-white font-medium"
+                  : "text-stone-300 hover:bg-white/5 hover:text-white"
               }`}
             >
-              <Icon name="home" size={18} className={isActive("/admin/dashboard") ? "text-blue-400" : "text-gray-400 group-hover:text-gray-200"} />
+              {isActive("/admin/dashboard") && (
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-400" />
+              )}
+              <Icon name="home" size={18} className={isActive("/admin/dashboard") ? "text-brand-400" : "text-stone-400 group-hover:text-stone-200"} />
               <span className="truncate">Dashboard</span>
             </Link>
           </div>
           {visibleSections.map((section, i) => (
             <div key={section.heading ?? i}>
               {section.heading && (
-                <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
                   {section.heading}
                 </p>
               )}
@@ -169,21 +175,21 @@ export default function AdminSidebar({ username, role }: { username: string; rol
                       aria-current={active ? "page" : undefined}
                       className={`
                         group relative flex items-center gap-3 px-3 py-2 rounded-md text-sm
-                        transition-colors
+                        transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-400
                         ${
                           active
-                            ? "bg-gray-800 text-white font-medium"
-                            : "text-gray-300 hover:bg-gray-800/60 hover:text-white"
+                            ? "bg-brand-600/20 text-white font-medium"
+                            : "text-stone-300 hover:bg-white/5 hover:text-white"
                         }
                       `}
                     >
                       {active && (
-                        <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-blue-400" />
+                        <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-400" />
                       )}
                       <Icon
                         name={link.icon}
                         size={18}
-                        className={active ? "text-blue-400" : "text-gray-400 group-hover:text-gray-200"}
+                        className={active ? "text-brand-400" : "text-stone-400 group-hover:text-stone-200"}
                       />
                       <span className="truncate">{link.label}</span>
                     </Link>
@@ -194,19 +200,21 @@ export default function AdminSidebar({ username, role }: { username: string; rol
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="px-4 py-4 border-t border-gray-800 space-y-2">
+        {/* Footer — shrink-0 keeps it pinned to the bottom; nav (min-h-0) is
+            what scrolls, so the user block can never overlap Log out. */}
+        <div className="shrink-0 px-3 py-3 border-t border-white/10 space-y-1.5">
           <Link
             href="/admin/account"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-gray-800/60"
+            aria-current={isActive("/admin/account") ? "page" : undefined}
+            className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm transition-colors hover:bg-white/5 outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-xs font-semibold uppercase">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600/30 text-xs font-semibold uppercase text-brand-100">
               {username.slice(0, 2)}
             </span>
-            <span className="min-w-0">
-              <span className="block truncate text-gray-300">{username}</span>
-              <span className="block text-[11px] text-gray-500">{ROLE_LABELS[role]}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-stone-200">{username}</span>
+              <span className="block text-[11px] text-stone-400">{ROLE_LABELS[role]}</span>
             </span>
           </Link>
           <LogoutButton />

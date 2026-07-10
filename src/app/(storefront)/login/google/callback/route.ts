@@ -51,6 +51,10 @@ export async function GET(request: NextRequest) {
   const sessionId = await createCustomerSession({ customerId: customer.id, email: customer.email });
   await setCustomerSessionCookie(sessionId);
 
+  // Signal the client to merge its localStorage cart into the server cart
+  // (see CartMergeOnLogin) — same rationale as the magic-link verify route.
   const next = safeRedirectPath(request.nextUrl.searchParams.get("state"));
-  return NextResponse.redirect(new URL(next ?? "/", request.url));
+  const destination = new URL(next ?? "/", request.url);
+  destination.searchParams.set("cartMerge", "1");
+  return NextResponse.redirect(destination);
 }

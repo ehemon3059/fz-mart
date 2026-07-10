@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDictionary } from "@/i18n/server";
-import { FacebookIcon, InstagramIcon, YoutubeIcon } from "./icons";
+import { getCompanyInfo } from "@/server/settings/company";
+import { FacebookIcon, InstagramIcon, YoutubeIcon, TwitterIcon, PinIcon, PhoneIcon, MailIcon } from "./icons";
 
 const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
   {
@@ -44,7 +45,15 @@ const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
 ];
 
 export default async function Footer() {
-  const dict = await getDictionary();
+  const [dict, company] = await Promise.all([getDictionary(), getCompanyInfo()]);
+
+  const socials = [
+    { href: company.facebookUrl, label: "Facebook", Icon: FacebookIcon },
+    { href: company.instagramUrl, label: "Instagram", Icon: InstagramIcon },
+    { href: company.youtubeUrl, label: "YouTube", Icon: YoutubeIcon },
+    { href: company.twitterUrl, label: "Twitter", Icon: TwitterIcon },
+  ].filter((s) => s.href.trim() !== "");
+
   return (
     <footer className="ft">
       <div className="wrap">
@@ -54,10 +63,27 @@ export default async function Footer() {
               <span className="mark"><span>FZ</span></span>
               <span><b>FZ</b><i>Mart</i></span>
             </Link>
-            <p>
-              Bangladesh&apos;s friendly online marketplace. Quality products, honest prices
-              and reliable cash-on-delivery to your doorstep.
-            </p>
+            {company.description && <p>{company.description}</p>}
+
+            {(company.address || company.phone || company.email) && (
+              <div className="ft-contact">
+                {company.address && (
+                  <p className="ft-contact-row"><PinIcon size={15} /> {company.address}</p>
+                )}
+                {company.phone && (
+                  <p className="ft-contact-row">
+                    <PhoneIcon size={15} />{" "}
+                    <a href={`tel:${company.phone.replace(/\s+/g, "")}`}>{company.phone}</a>
+                  </p>
+                )}
+                {company.email && (
+                  <p className="ft-contact-row">
+                    <MailIcon size={15} /> <a href={`mailto:${company.email}`}>{company.email}</a>
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="ft-pay">
               {["bKash", "Nagad", "Rocket", "VISA", "COD"].map((p) => (
                 <span className="pay" key={p}>{p}</span>
@@ -76,12 +102,16 @@ export default async function Footer() {
         </div>
 
         <div className="ft-bot">
-          <span>© {new Date().getFullYear()} FZ Mart. {dict.footer.allRightsReserved}</span>
-          <div className="ft-social">
-            <a href="#" aria-label="Facebook"><FacebookIcon /></a>
-            <a href="#" aria-label="Instagram"><InstagramIcon /></a>
-            <a href="#" aria-label="YouTube"><YoutubeIcon /></a>
-          </div>
+          <span>© {new Date().getFullYear()} {company.copyrightText}. {dict.footer.allRightsReserved}</span>
+          {socials.length > 0 && (
+            <div className="ft-social">
+              {socials.map(({ href, label, Icon }) => (
+                <a key={label} href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
+                  <Icon />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </footer>

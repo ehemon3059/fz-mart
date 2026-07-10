@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { paisaToTaka } from "@/lib/money";
 import { SITE_NAME, absoluteUrl, stripHtml, truncate } from "@/lib/seo";
+import { primeSiteUrl } from "@/server/settings/site";
 
 // Product feed data for Facebook Catalog and Google Merchant. One normalized
 // shape here; the two endpoints (CSV / XML) just serialise it differently.
@@ -27,6 +28,7 @@ function priceString(paisa: number): string {
 }
 
 export async function getFeedItems(): Promise<FeedItem[]> {
+  await primeSiteUrl(); // ensure absolute URLs use the admin-configured domain
   const products = await prisma.product.findMany({
     where: { status: "ACTIVE" },
     include: {

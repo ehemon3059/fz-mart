@@ -16,6 +16,9 @@ const CATALOG_TTL_SECONDS = 60;
 
 const productWithImages = {
   images: { orderBy: { sortOrder: "asc" } },
+  // Lets storefront cards know whether the shopper must pick a variant/color
+  // before adding to cart (quick-add) or should be sent to the detail page.
+  _count: { select: { variants: true, colors: true } },
 } satisfies Prisma.ProductInclude;
 
 const productWithDetails = {

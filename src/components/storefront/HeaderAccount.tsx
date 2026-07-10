@@ -60,6 +60,32 @@ export default function HeaderAccount({ displayName }: Props) {
             zIndex: 50,
           }}
         >
+          <Link
+            href="/account"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "block",
+              padding: "8px 10px",
+              borderRadius: 6,
+              fontSize: 14,
+              color: "#292524",
+            }}
+          >
+            My Account
+          </Link>
+          <Link
+            href="/account/orders"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "block",
+              padding: "8px 10px",
+              borderRadius: 6,
+              fontSize: 14,
+              color: "#292524",
+            }}
+          >
+            Order History
+          </Link>
           <form action={logout}>
             <button
               type="submit"

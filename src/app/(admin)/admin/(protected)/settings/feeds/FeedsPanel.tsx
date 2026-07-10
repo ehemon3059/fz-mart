@@ -3,13 +3,15 @@
 import { useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import { regenerateFeedTokenAction } from "./actions";
+import type { FeedsCopy } from "./content";
 
 interface Props {
   baseUrl: string;
   initialToken: string;
+  t: FeedsCopy["panel"];
 }
 
-function FeedRow({ label, url }: { label: string; url: string }) {
+function FeedRow({ label, url, t }: { label: string; url: string; t: FeedsCopy["panel"] }) {
   const [copied, setCopied] = useState(false);
   return (
     <div>
@@ -31,14 +33,14 @@ function FeedRow({ label, url }: { label: string; url: string }) {
           }}
           className="shrink-0 rounded-xl border border-stone-200 px-3 py-2 text-[13px] font-semibold text-stone-700 hover:bg-stone-50"
         >
-          {copied ? "Copied" : "Copy"}
+          {copied ? t.copied : t.copy}
         </button>
       </div>
     </div>
   );
 }
 
-export default function FeedsPanel({ baseUrl, initialToken }: Props) {
+export default function FeedsPanel({ baseUrl, initialToken, t }: Props) {
   const [token, setToken] = useState(initialToken);
   const [pending, startTransition] = useTransition();
 
@@ -46,11 +48,7 @@ export default function FeedsPanel({ baseUrl, initialToken }: Props) {
   const googleUrl = `${baseUrl}/api/feeds/google?token=${token}`;
 
   function regenerate() {
-    if (
-      !window.confirm(
-        "Regenerate the feed token? The old feed URLs will stop working and you must update them in Facebook / Google Merchant.",
-      )
-    ) {
+    if (!window.confirm(t.confirm)) {
       return;
     }
     startTransition(async () => {
@@ -61,14 +59,11 @@ export default function FeedsPanel({ baseUrl, initialToken }: Props) {
 
   return (
     <div className="max-w-2xl space-y-5 rounded-xl border border-stone-200 bg-white p-5 shadow-soft sm:p-6">
-      <FeedRow label="Facebook Catalog (CSV)" url={facebookUrl} />
-      <FeedRow label="Google Merchant (XML)" url={googleUrl} />
+      <FeedRow label={t.facebookLabel} url={facebookUrl} t={t} />
+      <FeedRow label={t.googleLabel} url={googleUrl} t={t} />
 
       <div className="flex items-center justify-between border-t border-stone-100 pt-4">
-        <p className="text-[12.5px] text-stone-400">
-          These URLs contain a secret token. Paste them into Facebook Commerce Manager and Google
-          Merchant Center as scheduled feeds.
-        </p>
+        <p className="text-[12.5px] text-stone-400">{t.note}</p>
         <button
           type="button"
           onClick={regenerate}
@@ -76,7 +71,7 @@ export default function FeedsPanel({ baseUrl, initialToken }: Props) {
           className="ml-4 flex shrink-0 items-center gap-1.5 rounded-xl border border-stone-200 px-3.5 py-2 text-[13px] font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-50"
         >
           <Icon name="settings" size={14} />
-          {pending ? "Regenerating…" : "Regenerate token"}
+          {pending ? t.regenerating : t.regenerate}
         </button>
       </div>
     </div>

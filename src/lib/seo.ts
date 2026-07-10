@@ -2,12 +2,24 @@
 // fallback logic for titles/descriptions. Centralised so product, category,
 // and CMS pages, the sitemap, and the JSON-LD all speak with one voice.
 
+import { getCachedSiteUrl } from "@/server/settings/site";
+
 export const SITE_NAME = "FZ Mart";
 export const SITE_TAGLINE = "Cash on Delivery Store in Bangladesh";
 
-/** Canonical origin, no trailing slash. Falls back to localhost in dev. */
+/**
+ * Canonical origin, no trailing slash.
+ *
+ * Resolution order: admin-configured domain (Settings → Appearance, cached in
+ * server/settings/site) → NEXT_PUBLIC_APP_URL → localhost. The admin value wins
+ * so a store can be pointed at a new domain from the UI without a rebuild.
+ *
+ * This stays synchronous (it's called from many places, some inside .map());
+ * the admin value is served from an in-memory cache primed by primeSiteUrl().
+ */
 export function siteUrl(): string {
-  const url = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const configured = getCachedSiteUrl();
+  const url = configured || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return url.replace(/\/$/, "");
 }
 

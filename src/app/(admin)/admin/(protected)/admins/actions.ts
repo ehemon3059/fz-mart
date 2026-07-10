@@ -7,18 +7,18 @@ import {
   inviteAdmin,
   setAdminRole,
   setAdminActive,
+  deleteAdmin,
   AdminManageError,
 } from "@/server/admin/manage";
 import { enqueueMailJob } from "@/jobs/enqueue";
-import { isAdminRole } from "@/lib/permissions";
+import { isAdminRole, ROLE_LABELS } from "@/lib/permissions";
+import { siteUrl } from "@/lib/seo";
+import { primeSiteUrl } from "@/server/settings/site";
+import { getCompanyInfo } from "@/server/settings/company";
 
 export interface ActionResult {
   error?: string;
   success?: string;
-}
-
-function baseUrl(): string {
-  return process.env.NEXT_PUBLIC_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 }
 
 export async function inviteAdminAction(formData: FormData): Promise<ActionResult> {
@@ -36,13 +36,19 @@ export async function inviteAdminAction(formData: FormData): Promise<ActionResul
     throw err;
   }
 
-  // Email the invitee a set-password link (reuses the reset flow / template).
-  const setupUrl = `${baseUrl()}/admin/reset-password?token=${invited.token}`;
+  // Email the invitee a set-password link. The domain comes from the
+  // admin-configured Site URL (Appearance → Site URL), and the brand name +
+  // role are shown in the invite-specific template.
+  await primeSiteUrl();
+  const company = await getCompanyInfo();
+  const setupUrl = `${siteUrl()}/admin/reset-password?token=${invited.token}`;
   await enqueueMailJob({
-    type: "password-reset",
+    type: "admin-invite",
     to: email,
-    resetUrl: setupUrl,
+    setupUrl,
     username: invited.username,
+    roleLabel: ROLE_LABELS[roleRaw],
+    companyName: company.copyrightText,
   }).catch((e) => console.error("[admins] failed to enqueue invite mail:", e));
 
   await logActivity({
@@ -98,4 +104,25 @@ export async function toggleActiveAction(targetId: number, isActive: boolean): P
 
   revalidatePath("/admin/admins");
   return { success: isActive ? "Admin activated." : "Admin deactivated." };
+}
+
+export async function deleteAdminAction(targetId: number): Promise<ActionResult> {
+  const admin = await requireOwner();
+
+  try {
+    await deleteAdmin(targetId, admin.id);
+  } catch (err) {
+    if (err instanceof AdminManageError) return { error: err.message };
+    throw err;
+  }
+
+  await logActivity({
+    adminId: admin.id,
+    actorName: admin.username,
+    action: "admin.delete",
+    detail: `Deleted admin #${targetId}`,
+  });
+
+  revalidatePath("/admin/admins");
+  return { success: "Admin deleted." };
 }

@@ -3,6 +3,8 @@ import { listActiveCategories } from "@/server/categories";
 import { prisma } from "@/lib/prisma";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { getDictionary } from "@/i18n/server";
+import { getLogoUrl } from "@/server/settings/branding";
+import { LOGO_WIDTH, LOGO_HEIGHT } from "@/lib/logo-spec";
 import HeaderCart from "./HeaderCart";
 import HeaderAccount from "./HeaderAccount";
 import CategoryNav from "./CategoryNav";
@@ -14,10 +16,11 @@ import { PinIcon } from "./icons";
 // masthead: utility bar, main bar (logo + search + account + cart) and the
 // sticky category nav beneath it.
 export default async function Header() {
-  const [categories, session, dict] = await Promise.all([
+  const [categories, session, dict, logoUrl] = await Promise.all([
     listActiveCategories(),
     getCurrentCustomer(),
     getDictionary(),
+    getLogoUrl(),
   ]);
 
   let displayName: string | null = null;
@@ -53,9 +56,23 @@ export default async function Header() {
       {/* main bar */}
       <header className="hdr">
         <div className="wrap">
-          <Link href="/" className="logo">
-            <span className="mark"><span>FZ</span></span>
-            <span><b>FZ</b><i>Mart</i></span>
+          <Link href="/" className="logo" aria-label="FZ Mart home">
+            {logoUrl ? (
+              // Admin-uploaded logo, sized to the fixed 120×40 slot.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt="FZ Mart"
+                width={LOGO_WIDTH}
+                height={LOGO_HEIGHT}
+                style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT, objectFit: "contain" }}
+              />
+            ) : (
+              <>
+                <span className="mark"><span>FZ</span></span>
+                <span><b>FZ</b><i>Mart</i></span>
+              </>
+            )}
           </Link>
 
           <HeaderSearch

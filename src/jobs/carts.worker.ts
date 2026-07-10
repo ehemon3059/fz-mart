@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { QUEUE_NAMES } from "@/lib/queue";
 import { getConversionConfig } from "@/server/settings/conversion";
 import { recoveryLink } from "@/server/cart";
+import { primeSiteUrl } from "@/server/settings/site";
 import { enqueueSmsJob, enqueueMailJob } from "@/jobs/enqueue";
 import type { CartJob } from "./types";
 
@@ -26,6 +27,7 @@ export function createCartsWorker(connection: { url: string }) {
       // job will cover it; skip to avoid double-sending.
       if (cart.updatedAt.toISOString() !== job.data.cartVersion) return;
 
+      await primeSiteUrl(); // recovery link must use the admin-configured domain
       const link = recoveryLink(cart.recoveryToken);
       const message = config.abandonedCartMessage.replace("{link}", link);
 

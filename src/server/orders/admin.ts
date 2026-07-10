@@ -2,6 +2,7 @@ import type { OrderStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { nextStatuses } from "@/config/order-status";
 import { restockOrderItems } from "@/server/payments";
+import { sendPurchaseConfirmed } from "@/server/facebook/capi";
 
 export const ORDERS_PAGE_SIZE = 20;
 
@@ -165,6 +166,18 @@ export async function updateOrderStatus(
     // cancelling it (the only manual transition allowed) releases the units.
     if (order.status === "PENDING_PAYMENT" && newStatus === "CANCELLED") {
       await restockOrderItems(tx, orderId);
+    }
+    return updated;
+  }).then((updated) => {
+    // Owner phone-confirmed the order → report the real conversion to Meta so
+    // ad delivery optimizes toward customers who genuinely confirm. Fire-and-
+    // forget: a Facebook failure must never fail the status change. Fires only
+    // on the actual PENDING→CONFIRMED transition, so re-confirms can't double
+    // count (the state machine forbids CONFIRMED→CONFIRMED anyway).
+    if (newStatus === "CONFIRMED") {
+      sendPurchaseConfirmed(updated).catch((err) =>
+        console.error("[orders] CAPI Purchase send failed (non-blocking):", err),
+      );
     }
     return updated;
   });

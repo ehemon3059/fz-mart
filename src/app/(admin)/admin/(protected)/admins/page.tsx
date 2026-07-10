@@ -15,7 +15,8 @@ export default async function AdminsPage() {
     <div className="mx-auto max-w-4xl">
       <h1 className="text-2xl font-bold text-gray-900">Admin Users</h1>
       <p className="mt-1 text-sm text-gray-500">
-        Invite teammates, set their role, and deactivate accounts. Only owners can manage admins.
+        Invite teammates, set their role, and deactivate or delete accounts. Only owners can manage
+        admins.
       </p>
 
       <div className="mt-6">

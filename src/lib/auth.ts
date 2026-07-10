@@ -25,8 +25,16 @@ function sessionKey(sessionId: string): string {
   return `admin_session:${sessionId}`;
 }
 
-export async function verifyAdminCredentials(username: string, password: string) {
-  const admin = await prisma.adminUser.findUnique({ where: { username } });
+// Accepts either the username or the email address. Invited admins get an
+// auto-derived username (email local-part), so they naturally try to sign in
+// with their email — look that up too rather than failing them.
+export async function verifyAdminCredentials(identifier: string, password: string) {
+  const value = identifier.trim();
+  const admin =
+    (await prisma.adminUser.findUnique({ where: { username: value } })) ??
+    (value.includes("@")
+      ? await prisma.adminUser.findUnique({ where: { email: value.toLowerCase() } })
+      : null);
   if (!admin) return null;
   const valid = await bcrypt.compare(password, admin.passwordHash);
   return valid ? admin : null;

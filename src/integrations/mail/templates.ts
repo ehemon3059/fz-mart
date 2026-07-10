@@ -28,7 +28,8 @@ export function orderConfirmationHtml(data: OrderConfirmationData): string {
 
 // Email clients (especially Gmail/Outlook) strip <style> blocks and ignore most
 // modern CSS, so professional emails are built with nested tables and inline styles.
-function emailLayout(opts: { preview: string; body: string }): string {
+function emailLayout(opts: { preview: string; body: string; brandName?: string }): string {
+  const brand = opts.brandName?.trim() || "fz-mart";
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -45,7 +46,7 @@ function emailLayout(opts: { preview: string; body: string }): string {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
             <td style="background-color:#111827;padding:24px 32px;" align="center">
-              <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">fz-mart</span>
+              <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">${brand}</span>
             </td>
           </tr>
           <tr>
@@ -56,7 +57,7 @@ function emailLayout(opts: { preview: string; body: string }): string {
           <tr>
             <td style="padding:20px 32px;background-color:#f9fafb;border-top:1px solid #eef0f3;" align="center">
               <p style="margin:0;font-size:12px;line-height:18px;color:#9aa0ab;">
-                &copy; ${new Date().getFullYear()} fz-mart. All rights reserved.
+                &copy; ${new Date().getFullYear()} ${brand}. All rights reserved.
               </p>
             </td>
           </tr>
@@ -155,6 +156,73 @@ export function passwordResetHtml(data: PasswordResetMailData): string {
   return emailLayout({
     preview: `Reset your fz-mart admin password (expires in ${data.ttlMinutes} minutes).`,
     body,
+  });
+}
+
+export interface AdminInviteMailData {
+  setupUrl: string;
+  username: string;
+  roleLabel: string;
+  companyName: string;
+  ttlMinutes: number;
+}
+
+export function adminInviteHtml(data: AdminInviteMailData): string {
+  const brand = data.companyName.trim() || "fz-mart";
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:20px;line-height:28px;color:#111827;font-weight:700;">You've been invited to ${brand}</h1>
+    <p style="margin:0 0 20px;font-size:15px;line-height:24px;color:#4b5563;">
+      You've been added to the <strong>${brand}</strong> admin panel as a <strong>${data.roleLabel}</strong>.
+      Set a password below to activate your account and sign in.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background-color:#f9fafb;border:1px solid #eef0f3;border-radius:8px;">
+      <tr>
+        <td style="padding:12px 16px;">
+          <span style="font-size:12px;line-height:16px;color:#9aa0ab;text-transform:uppercase;letter-spacing:0.5px;">Account</span><br />
+          <span style="font-size:14px;line-height:20px;color:#111827;font-weight:600;">${data.username}</span>
+        </td>
+        <td style="padding:12px 16px;" align="right">
+          <span style="font-size:12px;line-height:16px;color:#9aa0ab;text-transform:uppercase;letter-spacing:0.5px;">Role</span><br />
+          <span style="font-size:14px;line-height:20px;color:#111827;font-weight:600;">${data.roleLabel}</span>
+        </td>
+      </tr>
+    </table>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr>
+        <td align="center" style="border-radius:8px;background-color:#111827;">
+          <a href="${data.setupUrl}" target="_blank" style="display:inline-block;padding:13px 32px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+            Set your password
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 8px;font-size:13px;line-height:20px;color:#6b7280;">
+      Or copy and paste this link into your browser:
+    </p>
+    <p style="margin:0 0 24px;font-size:13px;line-height:20px;word-break:break-all;">
+      <a href="${data.setupUrl}" target="_blank" style="color:#2563eb;text-decoration:underline;">${data.setupUrl}</a>
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background-color:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+      <tr>
+        <td style="padding:12px 16px;font-size:13px;line-height:20px;color:#92400e;">
+          For your security, this link expires in <strong>${data.ttlMinutes} minutes</strong> and can only be used once.
+        </td>
+      </tr>
+    </table>
+
+    <hr style="border:none;border-top:1px solid #eef0f3;margin:0 0 16px;" />
+    <p style="margin:0;font-size:13px;line-height:20px;color:#9aa0ab;">
+      If you weren&rsquo;t expecting this invitation, you can safely ignore this email.
+    </p>
+  `;
+  return emailLayout({
+    preview: `You've been invited to ${brand} as a ${data.roleLabel}.`,
+    body,
+    brandName: brand,
   });
 }
 

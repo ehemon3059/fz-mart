@@ -7,6 +7,9 @@ import { formatTaka } from "@/lib/money";
 import { CashIcon, CheckIcon, TrashIcon } from "@/components/storefront/icons";
 import type { CheckoutPaymentOptions } from "@/server/settings/payments";
 import { placeOrder, applyCoupon, requestCheckoutOtp, confirmCheckoutOtp, syncCart } from "./actions";
+import { recordCheckoutStart } from "../funnel-actions";
+import { getFbAttribution } from "@/lib/fb-attribution";
+import { readUtmAttribution, type UtmAttribution } from "@/lib/utm-attribution";
 
 interface Props {
   zones: ShippingZone[];
@@ -66,6 +69,16 @@ export default function CheckoutForm({
   const [otpVerified, setOtpVerified] = useState(false);
   const [savedForm, setSavedForm] = useState<FormData | null>(null);
   const [otpPending, startOtp] = useTransition();
+
+  // Facebook click ids, read from cookies/URL once on mount and submitted as
+  // hidden fields so a confirmed order can be attributed back to its ad.
+  const [fbAttribution, setFbAttribution] = useState({ fbp: "", fbc: "" });
+  // First-touch utm_* (Google/TikTok/etc.), read from the fz_utm cookie.
+  const [utm, setUtm] = useState<UtmAttribution>({ utmSource: "", utmMedium: "", utmCampaign: "" });
+  useEffect(() => {
+    setFbAttribution(getFbAttribution());
+    setUtm(readUtmAttribution());
+  }, []);
 
   function currentPhone(): string {
     return savedForm ? String(savedForm.get("customerPhone") ?? "") : "";
@@ -160,6 +173,15 @@ export default function CheckoutForm({
     if (otpStep && !otpVerified) sendOtp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otpStep]);
+
+  // Funnel: a checkout was started (all entries — guests, buy-now, and logged-in
+  // — unlike syncCart which is scoped to recoverable identified carts). Once per
+  // mount; fire-and-forget.
+  useEffect(() => {
+    if (checkoutItems.length === 0) return;
+    void recordCheckoutStart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist a logged-in customer's cart on checkout entry, so an abandoned
   // checkout can be recovered. Guests and the buy-now flow are skipped.
@@ -330,6 +352,11 @@ export default function CheckoutForm({
           <h2 className="co-hd">Payment method</h2>
           <input type="hidden" name="paymentMethod" value={paymentMethod} />
           <input type="hidden" name="paymentProvider" value={provider} />
+          <input type="hidden" name="fbp" value={fbAttribution.fbp} />
+          <input type="hidden" name="fbc" value={fbAttribution.fbc} />
+          <input type="hidden" name="utmSource" value={utm.utmSource} />
+          <input type="hidden" name="utmMedium" value={utm.utmMedium} />
+          <input type="hidden" name="utmCampaign" value={utm.utmCampaign} />
 
           <button
             type="button"

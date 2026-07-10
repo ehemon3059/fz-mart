@@ -18,15 +18,7 @@ export function trackAddToCart(params: { value: number; currency?: string }) {
   });
 }
 
-export function trackPurchase(params: {
-  value: number;
-  currency?: string;
-  orderNo: string;
-}) {
-  if (typeof window === "undefined" || !window.fbq) return;
-  window.fbq("track", "Purchase", {
-    value: params.value,
-    currency: params.currency ?? "BDT",
-    content_ids: [params.orderNo],
-  });
-}
+// NOTE: There is deliberately no client-side Purchase event. For this COD
+// store the meaningful conversion is a phone-CONFIRMED order, sent server-side
+// via the Conversions API (see server/facebook/capi.ts) — not the moment a
+// shopper reaches the confirmation page (many of those orders are fake).

@@ -5,6 +5,7 @@ import {
   orderConfirmationHtml,
   magicLinkHtml,
   passwordResetHtml,
+  adminInviteHtml,
   abandonedCartHtml,
   backInStockHtml,
   lowStockDigestHtml,
@@ -25,6 +26,8 @@ function subjectFor(job: MailJob): string {
       return "Your fz-mart sign-in link";
     case "password-reset":
       return "Reset your fz-mart admin password";
+    case "admin-invite":
+      return `You've been invited to ${job.companyName || "fz-mart"} as ${job.roleLabel}`;
     case "abandoned-cart":
       return "You left items in your cart — fz-mart";
     case "back-in-stock":
@@ -49,6 +52,14 @@ function htmlFor(job: MailJob): string {
       return passwordResetHtml({
         resetUrl: job.resetUrl,
         username: job.username,
+        ttlMinutes: RESET_TOKEN_TTL_MINUTES,
+      });
+    case "admin-invite":
+      return adminInviteHtml({
+        setupUrl: job.setupUrl,
+        username: job.username,
+        roleLabel: job.roleLabel,
+        companyName: job.companyName,
         ttlMinutes: RESET_TOKEN_TTL_MINUTES,
       });
     case "abandoned-cart":

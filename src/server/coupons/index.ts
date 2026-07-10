@@ -15,19 +15,53 @@ export class CouponError extends Error {
 
 export interface CouponResult {
   code: string;
-  /** Discount in paisa for the given subtotal. */
+  /** Discount in paisa for the given cart. */
   discount: number;
 }
 
 /**
- * Compute the discount a coupon yields on `subtotal` (paisa), or throw
- * CouponError with a customer-facing reason. `customerPhone` is used for the
- * per-customer usage limit; pass null before the phone is known (the limit is
- * then re-checked at redemption).
+ * One cart line as seen by the coupon engine. `categoryId` is the top-level
+ * Category the product's subcategory belongs to (needed for CATEGORY-scoped
+ * coupons); `lineTotal` is the authoritative server-side price × qty in paisa.
+ */
+export interface CouponCartLine {
+  productId: number;
+  categoryId: number;
+  lineTotal: number;
+}
+
+/**
+ * Sum the cart lines a coupon is allowed to discount. For ALL coupons that's
+ * the whole cart; for CATEGORY/PRODUCT it's only the matching lines. Returned
+ * separately from the full subtotal so PERCENT/FIXED apply to the eligible
+ * amount, while minOrder is still checked against the full cart total.
+ */
+function eligibleSubtotal(
+  coupon: { appliesTo: string; categoryId: number | null; productId: number | null },
+  lines: CouponCartLine[],
+): number {
+  if (coupon.appliesTo === "PRODUCT") {
+    return lines
+      .filter((l) => l.productId === coupon.productId)
+      .reduce((sum, l) => sum + l.lineTotal, 0);
+  }
+  if (coupon.appliesTo === "CATEGORY") {
+    return lines
+      .filter((l) => l.categoryId === coupon.categoryId)
+      .reduce((sum, l) => sum + l.lineTotal, 0);
+  }
+  return lines.reduce((sum, l) => sum + l.lineTotal, 0);
+}
+
+/**
+ * Compute the discount a coupon yields on the given cart lines (paisa), or
+ * throw CouponError with a customer-facing reason. `customerPhone` is used for
+ * the per-customer usage limit; pass null before the phone is known (the limit
+ * is then re-checked at redemption).
  */
 export async function validateCoupon(
   codeInput: string,
-  subtotal: number,
+  lines: CouponCartLine[],
   customerPhone: string | null,
   tx: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<CouponResult> {
@@ -46,11 +80,21 @@ export async function validateCoupon(
   if (coupon.endsAt && coupon.endsAt < now) {
     throw new CouponError("This coupon has expired.");
   }
-  if (subtotal < coupon.minOrder) {
+
+  // minOrder gates on the FULL cart total; the discount applies to the
+  // eligible slice (the whole cart for ALL coupons).
+  const cartTotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
+  if (cartTotal < coupon.minOrder) {
     throw new CouponError(
-      `Add ৳${((coupon.minOrder - subtotal) / 100).toFixed(0)} more to use this coupon.`,
+      `Add ৳${((coupon.minOrder - cartTotal) / 100).toFixed(0)} more to use this coupon.`,
     );
   }
+
+  const eligible = eligibleSubtotal(coupon, lines);
+  if (eligible <= 0) {
+    throw new CouponError("This coupon doesn't apply to any item in your cart.");
+  }
+
   if (coupon.usageLimit != null && coupon.timesUsed >= coupon.usageLimit) {
     throw new CouponError("This coupon has reached its usage limit.");
   }
@@ -64,10 +108,10 @@ export async function validateCoupon(
   }
 
   let discount =
-    coupon.type === "PERCENT" ? Math.floor((subtotal * coupon.value) / 100) : coupon.value;
+    coupon.type === "PERCENT" ? Math.floor((eligible * coupon.value) / 100) : coupon.value;
   if (coupon.maxDiscount != null) discount = Math.min(discount, coupon.maxDiscount);
-  // Never discount more than the subtotal.
-  discount = Math.min(discount, subtotal);
+  // Never discount more than the eligible lines are worth.
+  discount = Math.min(discount, eligible);
   if (discount <= 0) throw new CouponError("This coupon gives no discount on your cart.");
 
   return { code, discount };
@@ -80,12 +124,12 @@ export async function validateCoupon(
 export async function redeemCoupon(
   tx: Prisma.TransactionClient,
   codeInput: string,
-  subtotal: number,
+  lines: CouponCartLine[],
   orderId: number,
   customerPhone: string,
   customerId: string | null,
 ): Promise<{ code: string; discount: number }> {
-  const { code, discount } = await validateCoupon(codeInput, subtotal, customerPhone, tx);
+  const { code, discount } = await validateCoupon(codeInput, lines, customerPhone, tx);
   const coupon = await tx.coupon.findUniqueOrThrow({ where: { code } });
 
   // Atomic guard on the total usage limit: only increment if still under it.

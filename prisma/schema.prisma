@@ -31,6 +31,7 @@ model Category {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   subcategories   Subcategory[]
+  coupons         Coupon[]
 
   @@index([isActive, sortOrder])
 }
@@ -88,6 +89,9 @@ model Product {
   wishlistItems      WishlistItem[]
   stockNotifications StockNotification[]
   stockAdjustments   StockAdjustment[]
+  coupons            Coupon[]
+  cartItems          CustomerCartItem[]
+  cartEvents         CartEvent[]
 
   @@index([subcategoryId, status])
   @@index([isFeatured, status])
@@ -267,6 +271,8 @@ model Customer {
   orders    Order[]
   reviews   ProductReview[]
   wishlist  WishlistItem[]
+  cart      CustomerCart?
+  cartEvents CartEvent[]
 }
 
 // Single-use magic-link tokens. usedAt marks consumption (kept for audit
@@ -334,7 +340,28 @@ model Order {
   // rewrite a historical order. total already has couponDiscount subtracted.
   couponCode         String?
   couponDiscount     Int               @default(0)
+  // ── Facebook attribution (Conversions API) ── click identifiers captured at
+  // checkout so a later server-side Purchase event (fired when the owner phone-
+  // confirms the order) can be matched back to the ad that drove it. Null when
+  // the shopper didn't arrive from a Facebook ad or blocked the pixel cookie.
+  //   fbp — the _fbp browser cookie the Pixel sets on every visitor.
+  //   fbc — derived from the fbclid URL param on an ad click (fb.1.<ts>.<id>).
+  fbp                String?
+  fbc                String?
+  // ── Marketing attribution (GAP 3) ── first-touch UTM params captured at
+  // checkout from a landing cookie, so a delivered order can be classified to a
+  // channel for ROAS/CAC even when it carries no Facebook click id (Google,
+  // TikTok, etc.). Null for organic/direct visitors.
+  utmSource          String?
+  utmMedium          String?
+  utmCampaign        String?
   status             OrderStatus       @default(PENDING)
+  // ── Courier (Phase 3+) ── which provider shipped this order. Set at
+  // consignment-creation time and FROZEN thereafter: manual "Refresh Status"
+  // and webhook routing always dispatch to THIS provider, never the currently
+  // active one — so switching the shop's active courier never misroutes an
+  // already-shipped order's status lookups. Null until a consignment exists.
+  courierProvider    CourierProvider?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   customer           Customer?         @relation(fields: [customerId], references: [id])
@@ -350,6 +377,15 @@ model Order {
   @@index([status, createdAt])
   @@index([customerPhone])
   @@index([customerId])
+}
+
+// Courier providers the adapter layer can dispatch to. Stored on Order once a
+// consignment is created so status refresh/webhooks route to the right adapter
+// regardless of which provider is currently "active" in settings.
+enum CourierProvider {
+  STEADFAST
+  PATHAO
+  REDX
 }
 
 enum OrderStatus {
@@ -489,6 +525,28 @@ model AdminUser {
   createdAt        DateTime             @default(now())
   resetTokens      PasswordResetToken[]
   activityLogs     AdminActivityLog[]
+  backupCodes      AdminBackupCode[]
+}
+
+// One-time 2FA recovery codes, for when an admin can't reach their
+// authenticator app. Generated 10 at a time (see server/admin/twofactor.ts);
+// regenerating deletes the old set so a leaked/lost batch can't be reused.
+// Only the bcrypt hash is stored — like passwordHash, the plaintext is shown
+// to the admin once at generation time and never persisted.
+model AdminBackupCode {
+  id        Int       @id @default(autoincrement())
+  adminId   Int
+  codeHash  String
+  // AES-GCM encrypted code value (lib/crypto), so the admin panel can show the
+  // plaintext of used codes. Nullable: codes generated before this column
+  // existed have only the one-way hash and can't be displayed. Verification
+  // always uses codeHash — codeEnc is display-only.
+  codeEnc   String?
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
 }
 
 enum AdminRole {
@@ -683,6 +741,67 @@ enum ExpenseCategory {
   OTHER
 }
 
+// Ad spend by channel, entered by hand (no ad-platform APIs in v1). Kept SEPARATE
+// from Expense: the finance dashboard ties this against ATTRIBUTED delivered-order
+// revenue to compute per-channel ROAS and CAC, which needs a channel dimension the
+// generic Expense.MARKETING line doesn't carry. `spentOn` (not createdAt) decides
+// which month a spend lands in — same back-dating convention as Expense.incurredOn.
+// `amount` is paisa, like every money field. Overlaps with the MARKETING expense
+// line by design (spend is tracked here for ROAS; whether it also books to the P&L
+// as a MARKETING expense is a separate manual entry).
+model AdSpend {
+  id        Int       @id @default(autoincrement())
+  channel   AdChannel @default(FACEBOOK)
+  amount    Int // paisa
+  spentOn   DateTime // any day in the month the spend belongs to
+  note      String?
+  createdBy String? // admin username who entered it (audit)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([spentOn])
+  @@index([channel, spentOn])
+}
+
+// Marketing channels an order can be attributed to, and that spend is booked
+// against. ORGANIC/DIRECT is the catch-all for orders with no ad attribution;
+// no spend is entered against it, so its ROAS/CAC are not shown.
+enum AdChannel {
+  FACEBOOK
+  GOOGLE
+  TIKTOK
+  OTHER
+}
+
+// Lightweight storefront funnel events, recorded server-side where each action
+// already happens (product view, add-to-cart, checkout start, order placed), so
+// the admin can see conversion rates in-house instead of only firing pixel
+// events outward. Writes are fire-and-forget — never block or fail the
+// user-facing action — and blocked-IP / bot traffic is filtered before insert.
+//
+// sessionId = the anonymous/identified customer id (no new cookie is minted);
+// it's coarse by design and used mainly for the per-session/product/day view
+// debounce. Rows older than 90 days are pruned by the daily maintenance job.
+model FunnelEvent {
+  id        Int             @id @default(autoincrement())
+  type      FunnelEventType
+  sessionId String
+  productId Int?
+  createdAt DateTime        @default(now())
+
+  // Range scans by (type, createdAt) drive the 30-day funnel aggregation and
+  // the 90-day prune; no FK on productId — events must survive product deletes.
+  @@index([type, createdAt])
+  @@index([createdAt])
+}
+
+enum FunnelEventType {
+  PRODUCT_VIEW
+  ADD_TO_CART
+  CHECKOUT_START
+  ORDER_PLACED
+}
+
 // ─────────────────────────────────────────────────────────────
 // Phase 4 — Conversion & Anti-Fraud
 // ─────────────────────────────────────────────────────────────
@@ -703,16 +822,33 @@ model Coupon {
   endsAt           DateTime?
   isActive         Boolean            @default(true)
   timesUsed        Int                @default(0)
+  // Scope: what the discount applies to. ALL = whole cart (default).
+  // CATEGORY = only lines whose product is in categoryId. PRODUCT = only
+  // lines for productId. For CATEGORY/PRODUCT the percent/fixed discount is
+  // computed against the ELIGIBLE lines' subtotal, not the whole cart.
+  appliesTo        CouponScope        @default(ALL)
+  categoryId       Int?
+  productId        Int?
+  category         Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  product          Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   redemptions      CouponRedemption[]
 
   @@index([isActive])
+  @@index([categoryId])
+  @@index([productId])
 }
 
 enum CouponType {
   PERCENT
   FIXED
+}
+
+enum CouponScope {
+  ALL
+  CATEGORY
+  PRODUCT
 }
 
 // One row per successful coupon use. Enforces per-customer limits (by phone,
@@ -789,6 +925,57 @@ model WishlistItem {
   @@index([customerId])
 }
 
+// The logged-in customer's live cart, persisted server-side so it follows them
+// across devices. One cart per customer. Like the client-side store in
+// lib/cart-store.ts this is DISPLAY ONLY — checkout re-verifies price and stock
+// inside a transaction; the browser (and this table) are never trusted for what
+// gets charged. Guests keep a localStorage-only cart and have no row here.
+model CustomerCart {
+  id         Int                @id @default(autoincrement())
+  customerId String             @unique
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  customer   Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      CustomerCartItem[]
+}
+
+// One line of a persisted cart, identified by (cart, product, variant) — the
+// same product in two variants is two lines, mirroring cartLineKey() in
+// lib/cart-store.ts. variantId is a plain nullable column (as in WishlistItem /
+// StockNotification), null when the product has no variants.
+model CustomerCartItem {
+  id        Int          @id @default(autoincrement())
+  cartId    Int
+  productId Int
+  variantId Int?
+  quantity  Int
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  cart      CustomerCart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId, variantId])
+  @@index([cartId])
+}
+
+// Append-only log of add-to-cart events for the profile's cart-history tab.
+// Distinct from CustomerCart (the live cart): this records every add, even for
+// items later removed, so the history is a faithful trail. Written only for
+// logged-in customers.
+model CartEvent {
+  id         Int      @id @default(autoincrement())
+  customerId String
+  productId  Int
+  variantId  Int?
+  quantity   Int
+  createdAt  DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@index([productId])
+}
+
 // "Notify me when back in stock" subscription. notifiedAt is set once the
 // alert has been queued, so a later restock doesn't re-notify the same person.
 model StockNotification {
@@ -822,4 +1009,18 @@ model StockAdjustment {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, createdAt])
+}
+
+// Newsletter signups from the storefront footer box ("Get ৳150 off…"). Email is
+// unique so a re-subscribe is a no-op (see server/newsletter). name is captured
+// from the logged-in customer at signup time when available, else left blank.
+// customerId is a soft link (the customer id string) for later attribution.
+model NewsletterSubscriber {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  name       String?
+  customerId String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }

@@ -12,7 +12,7 @@ import {
   consumePending2fa,
   PENDING_2FA_COOKIE,
 } from "@/lib/auth";
-import { verifyLoginCode } from "@/server/admin/twofactor";
+import { verifyLoginCode, verifyBackupCode } from "@/server/admin/twofactor";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/client-ip";
 
@@ -20,6 +20,8 @@ export interface LoginResult {
   error?: string;
   /** Set when the password was correct but a TOTP code is now required. */
   twoFactorRequired?: boolean;
+  /** Seconds to wait before retrying, when a rate limit was hit. */
+  retryAfterSeconds?: number;
 }
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // matches Redis TTL in lib/auth.ts
@@ -115,10 +117,20 @@ export async function verifyTwoFactorLogin(formData: FormData): Promise<LoginRes
   // Rate-limit code guesses per pending login.
   const limit = await rateLimit("login:2fa", String(adminId), 6, 5 * 60);
   if (!limit.allowed) {
-    return { error: "Too many attempts. Please sign in again." };
+    return {
+      error: "Too many attempts. Please wait before trying again.",
+      retryAfterSeconds: limit.resetInSeconds,
+    };
   }
 
-  const ok = await verifyLoginCode(adminId, code);
+  // A backup code is longer and contains a dash (e.g. "4F7K-9XQ2"); a TOTP
+  // code is always 6 digits. Try whichever shape the input matches — this
+  // lets one form field accept either without a separate mode toggle needed
+  // server-side (the client still offers a "use a backup code" affordance).
+  const isBackupCodeShape = code.includes("-") || code.length > 6;
+  const ok = isBackupCodeShape
+    ? await verifyBackupCode(adminId, code)
+    : await verifyLoginCode(adminId, code);
   if (!ok) {
     return { error: "Invalid code. Try again." };
   }

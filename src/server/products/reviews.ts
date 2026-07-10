@@ -65,6 +65,24 @@ export async function listApprovedReviews(productId: number) {
   });
 }
 
+/** A customer's own reviews, any status (including PENDING/REJECTED), for their profile page. */
+export async function listReviewsByCustomer(customerId: string) {
+  return prisma.productReview.findMany({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+        },
+      },
+    },
+  });
+}
+
 export interface RatingSummary {
   average: number;
   total: number;

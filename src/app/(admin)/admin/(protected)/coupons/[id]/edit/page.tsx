@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getCouponById } from "@/server/coupons/admin";
+import { getCouponById, getCouponScopeOptions } from "@/server/coupons/admin";
 import CouponForm from "../../CouponForm";
 
 export const metadata = { title: "Edit Coupon — FZ-Mart Admin" };
@@ -10,11 +10,16 @@ function toDateInput(d: Date | null): string | null {
 
 export default async function EditCouponPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const coupon = await getCouponById(Number(id));
+  const [coupon, scopeOptions] = await Promise.all([
+    getCouponById(Number(id)),
+    getCouponScopeOptions(),
+  ]);
   if (!coupon) notFound();
 
   return (
     <CouponForm
+      categories={scopeOptions.categories}
+      products={scopeOptions.products}
       coupon={{
         id: coupon.id,
         code: coupon.code,
@@ -27,6 +32,9 @@ export default async function EditCouponPage({ params }: { params: Promise<{ id:
         startsAt: toDateInput(coupon.startsAt),
         endsAt: toDateInput(coupon.endsAt),
         isActive: coupon.isActive,
+        appliesTo: coupon.appliesTo,
+        categoryId: coupon.categoryId,
+        productId: coupon.productId,
       }}
     />
   );

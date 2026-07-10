@@ -1,5 +1,6 @@
 import type { BannerSlot } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { deleteImage } from "@/integrations/storage";
 import { invalidateBannerCache } from "./cache";
 
 export async function listAllBanners() {
@@ -44,6 +45,8 @@ export async function updateBanner(id: number, input: BannerInput) {
 }
 
 export async function deleteBanner(id: number) {
-  await prisma.banner.delete({ where: { id } });
+  const banner = await prisma.banner.delete({ where: { id } });
   await invalidateBannerCache();
+  // Best-effort cleanup of the stored object (no-ops for seed/external URLs).
+  await deleteImage(banner.imageUrl);
 }

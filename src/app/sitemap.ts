@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { getOrSetCache } from "@/lib/cache";
 import { siteUrl } from "@/lib/seo";
+import { primeSiteUrl } from "@/server/settings/site";
 
 // Served at /sitemap.xml. Auto-updating: regenerated from the DB, cached in
 // Redis for an hour so a crawler hit doesn't scan the whole catalogue every
@@ -18,6 +19,7 @@ interface Entry {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  await primeSiteUrl();
   const base = siteUrl();
 
   const entries = await getOrSetCache<Entry[]>("seo:sitemap", SITEMAP_TTL_SECONDS, async () => {

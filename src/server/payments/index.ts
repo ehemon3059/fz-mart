@@ -7,6 +7,7 @@ import {
   type PaymentProviderKey,
 } from "@/server/settings/payments";
 import { enqueueMailJob, enqueuePaymentJob } from "@/jobs/enqueue";
+import { primeSiteUrl } from "@/server/settings/site";
 
 // Service layer for online payments. All state transitions are transactional
 // and idempotent — gateways retry IPNs, customers refresh callback pages, and
@@ -58,6 +59,10 @@ export async function initiateOnlinePayment(
   provider: PaymentProviderKey,
   amountPaisa: number,
 ): Promise<string> {
+  // The gateway callbackURL must use the admin-configured domain, so warm the
+  // Site URL cache before the adapter builds it via appBaseUrl().
+  await primeSiteUrl();
+
   const payment = await prisma.payment.create({
     data: { orderId: order.id, provider, amount: amountPaisa, status: "INITIATED" },
   });

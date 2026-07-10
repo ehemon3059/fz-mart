@@ -7,6 +7,11 @@ import {
 } from "@/server/orders/admin";
 import { getExistingFraudCheck } from "@/server/fraud";
 import { getOrderPayments } from "@/server/payments";
+import type { CourierProvider } from "@prisma/client";
+import { getCourierConfig } from "@/server/settings/courier";
+import { getPathaoConfig } from "@/server/settings/courier-pathao";
+import { getRedxConfig } from "@/server/settings/courier-redx";
+import { getActiveProvider } from "@/server/settings/courier-active";
 import { formatTaka } from "@/lib/money";
 import { nextStatuses } from "@/config/order-status";
 import StatusControls from "./StatusControls";
@@ -28,12 +33,31 @@ export default async function AdminOrderDetailPage({
   const order = await getOrderById(orderId);
   if (!order) notFound();
 
-  const [fraudCheck, statusLogs, notes, payments] = await Promise.all([
+  const [
+    fraudCheck,
+    statusLogs,
+    notes,
+    payments,
+    steadfastCfg,
+    pathaoCfg,
+    redxCfg,
+    activeProvider,
+  ] = await Promise.all([
     getExistingFraudCheck(order.customerPhone),
     getOrderStatusHistory(orderId),
     getOrderNotes(orderId),
     getOrderPayments(orderId),
+    getCourierConfig(),
+    getPathaoConfig(),
+    getRedxConfig(),
+    getActiveProvider(),
   ]);
+
+  const availableCouriers: CourierProvider[] = [
+    ...(steadfastCfg ? (["STEADFAST"] as const) : []),
+    ...(pathaoCfg ? (["PATHAO"] as const) : []),
+    ...(redxCfg ? (["REDX"] as const) : []),
+  ];
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -81,7 +105,12 @@ export default async function AdminOrderDetailPage({
         />
       </div>
 
-      <CourierPanel orderId={order.id} shipment={order.courierShipment} />
+      <CourierPanel
+        orderId={order.id}
+        shipment={order.courierShipment}
+        available={availableCouriers}
+        activeProvider={activeProvider}
+      />
 
       <div className="border rounded-lg bg-white p-6 space-y-2">
         <div className="flex items-center justify-between">

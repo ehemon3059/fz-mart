@@ -42,6 +42,12 @@ export const MenuIcon = (p: P) => (
 export const PinIcon = (p: P) => (
   <Svg {...p} strokeWidth={2}><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z" /><circle cx="12" cy="10" r="3" /></Svg>
 );
+export const PhoneIcon = (p: P) => (
+  <Svg {...p} strokeWidth={2}><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" /></Svg>
+);
+export const MailIcon = (p: P) => (
+  <Svg {...p} strokeWidth={2}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></Svg>
+);
 export const HeartIcon = (p: P) => (
   <Svg {...p} strokeWidth={2}><path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.5-7 10-7 10Z" /></Svg>
 );
@@ -92,6 +98,11 @@ export const InstagramIcon = ({ size = 16, ...rest }: P) => (
 export const YoutubeIcon = ({ size = 16, ...rest }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" {...rest}>
     <path d="M22 8.2a3 3 0 0 0-2.1-2.1C18 5.6 12 5.6 12 5.6s-6 0-7.9.5A3 3 0 0 0 2 8.2 31 31 0 0 0 1.7 12 31 31 0 0 0 2 15.8a3 3 0 0 0 2.1 2.1c1.9.5 7.9.5 7.9.5s6 0 7.9-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 22.3 12 31 31 0 0 0 22 8.2ZM10 15V9l5.2 3L10 15Z" />
+  </svg>
+);
+export const TwitterIcon = ({ size = 16, ...rest }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" {...rest}>
+    <path d="M18.9 3H22l-7.2 8.2L23 21h-6.4l-5-6.5L5.7 21H2.6l7.7-8.8L2 3h6.6l4.5 6L18.9 3Zm-1.1 16h1.8L7.3 4.9H5.4L17.8 19Z" />
   </svg>
 );
 

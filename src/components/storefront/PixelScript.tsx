@@ -2,13 +2,15 @@ import Script from "next/script";
 
 // Conditional injection: if no Pixel id is configured, render nothing — not
 // an empty <script> tag. AddToCart/Purchase events are fired separately
-// (see lib/pixel.ts) once this base script has initialized `fbq`.
-export default function PixelScript({ pixelId }: { pixelId: string | null }) {
+// (see lib/pixel.ts) once this base script has initialized `fbq`. The `nonce`
+// (from the per-request CSP set in middleware) is applied so this inline
+// bootstrap passes the nonce-based CSP.
+export default function PixelScript({ pixelId, nonce }: { pixelId: string | null; nonce?: string }) {
   if (!pixelId) return null;
 
   return (
     <>
-      <Script id="fb-pixel-script" strategy="afterInteractive">
+      <Script id="fb-pixel-script" strategy="afterInteractive" nonce={nonce}>
         {`!function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
         n.callMethod.apply(n,arguments):n.queue.push(arguments)};

@@ -34,6 +34,11 @@ export async function GET(request: NextRequest) {
   const sessionId = await createCustomerSession({ customerId: customer.id, email: customer.email });
   await setCustomerSessionCookie(sessionId);
 
+  // Signal the client to merge its localStorage cart into the now-signed-in
+  // customer's server cart (see CartMergeOnLogin). Appended as a query flag
+  // because the merge needs client-side localStorage, unreachable here.
   const next = safeRedirectPath(request.nextUrl.searchParams.get("next"));
-  return NextResponse.redirect(new URL(next ?? "/", request.url));
+  const destination = new URL(next ?? "/", request.url);
+  destination.searchParams.set("cartMerge", "1");
+  return NextResponse.redirect(destination);
 }

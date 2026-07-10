@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useCartStore } from "@/lib/cart-store";
 import { trackAddToCart } from "@/lib/pixel";
+import { recordAddToCart } from "@/app/(storefront)/funnel-actions";
 import { formatTaka } from "@/lib/money";
 import { Icon } from "@/components/icons";
 
@@ -143,17 +144,19 @@ function ActionButtons({
   return (
     <>
       <div className="flex gap-3">
+        {/* btn-brand-* are themed via --brand in storefront.css so both buttons
+            track the admin brand palette. */}
         <button
           onClick={onAdd}
           disabled={disabled}
-          className="flex-1 rounded border border-black px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-outline flex-1 rounded px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40"
         >
           Add to Cart
         </button>
         <button
           onClick={onBuy}
           disabled={disabled}
-          className="flex-1 rounded bg-black px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-solid flex-1 rounded px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40"
         >
           Buy Now
         </button>
@@ -267,6 +270,7 @@ function VariantPurchase({
       quantity,
     );
     trackAddToCart({ value: (selectedVariant!.price * quantity) / 100 });
+    void recordAddToCart(productId); // server-side funnel (fire-and-forget)
     return true;
   }
 

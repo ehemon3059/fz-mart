@@ -4,6 +4,10 @@ import GtmScript from "@/components/storefront/GtmScript";
 import PixelScript from "@/components/storefront/PixelScript";
 import JsonLd from "@/components/seo/JsonLd";
 import ChatButtons from "@/components/storefront/ChatButtons";
+import ScrollToTop from "@/components/storefront/ScrollToTop";
+import CartMergeOnLogin from "@/components/storefront/CartMergeOnLogin";
+import UtmCapture from "@/components/storefront/UtmCapture";
+import { headers } from "next/headers";
 import { organizationJsonLd } from "@/lib/jsonld";
 import { getGtmId, getPixelId } from "@/server/settings/tracking";
 import { getBrandPalette } from "@/server/settings/theme";
@@ -16,12 +20,16 @@ export default async function StorefrontLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [gtmId, pixelId, palette, prefs] = await Promise.all([
+  const [gtmId, pixelId, palette, prefs, headerList] = await Promise.all([
     getGtmId(),
     getPixelId(),
     getBrandPalette(),
     getLocalePrefs(),
+    headers(),
   ]);
+  // Per-request nonce from middleware — applied to the GTM/Pixel inline scripts
+  // so they pass the nonce-based CSP.
+  const nonce = headerList.get("x-nonce") ?? undefined;
 
   // Admin-chosen brand palette overrides the CSS defaults as inline custom
   // properties on the wrapper — applied during SSR so there's no colour flash.
@@ -38,13 +46,16 @@ export default async function StorefrontLayout({
     <I18nProvider value={{ locale: prefs.locale, dict: prefs.dict, banglaDigits: prefs.banglaDigits }}>
       <div className="fz" style={themeVars} lang={prefs.locale}>
         <JsonLd data={organizationJsonLd()} />
-        <GtmScript gtmId={gtmId} />
-        <PixelScript pixelId={pixelId} />
+        <GtmScript gtmId={gtmId} nonce={nonce} />
+        <PixelScript pixelId={pixelId} nonce={nonce} />
         <Header />
+        <CartMergeOnLogin />
+        <UtmCapture />
         <main className="wrap" style={{ paddingTop: 0, paddingBottom: 8 }}>
           {children}
         </main>
         <ChatButtons />
+        <ScrollToTop />
         <Footer />
       </div>
     </I18nProvider>

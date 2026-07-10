@@ -130,3 +130,25 @@ export async function setAdminActive(
 
   await prisma.adminUser.update({ where: { id: targetId }, data: { isActive } });
 }
+
+/**
+ * Permanently delete an admin. Unlike deactivation this removes the row, so it
+ * frees the email/username for reuse. The audit-log FK is onDelete: SetNull, so
+ * past actions stay attributed by their snapshotted actorName. Same invariants
+ * as the other mutations: never delete yourself, never remove the last owner.
+ */
+export async function deleteAdmin(targetId: number, actingAdminId: number): Promise<void> {
+  if (targetId === actingAdminId) {
+    throw new AdminManageError("You can't delete your own account.");
+  }
+  const target = await prisma.adminUser.findUnique({ where: { id: targetId } });
+  if (!target) throw new AdminManageError("Admin not found.");
+
+  if (target.role === "OWNER" && target.isActive) {
+    if ((await activeOwnerCount()) <= 1) {
+      throw new AdminManageError("You can't delete the last remaining owner.");
+    }
+  }
+
+  await prisma.adminUser.delete({ where: { id: targetId } });
+}

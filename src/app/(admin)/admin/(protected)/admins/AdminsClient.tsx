@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ALL_ROLES, ROLE_LABELS, type AdminRole } from "@/lib/permissions";
-import { inviteAdminAction, changeRoleAction, toggleActiveAction } from "./actions";
+import { inviteAdminAction, changeRoleAction, toggleActiveAction, deleteAdminAction } from "./actions";
 
 interface AdminRow {
   id: number;
@@ -138,16 +138,34 @@ export default function AdminsClient({
                       <span className="rounded bg-stone-200 px-2 py-0.5 text-[12px] font-medium text-stone-600">Inactive</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3">
                     {!isSelf && (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => run(() => toggleActiveAction(a.id, !a.isActive))}
-                        className="rounded-lg border border-stone-300 px-3 py-1.5 text-[13px] font-medium hover:border-black disabled:opacity-50"
-                      >
-                        {a.isActive ? "Deactivate" : "Activate"}
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => run(() => toggleActiveAction(a.id, !a.isActive))}
+                          className="rounded-lg border border-stone-300 px-3 py-1.5 text-[13px] font-medium hover:border-black disabled:opacity-50"
+                        >
+                          {a.isActive ? "Deactivate" : "Activate"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Permanently delete "${a.username}"? This can't be undone. To keep their history but block access, use Deactivate instead.`,
+                              )
+                            ) {
+                              run(() => deleteAdminAction(a.id));
+                            }
+                          }}
+                          className="rounded-lg border border-red-300 px-3 py-1.5 text-[13px] font-medium text-red-600 hover:border-red-500 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
