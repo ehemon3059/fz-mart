@@ -28,11 +28,14 @@ export async function createCustomerSession(data: CustomerSessionData): Promise<
 }
 
 export async function getCustomerSessionById(sessionId: string): Promise<CustomerSessionData | null> {
-  const raw = await redis.get(sessionKey(sessionId));
-  if (!raw) return null;
+  // Read on every page via getCurrentCustomer(). If Redis is unreachable, treat
+  // the visitor as logged out rather than crashing the render.
   try {
+    const raw = await redis.get(sessionKey(sessionId));
+    if (!raw) return null;
     return JSON.parse(raw) as CustomerSessionData;
-  } catch {
+  } catch (err) {
+    console.error("[customer-session] read failed, treating as logged out:", (err as Error).message);
     return null;
   }
 }

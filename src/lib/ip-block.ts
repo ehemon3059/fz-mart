@@ -9,8 +9,16 @@ import { prisma } from "@/lib/prisma";
 const REDIS_SET_KEY = "blocked_ips";
 
 export async function isIpBlocked(ip: string): Promise<boolean> {
-  const result = await redis.sismember(REDIS_SET_KEY, ip);
-  return result === 1;
+  // Checked in the root layout on every render. Fail open if Redis is
+  // unreachable (e.g. not provisioned on serverless) so the whole site doesn't
+  // 500 — an unavailable block set means "don't block", never "block everyone".
+  try {
+    const result = await redis.sismember(REDIS_SET_KEY, ip);
+    return result === 1;
+  } catch (err) {
+    console.error("[ip-block] check failed, allowing request:", (err as Error).message);
+    return false;
+  }
 }
 
 export async function blockIp(ip: string, reason?: string): Promise<void> {

@@ -52,11 +52,15 @@ export async function createSession(data: SessionData): Promise<string> {
 }
 
 export async function getSession(sessionId: string): Promise<SessionData | null> {
-  const raw = await redis.get(sessionKey(sessionId));
-  if (!raw) return null;
+  // Read on every admin render. If Redis is unreachable, treat the admin as
+  // logged out rather than crashing the page (they can sign in again once
+  // Redis is back).
   try {
+    const raw = await redis.get(sessionKey(sessionId));
+    if (!raw) return null;
     return JSON.parse(raw) as SessionData;
-  } catch {
+  } catch (err) {
+    console.error("[auth] session read failed, treating as logged out:", (err as Error).message);
     return null;
   }
 }

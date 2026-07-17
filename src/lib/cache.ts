@@ -10,15 +10,32 @@ export async function getOrSetCache<T>(
   ttlSeconds: number,
   compute: () => Promise<T>,
 ): Promise<T> {
-  const cached = await redis.get(key);
-  if (cached !== null) {
-    return JSON.parse(cached) as T;
+  // Redis is a cache, not a source of truth: if it's unreachable (e.g. not
+  // provisioned on a serverless deploy) we bypass it and compute directly
+  // rather than letting the whole request fail.
+  try {
+    const cached = await redis.get(key);
+    if (cached !== null) {
+      return JSON.parse(cached) as T;
+    }
+  } catch (err) {
+    console.error("[cache] read failed, computing without cache:", (err as Error).message);
+    return compute();
   }
+
   const value = await compute();
-  await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
+  try {
+    await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
+  } catch (err) {
+    console.error("[cache] write failed, returning value uncached:", (err as Error).message);
+  }
   return value;
 }
 
 export async function invalidateCache(key: string): Promise<void> {
-  await redis.del(key);
+  try {
+    await redis.del(key);
+  } catch (err) {
+    console.error("[cache] invalidate failed:", (err as Error).message);
+  }
 }

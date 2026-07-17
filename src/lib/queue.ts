@@ -1,4 +1,5 @@
 import { Queue, type ConnectionOptions } from "bullmq";
+import { redisOptionsFor } from "@/lib/redis";
 
 // Queue producers (the app side). Workers live in src/jobs/ and run as a
 // SEPARATE process — see the deployment note in the blueprint.
@@ -7,15 +8,30 @@ import { Queue, type ConnectionOptions } from "bullmq";
 // instance: BullMQ bundles its own ioredis copy and requires
 // `maxRetriesPerRequest: null`, so letting it manage its own connection avoids
 // version-mismatch type conflicts with lib/redis.ts.
+//
+// Serverless note (Vercel): no worker process runs, so jobs enqueued here are
+// simply never consumed — that's acceptable for a demo. Enqueue calls must not
+// break the flows that make them; see the try/catch in src/jobs/enqueue.ts.
 
 const globalForQueue = globalThis as unknown as {
   queues: Map<string, Queue> | undefined;
 };
 
+/**
+ * Whether a job queue is even usable in this environment. Producers short-
+ * circuit on this so a missing REDIS_URL doesn't throw on the request path.
+ */
+export function isQueueEnabled(): boolean {
+  return Boolean(process.env.REDIS_URL);
+}
+
 function getConnection(): ConnectionOptions {
   const url = process.env.REDIS_URL;
   if (!url) throw new Error("REDIS_URL is not set.");
-  return { url, maxRetriesPerRequest: null };
+  // Enable TLS for `rediss://` URLs (Upstash) so the BullMQ connection matches
+  // the shared client's transport. Cap retries so producing against a dead
+  // Redis rejects quickly instead of buffering forever.
+  return { url, ...redisOptionsFor(url), maxRetriesPerRequest: null };
 }
 
 // Queue names — shared between producers here and workers in src/jobs/.

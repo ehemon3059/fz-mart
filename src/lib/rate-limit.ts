@@ -21,17 +21,25 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   const key = `ratelimit:${scope}:${identifier}`;
 
-  const count = await redis.incr(key);
-  if (count === 1) {
-    await redis.expire(key, windowSeconds);
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, windowSeconds);
+    }
+
+    const ttl = await redis.ttl(key);
+    const resetInSeconds = ttl > 0 ? ttl : windowSeconds;
+
+    return {
+      allowed: count <= limit,
+      remaining: Math.max(0, limit - count),
+      resetInSeconds,
+    };
+  } catch (err) {
+    // Fail open: if Redis is unreachable (e.g. not provisioned on serverless),
+    // allow the request rather than blocking legitimate traffic. Rate limiting
+    // is best-effort abuse prevention, not a correctness guarantee.
+    console.error("[rate-limit] Redis unavailable, allowing request:", (err as Error).message);
+    return { allowed: true, remaining: limit, resetInSeconds: windowSeconds };
   }
-
-  const ttl = await redis.ttl(key);
-  const resetInSeconds = ttl > 0 ? ttl : windowSeconds;
-
-  return {
-    allowed: count <= limit,
-    remaining: Math.max(0, limit - count),
-    resetInSeconds,
-  };
 }
