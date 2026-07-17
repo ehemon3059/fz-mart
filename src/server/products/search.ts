@@ -63,8 +63,12 @@ function buildConditions(q: SearchQuery): { where: Prisma.Sql; relevance: Prisma
   const keyword = q.keyword?.trim();
   if (keyword) {
     // NATURAL LANGUAGE MODE ranks by relevance; the same expression is
-    // selected (for ORDER BY) and used as a filter.
-    relevance = Prisma.sql`MATCH(p.name, p.description) AGAINST(${keyword} IN NATURAL LANGUAGE MODE)`;
+    // selected (for ORDER BY) and used as a filter. TiDB only allows a single
+    // column per MATCH, so name and description are matched separately and
+    // their scores summed for a combined relevance ranking.
+    relevance = Prisma.sql`(
+      MATCH(p.name) AGAINST(${keyword} IN NATURAL LANGUAGE MODE)
+      + MATCH(p.description) AGAINST(${keyword} IN NATURAL LANGUAGE MODE))`;
     conditions.push(Prisma.sql`${relevance} > 0`);
   }
 
@@ -245,7 +249,8 @@ export async function suggestProducts(keyword: string, limit = 6): Promise<Sugge
     ? await prisma.$queryRaw<{ id: number }[]>(Prisma.sql`
         SELECT p.id FROM Product p
         WHERE p.status = 'ACTIVE'
-          AND MATCH(p.name, p.description) AGAINST(${booleanExpr} IN BOOLEAN MODE)
+          AND (MATCH(p.name) AGAINST(${booleanExpr} IN BOOLEAN MODE)
+               OR MATCH(p.description) AGAINST(${booleanExpr} IN BOOLEAN MODE))
         LIMIT ${limit}`)
     : [];
 

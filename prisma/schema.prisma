@@ -95,10 +95,15 @@ model Product {
 
   @@index([subcategoryId, status])
   @@index([isFeatured, status])
-  // Full-text search over name + description. MySQL's default parser is
+  // Full-text search over name + description. The default parser is
   // whitespace/punctuation based, which handles space-separated Bangla words;
   // querying is via MATCH … AGAINST in server/products/search.ts.
-  @@fulltext([name, description])
+  //
+  // TiDB only supports single-column FULLTEXT indexes, so name and description
+  // are indexed separately and the search queries MATCH each column on its own
+  // (summing the two AGAINST scores for relevance).
+  @@fulltext([name])
+  @@fulltext([description])
 }
 
 // Purchasable option of a product — one cell of the (color × size) matrix.
