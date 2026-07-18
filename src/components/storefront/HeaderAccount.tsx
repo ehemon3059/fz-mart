@@ -25,7 +25,7 @@ export default function HeaderAccount({ displayName }: Props) {
 
   if (!displayName) {
     return (
-      <Link href="/login" className="icon-btn">
+      <Link href="/login" className="icon-btn" aria-label="Sign in to your account">
         <UserIcon size={22} />
         <span className="ib-txt">
           <small>Account</small>
@@ -37,7 +37,14 @@ export default function HeaderAccount({ displayName }: Props) {
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button type="button" onClick={() => setOpen((v) => !v)} className="icon-btn">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="icon-btn"
+        aria-label="Account menu"
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
         <UserIcon size={22} />
         <span className="ib-txt">
           <small>Account</small>

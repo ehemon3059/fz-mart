@@ -18,6 +18,13 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "browserslist": [
+    "chrome >= 111",
+    "edge >= 111",
+    "firefox >= 111",
+    "safari >= 16.4",
+    "not dead"
+  ],
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1083.0",
     "@prisma/client": "^6.19.3",
