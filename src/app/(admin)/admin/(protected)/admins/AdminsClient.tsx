@@ -4,6 +4,17 @@ import { useState, useTransition } from "react";
 import { ALL_ROLES, ROLE_LABELS, type AdminRole } from "@/lib/permissions";
 import { inviteAdminAction, changeRoleAction, toggleActiveAction, deleteAdminAction } from "./actions";
 
+/** Inline Tailwind spinner — a spinning ring sized to the current text. */
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <span
+      role="status"
+      aria-label="Loading"
+      className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
+    />
+  );
+}
+
 interface AdminRow {
   id: number;
   username: string;
@@ -79,9 +90,11 @@ export default function AdminsClient({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          aria-busy={pending}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Send invite
+          {pending && <Spinner />}
+          {pending ? "Sending…" : "Send invite"}
         </button>
       </form>
 
