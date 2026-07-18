@@ -45,7 +45,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Read the Node version from .nvmrc (22) so CI matches local dev and
+          # the lockfile npm generates locally stays in sync with `npm ci` here.
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
