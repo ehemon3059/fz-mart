@@ -1,4 +1,5 @@
 import { getQueue, isQueueEnabled, QUEUE_NAMES } from "@/lib/queue";
+import { sendMailNow } from "./mail-send";
 import type { CartJob, MailJob, PaymentJob, SmsJob } from "./types";
 
 // Producer-side enqueue helpers. Called from server/orders/* — never
@@ -12,6 +13,14 @@ import type { CartJob, MailJob, PaymentJob, SmsJob } from "./types";
 // background notification couldn't be queued. Jobs that fail to enqueue simply
 // don't run — acceptable for a demo deployment.
 
+// Mail delivery mode:
+//   • "queue"  → add to the BullMQ mail queue for a worker to send (VPS).
+//   • "inline" → send synchronously inside this request (serverless/Vercel,
+//                where no worker drains the queue).
+// Default is "inline" so a serverless deploy sends mail with no extra config;
+// set MAIL_DELIVERY=queue when running the standalone worker (npm run worker).
+const MAIL_DELIVERY = (process.env.MAIL_DELIVERY ?? "inline").toLowerCase();
+
 async function safeEnqueue(label: string, fn: () => Promise<unknown>): Promise<void> {
   if (!isQueueEnabled()) return;
   try {
@@ -22,6 +31,12 @@ async function safeEnqueue(label: string, fn: () => Promise<unknown>): Promise<v
 }
 
 export async function enqueueMailJob(job: MailJob): Promise<void> {
+  // Inline delivery (default) sends within the request — the only mode that
+  // works on serverless. sendMailNow never throws, so callers stay unaffected.
+  if (MAIL_DELIVERY !== "queue") {
+    await sendMailNow(job);
+    return;
+  }
   await safeEnqueue(`mail:${job.type}`, () => getQueue(QUEUE_NAMES.mail).add(job.type, job));
 }
 

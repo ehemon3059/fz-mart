@@ -206,9 +206,11 @@ export async function handleVerifiedPayment(
   });
 
   // Confirmation mail goes out on payment, mirroring the COD checkout path.
+  // Awaited so inline delivery (serverless) completes the send before this
+  // request returns; enqueueMailJob never throws, so it can't fail the payment.
   if (updatedOrder.customerEmail) {
     const items = await prisma.orderItem.findMany({ where: { orderId: updatedOrder.id } });
-    enqueueMailJob({
+    await enqueueMailJob({
       type: "order-confirmation",
       to: updatedOrder.customerEmail,
       orderNo: updatedOrder.orderNo,
@@ -219,7 +221,7 @@ export async function handleVerifiedPayment(
         unitPrice: i.unitPrice,
       })),
       total: updatedOrder.total,
-    }).catch((err) => console.error("[payments] failed to enqueue confirmation mail:", err));
+    });
   }
 
   return { orderNo: updatedOrder.orderNo, paid: true };

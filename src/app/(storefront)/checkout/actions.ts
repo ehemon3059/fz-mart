@@ -291,7 +291,14 @@ export async function placeOrder(
     // Online orders get their confirmation mail on PAYMENT (server/payments),
     // not here — a PENDING_PAYMENT order isn't confirmed yet.
     if (customerEmail && paymentMethod === "COD") {
-      enqueueMailJob({
+      // Awaited on purpose: with inline mail delivery (serverless/Vercel) the
+      // email is sent within THIS request. An un-awaited promise would be
+      // killed when the serverless function freezes after the action returns,
+      // silently dropping the email. enqueueMailJob never throws (queue mode
+      // swallows enqueue errors; inline mode swallows send errors), so awaiting
+      // it can't fail checkout — it only adds the SMTP round-trip to the
+      // response, which is acceptable for a confirmation email.
+      await enqueueMailJob({
         type: "order-confirmation",
         to: customerEmail,
         orderNo: order.orderNo,
@@ -302,7 +309,7 @@ export async function placeOrder(
           unitPrice: item.unitPrice,
         })),
         total: order.total,
-      }).catch((err) => console.error("[checkout] failed to enqueue confirmation mail:", err));
+      });
     }
 
     // Fraud check is informational only — it surfaces a risk indicator to
