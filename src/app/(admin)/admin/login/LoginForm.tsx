@@ -4,6 +4,17 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { login, verifyTwoFactorLogin } from "./actions";
 
+/** Inline Tailwind spinner — a spinning ring sized to the current text. */
+function Spinner() {
+  return (
+    <span
+      role="status"
+      aria-label="Loading"
+      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+    />
+  );
+}
+
 /** "1:59" from a seconds count. */
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -117,8 +128,10 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={pending || lockedOut}
-          className="w-full rounded-xl bg-brand-600 py-2.5 text-[14.5px] font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-500 disabled:opacity-50"
+          aria-busy={pending}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-[14.5px] font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
+          {pending && !lockedOut && <Spinner />}
           {lockedOut
             ? `Wait ${formatCountdown(lockSeconds)}`
             : pending
@@ -192,8 +205,10 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-xl bg-brand-600 py-2.5 text-[14.5px] font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-500 disabled:opacity-50"
+        aria-busy={pending}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-[14.5px] font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
+        {pending && <Spinner />}
         {pending ? "Signing in…" : "Sign in"}
       </button>
     </form>
