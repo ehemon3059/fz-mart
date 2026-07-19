@@ -40,6 +40,9 @@ yarn-error.log*
 .env.*.local
 !.env.example
 
+# mcp — contains DB credentials, never commit
+.mcp.json
+
 # vercel
 .vercel
 

@@ -37,7 +37,16 @@ interface VariantRow {
   stock: string;
 }
 
+/**
+ * A product is priced one of two ways, never both:
+ *  - "simple": a single top-level price & stock (Pricing & stock card).
+ *  - "variant": per-option rows (Sizes / Variants card); the base price/stock
+ *    are derived from the variants (lowest price = "from", summed stock).
+ */
+type PricingMode = "simple" | "variant";
+
 interface FormState {
+  pricingMode: PricingMode;
   name: string;
   subcategoryId: string; // string for select value
   description: string;
@@ -76,6 +85,7 @@ const paisaToTakaStr = (paisa: number | "") => (paisa === "" ? "" : String(Numbe
 function initialFromProduct(p?: Product): FormState {
   if (!p) {
     return {
+      pricingMode: "simple",
       name: "",
       subcategoryId: "",
       description: "",
@@ -98,6 +108,7 @@ function initialFromProduct(p?: Product): FormState {
   }
   const urls = p.images.slice().sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0)).map((i) => i.url);
   return {
+    pricingMode: (p.variants?.length ?? 0) > 0 ? "variant" : "simple",
     name: p.name,
     subcategoryId: String(p.subcategoryId),
     description: p.description ?? "",
@@ -299,9 +310,10 @@ function SubcategorySelect({
 }
 
 /* ─────────── live preview ─────────── */
-function LivePreview({ form }: { form: FormState }) {
+function LivePreview({ form, basePricePaisa, fromPrice }: { form: FormState; basePricePaisa: number | ""; fromPrice: boolean }) {
   const firstImg = form.imageUrls.find((u) => u && u.trim());
-  const hasDiscount = form.discountPrice !== "" && form.price !== "" && Number(form.discountPrice) < Number(form.price);
+  // In variant mode there's no product-level discount; price is the "from" price.
+  const hasDiscount = !fromPrice && form.discountPrice !== "" && basePricePaisa !== "" && Number(form.discountPrice) < Number(basePricePaisa);
 
   return (
     <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
@@ -338,10 +350,13 @@ function LivePreview({ form }: { form: FormState }) {
           {hasDiscount ? (
             <>
               <span className="text-[15px] font-bold text-stone-900">{fmtTaka(Number(form.discountPrice))}</span>
-              <span className="text-[12px] text-stone-400 line-through">{fmtTaka(Number(form.price))}</span>
+              <span className="text-[12px] text-stone-400 line-through">{fmtTaka(Number(basePricePaisa))}</span>
             </>
-          ) : form.price !== "" ? (
-            <span className="text-[15px] font-bold text-stone-900">{fmtTaka(Number(form.price))}</span>
+          ) : basePricePaisa !== "" ? (
+            <span className="text-[15px] font-bold text-stone-900">
+              {fromPrice && <span className="text-[12px] font-semibold text-stone-400">from </span>}
+              {fmtTaka(Number(basePricePaisa))}
+            </span>
           ) : (
             <span className="text-[13px] italic text-stone-400">No price set</span>
           )}
@@ -362,6 +377,8 @@ export default function ProductForm({ subcategories, product }: Props) {
   const [imageError, setImageError] = useState<string | null>(null);
 
   const set = <K extends keyof FormState>(key: K, val: FormState[K]) => setForm((f) => ({ ...f, [key]: val }));
+
+  const isVariantMode = form.pricingMode === "variant";
 
   const liveErrors = useMemo(() => {
     const e: Record<string, string> = {};
@@ -446,19 +463,40 @@ export default function ProductForm({ subcategories, product }: Props) {
 
   // Serialize variants for the hidden input / submit: a row needs a colour or a
   // size plus a price. Price stays in Taka (the server action converts to paisa).
+  // In simple mode we submit no variants at all.
   const cleanVariants = () =>
-    form.variants
-      .filter((v) => (v.color.trim() || v.size.trim()) && Number(v.price) > 0)
-      .map((v) => ({
-        colorName: v.color.trim() || null,
-        size: v.size.trim() || null,
-        price: Number(v.price),
-        stock: Math.max(0, Number(v.stock) || 0),
-      }));
+    isVariantMode
+      ? form.variants
+          .filter((v) => (v.color.trim() || v.size.trim()) && Number(v.price) > 0)
+          .map((v) => ({
+            colorName: v.color.trim() || null,
+            size: v.size.trim() || null,
+            price: Number(v.price),
+            stock: Math.max(0, Number(v.stock) || 0),
+          }))
+      : [];
+
+  // The product row always needs a base price & stock. In variant mode they're
+  // derived from the variants — lowest price becomes the storefront "from" price,
+  // stock is the sum across variants — so the disabled Pricing card stays in sync.
+  const derivedBase = () => {
+    const rows = cleanVariants();
+    if (rows.length === 0) return { priceTaka: "" as number | "", stock: 0 };
+    const priceTaka = Math.min(...rows.map((r) => r.price));
+    const stock = rows.reduce((sum, r) => sum + r.stock, 0);
+    return { priceTaka, stock };
+  };
+
+  // Base price (taka) and stock actually submitted, per mode.
+  const submitPriceTaka = (): number | "" => (isVariantMode ? derivedBase().priceTaka : paisaToTakaStr(form.price) === "" ? "" : Number(form.price) / 100);
+  const submitStock = (): number | "" => (isVariantMode ? derivedBase().stock : form.stock);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const base = { price: submitPriceTaka(), stock: submitStock() };
+    fd.set("price", base.price === "" ? "" : String(base.price));
+    fd.set("stock", base.stock === "" ? "" : String(base.stock));
     fd.set("imageUrls", form.imageUrls.filter((u) => u.trim()).join("\n"));
     fd.set("colors", JSON.stringify(form.colors.filter((c) => c.name.trim() && c.hexCode.trim())));
     fd.set(
@@ -471,8 +509,15 @@ export default function ProductForm({ subcategories, product }: Props) {
     const clientErrors: Record<string, string> = { ...liveErrors };
     if (!form.name.trim()) clientErrors.name = "Name is required.";
     if (!form.subcategoryId) clientErrors.subcategoryId = "Please select a category.";
-    if (!form.price || Number(form.price) <= 0) clientErrors.price = "Price must be greater than zero.";
-    if (form.stock === "" || Number(form.stock) < 0) clientErrors.stock = "Stock cannot be negative.";
+    if (isVariantMode) {
+      // Variants carry the price/stock; require at least one valid row.
+      if (cleanVariants().length === 0) {
+        clientErrors.variants = "Add at least one variant with a colour or size and a price.";
+      }
+    } else {
+      if (!form.price || Number(form.price) <= 0) clientErrors.price = "Price must be greater than zero.";
+      if (form.stock === "" || Number(form.stock) < 0) clientErrors.stock = "Stock cannot be negative.";
+    }
     setErrors(clientErrors);
     if (Object.keys(clientErrors).length) return;
 
@@ -491,10 +536,10 @@ export default function ProductForm({ subcategories, product }: Props) {
       <input type="hidden" name="name" value={form.name} />
       <input type="hidden" name="subcategoryId" value={form.subcategoryId} />
       <input type="hidden" name="description" value={form.description} />
-      <input type="hidden" name="price" value={paisaToTakaStr(form.price)} />
-      <input type="hidden" name="discountPrice" value={paisaToTakaStr(form.discountPrice)} />
+      <input type="hidden" name="price" value={(() => { const p = submitPriceTaka(); return p === "" ? "" : String(p); })()} />
+      <input type="hidden" name="discountPrice" value={isVariantMode ? "" : paisaToTakaStr(form.discountPrice)} />
       <input type="hidden" name="purchaseCost" value={paisaToTakaStr(form.purchaseCost)} />
-      <input type="hidden" name="stock" value={form.stock === "" ? "" : String(form.stock)} />
+      <input type="hidden" name="stock" value={(() => { const s = submitStock(); return s === "" ? "" : String(s); })()} />
       <input type="hidden" name="lowStockThreshold" value={form.lowStockThreshold === "" ? "" : String(form.lowStockThreshold)} />
       <input type="hidden" name="status" value={form.status} />
       <input type="hidden" name="promoBadge" value={form.promoBadge} />
@@ -588,7 +633,45 @@ export default function ProductForm({ subcategories, product }: Props) {
             </div>
           </Card>
 
-          <Card icon="tag" title="Pricing & stock" hint="All amounts in Bangladeshi Taka.">
+          {/* Pricing mode selector — a product is priced by a single price/stock
+              OR by per-option variants, never both. Switching greys out the
+              other card and skips its validation. */}
+          <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-bold text-stone-800">How is this product priced?</p>
+              <p className="text-[12.5px] text-stone-400">
+                {isVariantMode
+                  ? "Per-option variants — price & stock come from the variant rows below."
+                  : "A single price and stock for the whole product."}
+              </p>
+            </div>
+            <div className="inline-flex shrink-0 rounded-lg border border-stone-200 bg-stone-50 p-0.5" role="tablist" aria-label="Pricing mode">
+              {([
+                { key: "simple" as const, label: "Single price" },
+                { key: "variant" as const, label: "Variants" },
+              ]).map((opt) => {
+                const active = form.pricingMode === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => set("pricingMode", opt.key)}
+                    className={[
+                      "rounded-md px-3.5 py-1.5 text-[13px] font-semibold transition",
+                      active ? "bg-white text-brand-700 shadow-sm" : "text-stone-500 hover:text-stone-700",
+                    ].join(" ")}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <Card icon="tag" title="Pricing & stock" hint={isVariantMode ? "Disabled — priced by variants below." : "All amounts in Bangladeshi Taka."} className={isVariantMode ? "opacity-60" : ""}>
+            <fieldset disabled={isVariantMode} className="contents">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label required>Price</Label>
@@ -691,13 +774,25 @@ export default function ProductForm({ subcategories, product }: Props) {
                 </div>
               </div>
             </div>
+            </fieldset>
           </Card>
 
           <Card
             icon="box"
             title="Sizes / Variants"
-            hint="Optional. One row per option or per colour+size combo (e.g. Navy/M). Each has its own price & stock; customers must pick one."
+            hint={
+              isVariantMode
+                ? "One row per option or per colour+size combo (e.g. Navy/M). Each has its own price & stock; customers must pick one."
+                : "Disabled — switch to “Variants” above to price by option."
+            }
+            className={isVariantMode ? "" : "opacity-60"}
           >
+            <fieldset disabled={!isVariantMode} className="contents">
+            {errors.variants && isVariantMode && (
+              <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+                {errors.variants}
+              </p>
+            )}
             {form.variants.length > 0 && (
               <div className="mb-2 hidden grid-cols-[150px_1fr_120px_100px_36px] gap-2 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400 sm:grid">
                 <span>Colour</span>
@@ -782,6 +877,7 @@ export default function ProductForm({ subcategories, product }: Props) {
                 be added to cart.
               </p>
             )}
+            </fieldset>
           </Card>
 
           <Card
@@ -960,7 +1056,14 @@ export default function ProductForm({ subcategories, product }: Props) {
 
         <div className="space-y-6 lg:sticky lg:top-6 self-start">
           <Card icon="eye" title="Live preview" hint="How customers will see it.">
-            <LivePreview form={form} />
+            <LivePreview
+              form={form}
+              basePricePaisa={(() => {
+                const p = submitPriceTaka();
+                return p === "" ? "" : Math.round(Number(p) * 100);
+              })()}
+              fromPrice={isVariantMode}
+            />
           </Card>
 
           <Card icon="grid" title="Organization">
