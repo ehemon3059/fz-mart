@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono, Manrope, Spline_Sans_Mono } from "next/font/google";
+import TopProgressBar from "@/components/TopProgressBar";
 import { isIpBlocked } from "@/lib/ip-block";
 import { getClientIp } from "@/lib/client-ip";
 import { SITE_NAME, SITE_TAGLINE, siteUrl } from "@/lib/seo";
@@ -66,6 +68,12 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${splineSansMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-gray-50">
+        {/* Top loading bar (YouTube/Facebook style). Wrapped in Suspense
+            because it reads useSearchParams; the boundary keeps the rest of the
+            tree eligible for static rendering. */}
+        <Suspense fallback={null}>
+          <TopProgressBar />
+        </Suspense>
         {blocked ? (
           <div className="flex-1 flex items-center justify-center text-center p-8">
             <p className="text-gray-500">

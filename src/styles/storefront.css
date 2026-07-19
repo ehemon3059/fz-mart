@@ -475,6 +475,24 @@
 .fz .co-input,.fz .co-select,.fz .co-area{width:100%;border:1.5px solid var(--line);border-radius:11px;padding:12px 14px;font:inherit;font-size:14px;color:var(--ink);background:#fff;outline:none;transition:border-color .15s,box-shadow .15s;}
 .fz .co-input:focus,.fz .co-select:focus,.fz .co-area:focus{border-color:var(--brand);box-shadow:0 0 0 4px var(--brand-tint);}
 .fz .co-area{resize:vertical;min-height:84px;}
+
+/* Delivery location — radio cards (replaces the old dropdown) */
+.fz .co-zones{border:0;margin:0;padding:0;}
+.fz .co-zones-lg{padding:0;margin:0 0 8px;font-size:13px;font-weight:700;color:var(--ink-soft);}
+.fz .co-zone-list{display:grid;gap:10px;}
+.fz .co-zone{display:flex;align-items:center;gap:11px;border:1.5px solid var(--line);border-radius:11px;padding:12px 14px;cursor:pointer;background:#fff;transition:border-color .15s,box-shadow .15s,background .15s;}
+.fz .co-zone:hover{border-color:var(--brand);}
+.fz .co-zone.is-checked{border-color:var(--brand);background:var(--brand-tint);box-shadow:0 0 0 4px var(--brand-tint);}
+/* Hide native radio; the custom dot conveys state */
+.fz .co-zone input{position:absolute;opacity:0;width:0;height:0;}
+.fz .co-zone-dot{position:relative;flex:0 0 auto;width:18px;height:18px;border:2px solid var(--line);border-radius:50%;transition:border-color .15s;}
+.fz .co-zone.is-checked .co-zone-dot{border-color:var(--brand);}
+.fz .co-zone-dot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--brand);transform:scale(0);transition:transform .15s;}
+.fz .co-zone.is-checked .co-zone-dot::after{transform:scale(1);}
+.fz .co-zone input:focus-visible ~ .co-zone-dot{box-shadow:0 0 0 4px var(--brand-tint);}
+.fz .co-zone-name{flex:1;font-size:14px;font-weight:600;color:var(--ink);}
+.fz .co-zone-charge{font-size:14px;font-weight:700;color:var(--ink);}
+
 .fz .co-phone{display:flex;align-items:stretch;border:1.5px solid var(--line);border-radius:11px;overflow:hidden;transition:border-color .15s,box-shadow .15s;}
 .fz .co-phone:focus-within{border-color:var(--brand);box-shadow:0 0 0 4px var(--brand-tint);}
 .fz .co-phone .cc{display:flex;align-items:center;padding:0 12px;background:var(--bg);border-right:1px solid var(--line);font-size:14px;font-weight:700;color:var(--ink-soft);}

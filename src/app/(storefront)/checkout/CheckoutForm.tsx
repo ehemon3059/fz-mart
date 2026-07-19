@@ -322,20 +322,37 @@ export default function CheckoutForm({
               placeholder="ex: House no. / building / street / area"
             />
           </div>
-          <div className="co-row2 co-field">
-            <select
-              name="shippingZoneId"
-              required
-              value={zoneId}
-              onChange={(e) => setZoneId(Number(e.target.value))}
-              className="co-select"
-            >
-              {zones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name} — {formatTaka(zone.charge)}
-                </option>
-              ))}
-            </select>
+          <div className="co-field">
+            <fieldset className="co-zones">
+              <legend className="co-zones-lg">Delivery location</legend>
+              {/* Submitted value for the server action — kept in sync with the
+                  chosen radio below. */}
+              <input type="hidden" name="shippingZoneId" value={zoneId} />
+              <div className="co-zone-list">
+                {zones.map((zone) => {
+                  const checked = zone.id === zoneId;
+                  return (
+                    <label
+                      key={zone.id}
+                      className={"co-zone" + (checked ? " is-checked" : "")}
+                    >
+                      <input
+                        type="radio"
+                        name="shippingZoneRadio"
+                        value={zone.id}
+                        checked={checked}
+                        onChange={() => setZoneId(zone.id)}
+                      />
+                      <span className="co-zone-dot" aria-hidden="true" />
+                      <span className="co-zone-name">{zone.name}</span>
+                      <span className="co-zone-charge">{formatTaka(zone.charge)}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </div>
+          <div className="co-field">
             <input
               name="customerEmail"
               type="email"
