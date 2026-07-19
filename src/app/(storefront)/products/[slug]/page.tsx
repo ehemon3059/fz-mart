@@ -185,7 +185,7 @@ export default async function ProductPage({
             <p className="text-sm">
               {product.stock > 0 ? (
                 <span className="text-green-700 font-medium">
-                  In stock ({product.stock} available)
+                  {product.showStock ? `In stock (${product.stock} available)` : "In stock"}
                 </span>
               ) : (
                 <span className="text-red-600 font-medium">Out of stock</span>

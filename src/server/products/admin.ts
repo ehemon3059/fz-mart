@@ -76,6 +76,8 @@ export interface ProductInput {
   stock: number;
   /** Low-stock alert threshold; 0 disables. */
   lowStockThreshold?: number;
+  /** Show the "In stock (N available)" count on the storefront. Default true. */
+  showStock?: boolean;
   isFeatured?: boolean;
   status?: "ACTIVE" | "INACTIVE";
   promoBadge?: string | null;
@@ -104,6 +106,7 @@ export async function createProduct(input: ProductInput) {
       purchaseCost: input.purchaseCost ?? 0,
       stock: input.stock,
       lowStockThreshold: input.lowStockThreshold ?? 0,
+      showStock: input.showStock ?? true,
       isFeatured: input.isFeatured ?? false,
       status: input.status ?? "ACTIVE",
       promoBadge: input.promoBadge ?? null,
@@ -203,6 +206,7 @@ export async function updateProduct(id: number, input: ProductInput) {
         purchaseCost: input.purchaseCost ?? 0,
         stock: input.stock,
       lowStockThreshold: input.lowStockThreshold ?? 0,
+        showStock: input.showStock ?? true,
         isFeatured: input.isFeatured ?? false,
         status: input.status ?? "ACTIVE",
         promoBadge: input.promoBadge ?? null,

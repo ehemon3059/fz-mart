@@ -75,6 +75,10 @@ model Product {
   // Low-stock alert threshold (Phase 5). When 0 < stock <= this, the product
   // surfaces in the admin low-stock alert + daily digest. 0 disables it.
   lowStockThreshold  Int                    @default(0)
+  // Whether the "In stock (N available)" count is shown on the storefront for a
+  // simple (variant-less) product. Availability (sold-out disabling) is
+  // unaffected — this only hides the number. Mirrors ProductVariant.showStock.
+  showStock          Boolean                @default(true)
   isFeatured         Boolean                @default(false)
   status             ProductStatus          @default(ACTIVE)
   promoBadge         String?

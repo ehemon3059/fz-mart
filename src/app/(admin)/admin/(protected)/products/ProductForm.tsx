@@ -63,6 +63,7 @@ interface FormState {
   purchaseCost: number | ""; // paisa — sourcing cost (COGS basis)
   stock: number | "";
   lowStockThreshold: number | ""; // 0/"" = disabled
+  showStock: boolean; // show the "In stock (N available)" count on the storefront
   status: "ACTIVE" | "INACTIVE";
   promoBadge: string;
   metaTitle: string;
@@ -102,6 +103,7 @@ function initialFromProduct(p?: Product): FormState {
       purchaseCost: "",
       stock: "",
       lowStockThreshold: "",
+      showStock: true,
       status: "ACTIVE",
       promoBadge: "",
       metaTitle: "",
@@ -125,6 +127,7 @@ function initialFromProduct(p?: Product): FormState {
     purchaseCost: p.purchaseCost ?? "",
     stock: p.stock,
     lowStockThreshold: p.lowStockThreshold || "",
+    showStock: p.showStock ?? true,
     status: p.status,
     promoBadge: p.promoBadge ?? "",
     metaTitle: p.metaTitle ?? "",
@@ -593,6 +596,7 @@ export default function ProductForm({ subcategories, product }: Props) {
       <input type="hidden" name="purchaseCost" value={paisaToTakaStr(form.purchaseCost)} />
       <input type="hidden" name="stock" value={(() => { const s = submitStock(); return s === "" ? "" : String(s); })()} />
       <input type="hidden" name="lowStockThreshold" value={form.lowStockThreshold === "" ? "" : String(form.lowStockThreshold)} />
+      <input type="hidden" name="showStock" value={form.showStock ? "true" : "false"} />
       <input type="hidden" name="status" value={form.status} />
       <input type="hidden" name="promoBadge" value={form.promoBadge} />
       <input type="hidden" name="metaTitle" value={form.metaTitle} />
@@ -820,6 +824,29 @@ export default function ProductForm({ subcategories, product }: Props) {
                     Warn on the dashboard when stock drops to this level.
                   </p>
                 </div>
+              </div>
+
+              {/* Storefront stock visibility — hides the "In stock (N available)"
+                  count without changing availability. Mirrors the per-variant
+                  "Show stock count on site" toggle. */}
+              <div className="mt-4 border-t border-stone-100 pt-4">
+                <label className="flex cursor-pointer items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={form.showStock}
+                    onChange={(e) => set("showStock", e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <span>
+                    <span className="block text-[13px] font-medium text-stone-700">
+                      Show stock count on site
+                    </span>
+                    <span className="block text-[12px] text-stone-400">
+                      Displays “In stock (N available)” on the product page. Turning
+                      it off hides the number — the product stays purchasable.
+                    </span>
+                  </span>
+                </label>
               </div>
             </div>
 

@@ -114,6 +114,7 @@ export async function saveProduct(
     : 0;
   const stock = Number(formData.get("stock"));
   const lowStockThreshold = Number(formData.get("lowStockThreshold") ?? 0);
+  const showStock = formData.get("showStock") !== "false";
   const isFeatured = formData.get("isFeatured") === "on";
   const status = formData.get("status") === "INACTIVE" ? "INACTIVE" : "ACTIVE";
   const promoBadge = String(formData.get("promoBadge") ?? "").trim();
@@ -151,6 +152,7 @@ export async function saveProduct(
     purchaseCost: takaToPaisa(purchaseCostTaka),
     stock,
     lowStockThreshold: Number.isFinite(lowStockThreshold) && lowStockThreshold > 0 ? Math.floor(lowStockThreshold) : 0,
+    showStock,
     isFeatured,
     status: status as "ACTIVE" | "INACTIVE",
     promoBadge: promoBadge || null,
