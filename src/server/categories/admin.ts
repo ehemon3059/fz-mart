@@ -18,6 +18,10 @@ export async function getCategoryById(id: number) {
   return prisma.category.findUnique({ where: { id } });
 }
 
+export async function getSubcategoryById(id: number) {
+  return prisma.subcategory.findUnique({ where: { id } });
+}
+
 export async function listAllSubcategories() {
   return prisma.subcategory.findMany({
     orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
@@ -27,6 +31,8 @@ export async function listAllSubcategories() {
 
 export interface CategoryInput {
   name: string;
+  imageUrl?: string | null;
+  description?: string | null;
   sortOrder?: number;
   isActive?: boolean;
   metaTitle?: string | null;
@@ -38,6 +44,8 @@ export async function createCategory(input: CategoryInput) {
     data: {
       name: input.name,
       slug: slugify(input.name),
+      imageUrl: input.imageUrl ?? null,
+      description: input.description ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
       metaTitle: input.metaTitle ?? null,
@@ -55,6 +63,8 @@ export async function updateCategory(id: number, input: CategoryInput) {
     data: {
       name: input.name,
       slug: slugify(input.name),
+      imageUrl: input.imageUrl ?? null,
+      description: input.description ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
       metaTitle: input.metaTitle ?? null,
@@ -80,6 +90,8 @@ export async function deleteCategory(id: number) {
 export interface SubcategoryInput {
   name: string;
   categoryId: number;
+  imageUrl?: string | null;
+  description?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -90,6 +102,8 @@ export async function createSubcategory(input: SubcategoryInput) {
       name: input.name,
       slug: slugify(input.name),
       categoryId: input.categoryId,
+      imageUrl: input.imageUrl ?? null,
+      description: input.description ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     },
@@ -114,6 +128,8 @@ export async function updateSubcategory(id: number, input: SubcategoryInput) {
       name: input.name,
       slug: slugify(input.name),
       categoryId: input.categoryId,
+      imageUrl: input.imageUrl ?? null,
+      description: input.description ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     },

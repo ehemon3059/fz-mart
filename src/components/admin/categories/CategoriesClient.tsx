@@ -116,6 +116,8 @@ export function CategoriesClient({ initialCategories }: Props) {
       id: ++nextId,
       name,
       slug,
+      imageUrl: null,
+      description: null,
       sortOrder: 0,
       isActive: true,
       categoryId: catId,

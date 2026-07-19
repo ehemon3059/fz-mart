@@ -21,6 +21,8 @@ export async function saveCategory(
 ): Promise<ActionResult> {
   await requirePermission("categories");
   const name = String(formData.get("name") ?? "").trim();
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
+  const description = String(formData.get("description") ?? "").trim() || null;
   const sortOrder = Number(formData.get("sortOrder") ?? 0);
   const isActive = formData.get("isActive") === "on";
   const metaTitle = String(formData.get("metaTitle") ?? "").trim() || null;
@@ -28,10 +30,11 @@ export async function saveCategory(
 
   if (!name) return { error: "Name is required." };
 
+  const data = { name, imageUrl, description, sortOrder, isActive, metaTitle, metaDescription };
   if (id) {
-    await updateCategory(id, { name, sortOrder, isActive, metaTitle, metaDescription });
+    await updateCategory(id, data);
   } else {
-    await createCategory({ name, sortOrder, isActive, metaTitle, metaDescription });
+    await createCategory(data);
   }
 
   revalidatePath("/admin/categories");
@@ -60,19 +63,23 @@ export async function saveSubcategory(
   await requirePermission("categories");
   const name = String(formData.get("name") ?? "").trim();
   const categoryId = Number(formData.get("categoryId"));
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
+  const description = String(formData.get("description") ?? "").trim() || null;
   const sortOrder = Number(formData.get("sortOrder") ?? 0);
   const isActive = formData.get("isActive") === "on";
 
   if (!name) return { error: "Name is required." };
   if (!categoryId) return { error: "Category is required." };
 
+  const data = { name, categoryId, imageUrl, description, sortOrder, isActive };
   if (id) {
-    await updateSubcategory(id, { name, categoryId, sortOrder, isActive });
+    await updateSubcategory(id, data);
   } else {
-    await createSubcategory({ name, categoryId, sortOrder, isActive });
+    await createSubcategory(data);
   }
 
   revalidatePath("/admin/categories");
+  revalidatePath("/category");
   return {};
 }
 

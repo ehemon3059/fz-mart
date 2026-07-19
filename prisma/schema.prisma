@@ -22,6 +22,9 @@ model Category {
   id              Int           @id @default(autoincrement())
   name            String
   slug            String        @unique
+  // Optional hero image + short blurb shown on the storefront category pages.
+  imageUrl        String?
+  description     String?       @db.Text
   sortOrder       Int           @default(0)
   isActive        Boolean       @default(true)
   // Optional SEO overrides (Phase 2). When blank the storefront falls back to
@@ -37,12 +40,15 @@ model Category {
 }
 
 model Subcategory {
-  id         Int       @id @default(autoincrement())
-  categoryId Int
-  name       String
-  slug       String    @unique
-  sortOrder  Int       @default(0)
-  isActive   Boolean   @default(true)
+  id          Int       @id @default(autoincrement())
+  categoryId  Int
+  name        String
+  slug        String    @unique
+  // Optional image + short blurb shown on the storefront subcategory listings.
+  imageUrl    String?
+  description String?   @db.Text
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)

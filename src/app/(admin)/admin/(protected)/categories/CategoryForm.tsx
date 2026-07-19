@@ -4,12 +4,15 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
+import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
 import { saveCategory } from "./actions";
 
 interface Props {
   category?: {
     id: number;
     name: string;
+    imageUrl: string | null;
+    description: string | null;
     sortOrder: number;
     isActive: boolean;
     metaTitle: string | null;
@@ -56,6 +59,8 @@ export default function CategoryForm({ category }: Props) {
   const isEdit = !!category;
   const router = useRouter();
   const [name, setName] = useState(category?.name ?? "");
+  const [imageUrl, setImageUrl] = useState(category?.imageUrl ?? "");
+  const [description, setDescription] = useState(category?.description ?? "");
   const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 0);
   const [isActive, setIsActive] = useState(category?.isActive ?? true);
   const [metaTitle, setMetaTitle] = useState(category?.metaTitle ?? "");
@@ -80,6 +85,8 @@ export default function CategoryForm({ category }: Props) {
   return (
     <form onSubmit={handleSubmit} className="font-manrope mx-auto w-full max-w-[640px] px-5 py-6 pb-32 lg:px-8 lg:pb-10">
       <input type="hidden" name="name" value={name} />
+      <input type="hidden" name="imageUrl" value={imageUrl} />
+      <input type="hidden" name="description" value={description} />
       <input type="hidden" name="sortOrder" value={String(sortOrder)} />
       {isActive && <input type="hidden" name="isActive" value="on" />}
 
@@ -146,6 +153,26 @@ export default function CategoryForm({ category }: Props) {
                   className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[13px] font-semibold text-stone-700">Image</label>
+              <CategoryImagePicker value={imageUrl} onChange={setImageUrl} label="Category image" />
+            </div>
+
+            <div>
+              <label className="mb-1.5 flex items-baseline gap-1.5 text-[13px] font-semibold text-stone-700">
+                <span>Description</span>
+                <span className="ml-auto text-[12px] font-normal text-stone-400">optional · shown on the category page</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="Short blurb describing this category for shoppers."
+                className="w-full resize-y rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-800 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50 placeholder:text-stone-400"
+              />
             </div>
 
             <div>

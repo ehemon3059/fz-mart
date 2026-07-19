@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Icon } from "@/components/icons";
 import { SlugChip } from "./SlugChip";
 import { InactiveBadge } from "./InactiveBadge";
 import { DeleteBtn } from "./DeleteBtn";
@@ -25,7 +27,16 @@ export function SubcategoryRow({ sub, confirmed, onDeleteFirst, onDeleteConfirm,
         {!sub.isActive && <InactiveBadge />}
       </div>
 
-      <div className="shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
+        {!confirmed && (
+          <Link
+            href={`/admin/categories/sub/${sub.id}/edit`}
+            className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-2 py-1 text-[12.5px] font-semibold text-stone-600 opacity-0 transition hover:bg-stone-50 hover:border-stone-300 group-hover:opacity-100"
+          >
+            <Icon name="pencil" size={13} />
+            <span className="hidden sm:inline">Edit</span>
+          </Link>
+        )}
         <DeleteBtn
           size="sm"
           confirmed={confirmed}

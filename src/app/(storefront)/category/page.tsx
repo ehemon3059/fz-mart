@@ -32,12 +32,17 @@ export default async function AllCategoriesPage() {
                 style={{ animationDelay: `${Math.min(i * 60, 480)}ms` }}
               >
                 <Link href={`/category/${cat.slug}`} className="cat-c-top">
-                  <span
-                    className="cat-c-ic"
-                    style={{ "--ct-bg": v.bg, "--ct-fg": v.fg } as React.CSSProperties}
-                  >
-                    <CategoryIcon name={cat.name} />
-                  </span>
+                  {cat.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={cat.imageUrl} alt="" className="cat-c-img" />
+                  ) : (
+                    <span
+                      className="cat-c-ic"
+                      style={{ "--ct-bg": v.bg, "--ct-fg": v.fg } as React.CSSProperties}
+                    >
+                      <CategoryIcon name={cat.name} />
+                    </span>
+                  )}
                   <span>
                     <b>{cat.name}</b>
                     <span className="cat-c-count">
@@ -45,6 +50,7 @@ export default async function AllCategoriesPage() {
                         ? `${subCount} ${subCount === 1 ? "subcategory" : "subcategories"}`
                         : "View products"}
                     </span>
+                    {cat.description && <span className="cat-c-desc">{cat.description}</span>}
                   </span>
                 </Link>
 

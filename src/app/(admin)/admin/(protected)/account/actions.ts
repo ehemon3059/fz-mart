@@ -1,9 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireAdminUser } from "@/server/admin/guard";
 import { logActivity } from "@/server/admin/audit";
+import { getCurrentAdmin, updateSession, SESSION_COOKIE } from "@/lib/auth";
+import {
+  changeOwnUsername,
+  changeOwnPassword,
+  CredentialError,
+} from "@/server/admin/credentials";
 import {
   beginEnrollment,
   confirmEnrollment,
@@ -11,6 +18,69 @@ import {
   generateBackupCodes,
   TwoFactorError,
 } from "@/server/admin/twofactor";
+
+export async function changeUsernameAction(formData: FormData): Promise<ActionResult> {
+  const admin = await requireAdminUser();
+  const newUsername = String(formData.get("username") ?? "").trim();
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+
+  if (newUsername === admin.username) {
+    return { error: "That's already your username." };
+  }
+
+  let updated: string;
+  try {
+    updated = await changeOwnUsername(admin.id, newUsername, currentPassword);
+  } catch (err) {
+    if (err instanceof CredentialError) return { error: err.message };
+    throw err;
+  }
+
+  // Keep the current session's snapshot (shown in the header) in sync so the
+  // admin isn't looking at their old name until the next login.
+  const store = await cookies();
+  const sessionId = store.get(SESSION_COOKIE)?.value;
+  const session = await getCurrentAdmin();
+  if (sessionId && session) {
+    await updateSession(sessionId, { ...session, username: updated });
+  }
+
+  await logActivity({
+    adminId: admin.id,
+    actorName: updated,
+    action: "admin.username_change",
+    detail: `Changed username from ${admin.username} to ${updated}`,
+  });
+  revalidatePath("/admin/account");
+  return { success: "Your username has been updated." };
+}
+
+export async function changePasswordAction(formData: FormData): Promise<ActionResult> {
+  const admin = await requireAdminUser();
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const newPassword = String(formData.get("newPassword") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (newPassword !== confirmPassword) {
+    return { error: "The new passwords don't match." };
+  }
+
+  try {
+    await changeOwnPassword(admin.id, currentPassword, newPassword);
+  } catch (err) {
+    if (err instanceof CredentialError) return { error: err.message };
+    throw err;
+  }
+
+  await logActivity({
+    adminId: admin.id,
+    actorName: admin.username,
+    action: "admin.password_change",
+    detail: "Changed own password",
+  });
+  revalidatePath("/admin/account");
+  return { success: "Your password has been updated." };
+}
 
 export interface EnrollResult {
   error?: string;

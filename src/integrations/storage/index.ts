@@ -118,7 +118,7 @@ const ALLOWED_TYPES: Record<string, string> = {
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /** Whitelisted key prefixes — callers can only write inside these folders. */
-export const STORAGE_FOLDERS = ["products", "banners", "branding"] as const;
+export const STORAGE_FOLDERS = ["products", "banners", "branding", "categories"] as const;
 export type StorageFolder = (typeof STORAGE_FOLDERS)[number];
 
 /** Largest edge (px) an uploaded image is downscaled to before storing.

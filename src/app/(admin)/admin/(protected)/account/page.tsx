@@ -2,6 +2,7 @@ import { requireAdminUser } from "@/server/admin/guard";
 import { ROLE_LABELS, type AdminRole } from "@/lib/permissions";
 import { backupCodeStats } from "@/server/admin/twofactor";
 import TwoFactorPanel from "./TwoFactorPanel";
+import CredentialsPanel from "./CredentialsPanel";
 
 export const metadata = { title: "My Account — FZ-Mart Admin" };
 
@@ -37,6 +38,11 @@ export default async function AccountPage() {
           are locked until you do.
         </div>
       )}
+
+      <div className="rounded-xl border border-stone-200 bg-white p-6">
+        <h2 className="mb-4 font-semibold text-gray-900">Login credentials</h2>
+        <CredentialsPanel username={admin.username} />
+      </div>
 
       <div className="rounded-xl border border-stone-200 bg-white p-6">
         <h2 className="mb-4 font-semibold text-gray-900">Two-factor authentication</h2>

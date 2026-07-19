@@ -51,6 +51,16 @@ export async function createSession(data: SessionData): Promise<string> {
   return sessionId;
 }
 
+/**
+ * Overwrite an existing session's data in place, preserving its remaining TTL
+ * as closely as Redis allows (re-sets the full 7-day window). Used when a
+ * mutable field in the snapshot — e.g. the username shown in the admin header —
+ * changes and the current session should reflect it without re-login.
+ */
+export async function updateSession(sessionId: string, data: SessionData): Promise<void> {
+  await redis.set(sessionKey(sessionId), JSON.stringify(data), "EX", SESSION_TTL_SECONDS);
+}
+
 export async function getSession(sessionId: string): Promise<SessionData | null> {
   // Read on every admin render. If Redis is unreachable, treat the admin as
   // logged out rather than crashing the page (they can sign in again once

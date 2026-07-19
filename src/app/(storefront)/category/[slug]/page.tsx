@@ -52,15 +52,36 @@ export default async function CategoryPage({
         ])}
       />
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{category.name}</h1>
+        <div className="flex items-start gap-4">
+          {category.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={category.imageUrl}
+              alt={category.name}
+              className="h-16 w-16 shrink-0 rounded-xl border border-gray-200 object-cover sm:h-20 sm:w-20"
+            />
+          )}
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900">{category.name}</h1>
+            {category.description && (
+              <p className="mt-1 text-sm text-gray-600 whitespace-pre-line">{category.description}</p>
+            )}
+          </div>
+        </div>
         {category.subcategories.length > 0 && (
-          <div className="mt-3 flex gap-3 flex-wrap text-sm">
+          <div className="mt-4 flex gap-3 flex-wrap text-sm">
             {category.subcategories.map((sub) => (
               <Link
                 key={sub.id}
                 href={`/category/${category.slug}#${sub.slug}`}
-                className="px-3 py-1 rounded-full border text-gray-700 hover:border-black"
+                className="flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-gray-700 hover:border-black"
               >
+                {sub.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={sub.imageUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
+                ) : (
+                  <span className="h-6 w-6" />
+                )}
                 {sub.name}
               </Link>
             ))}
