@@ -158,6 +158,11 @@ model ProductImage {
   url       String
   isPrimary Boolean @default(false)
   sortOrder Int     @default(0)
+  // Which variant this photo shows, as a label snapshot ("Navy / M") rather
+  // than a variantId FK — variants are wiped & recreated on every product save
+  // (see updateProduct), so an FK would break on each edit. Null = whole-product
+  // photo. Matches the label derived from ProductVariant colorName/size.
+  variantLabel String?
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, sortOrder])

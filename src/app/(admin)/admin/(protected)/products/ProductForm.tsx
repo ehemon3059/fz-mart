@@ -16,6 +16,12 @@ const MAX_IMAGES = 10;
 type Subcategory = Awaited<ReturnType<typeof listAllSubcategories>>[number];
 type Product = NonNullable<Awaited<ReturnType<typeof getProductById>>>;
 
+interface ImageRow {
+  url: string;
+  /** Label of the variant row this photo shows ("Navy / M"); "" = whole product. */
+  variantLabel: string;
+}
+
 interface ColorRow {
   name: string;
   hexCode: string;
@@ -69,7 +75,7 @@ interface FormState {
   metaTitle: string;
   metaDescription: string;
   isFeatured: boolean;
-  imageUrls: string[]; // never empty (at least one row)
+  images: ImageRow[]; // photo URLs + optional variant link; first is the cover
   colors: ColorRow[];
   specifications: SpecRow[];
   features: string[];
@@ -109,14 +115,17 @@ function initialFromProduct(p?: Product): FormState {
       metaTitle: "",
       metaDescription: "",
       isFeatured: false,
-      imageUrls: [],
+      images: [],
       colors: [],
       specifications: [],
       features: [],
       variants: [],
     };
   }
-  const urls = p.images.slice().sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0)).map((i) => i.url);
+  const imageRows: ImageRow[] = p.images
+    .slice()
+    .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+    .map((i) => ({ url: i.url, variantLabel: i.variantLabel ?? "" }));
   return {
     pricingMode: (p.variants?.length ?? 0) > 0 ? "variant" : "simple",
     name: p.name,
@@ -133,7 +142,7 @@ function initialFromProduct(p?: Product): FormState {
     metaTitle: p.metaTitle ?? "",
     metaDescription: p.metaDescription ?? "",
     isFeatured: p.isFeatured,
-    imageUrls: urls,
+    images: imageRows,
     colors: p.colors?.map((c) => ({ name: c.name, hexCode: c.hexCode, imageUrl: c.imageUrl ?? "" })) ?? [],
     specifications: p.specifications?.map((s) => ({ label: s.label, value: s.value })) ?? [],
     features: p.features?.map((f) => f.text) ?? [],
@@ -332,7 +341,7 @@ function SubcategorySelect({
 
 /* ─────────── live preview ─────────── */
 function LivePreview({ form, basePricePaisa, fromPrice }: { form: FormState; basePricePaisa: number | ""; fromPrice: boolean }) {
-  const firstImg = form.imageUrls.find((u) => u && u.trim());
+  const firstImg = form.images.find((i) => i.url.trim())?.url;
   // In variant mode there's no product-level discount; price is the "from" price.
   const hasDiscount = !fromPrice && form.discountPrice !== "" && basePricePaisa !== "" && Number(form.discountPrice) < Number(basePricePaisa);
 
@@ -429,16 +438,21 @@ export default function ProductForm({ subcategories, product }: Props) {
       : null;
 
   const removeImage = (idx: number) =>
-    setForm((f) => ({ ...f, imageUrls: f.imageUrls.filter((_, i) => i !== idx) }));
+    setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== idx) }));
   // Promote a photo to the front of the list — the first image is the cover/thumbnail.
   const makePrimary = (idx: number) =>
     setForm((f) => {
       if (idx === 0) return f;
-      const next = [...f.imageUrls];
-      const [u] = next.splice(idx, 1);
-      next.unshift(u);
-      return { ...f, imageUrls: next };
+      const next = [...f.images];
+      const [img] = next.splice(idx, 1);
+      next.unshift(img);
+      return { ...f, images: next };
     });
+  const setImageVariant = (idx: number, variantLabel: string) =>
+    setForm((f) => ({
+      ...f,
+      images: f.images.map((img, i) => (i === idx ? { ...img, variantLabel } : img)),
+    }));
 
   // The customizer hands back a JPEG already cropped to 1000×1000 and compressed
   // under 200 KB, so it just needs uploading and appending to the list.
@@ -453,7 +467,7 @@ export default function ProductForm({ subcategories, product }: Props) {
       const res = await fetch("/api/admin/upload", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      setForm((f) => ({ ...f, imageUrls: [...f.imageUrls, data.url].slice(0, MAX_IMAGES) }));
+      setForm((f) => ({ ...f, images: [...f.images, { url: data.url, variantLabel: "" }].slice(0, MAX_IMAGES) }));
     } catch (err) {
       setImageError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -507,6 +521,31 @@ export default function ProductForm({ subcategories, product }: Props) {
           })
       : [];
 
+  // Display label for a variant row — must mirror how the server derives it
+  // from colorName/size ("Navy / M") since ProductImage.variantLabel is matched
+  // against these labels on save.
+  const variantRowLabel = (v: VariantRow) =>
+    [v.color.trim(), v.size.trim()].filter(Boolean).join(" / ");
+  // Labels of the rows that will actually be saved — these feed the per-image
+  // "which variant is this photo?" dropdowns in the Images card.
+  const validVariantLabels = isVariantMode
+    ? [...new Set(
+        form.variants
+          .filter((v) => (v.color.trim() || v.size.trim()) && Number(v.price) > 0)
+          .map(variantRowLabel),
+      )]
+    : [];
+
+  // Images serialized for submit: drop blank URLs, and drop a variant link whose
+  // row was deleted/renamed after the photo was tagged.
+  const cleanImages = () =>
+    form.images
+      .filter((img) => img.url.trim())
+      .map((img) => ({
+        url: img.url.trim(),
+        variantLabel: validVariantLabels.includes(img.variantLabel) ? img.variantLabel : null,
+      }));
+
   // The product row always needs a base price & stock. In variant mode they're
   // derived from the variants — lowest price becomes the storefront "from" price,
   // stock is the sum across variants — so the disabled Pricing card stays in sync.
@@ -552,7 +591,7 @@ export default function ProductForm({ subcategories, product }: Props) {
     const base = { price: submitPriceTaka(), stock: submitStock() };
     fd.set("price", base.price === "" ? "" : String(base.price));
     fd.set("stock", base.stock === "" ? "" : String(base.stock));
-    fd.set("imageUrls", form.imageUrls.filter((u) => u.trim()).join("\n"));
+    fd.set("images", JSON.stringify(cleanImages()));
     fd.set("colors", JSON.stringify(cleanColors()));
     fd.set(
       "specifications",
@@ -602,7 +641,7 @@ export default function ProductForm({ subcategories, product }: Props) {
       <input type="hidden" name="metaTitle" value={form.metaTitle} />
       <input type="hidden" name="metaDescription" value={form.metaDescription} />
       {form.isFeatured && <input type="hidden" name="isFeatured" value="on" />}
-      <input type="hidden" name="imageUrls" value={form.imageUrls.filter((u) => u.trim()).join("\n")} />
+      <input type="hidden" name="images" value={JSON.stringify(cleanImages())} />
       <input type="hidden" name="colors" value={JSON.stringify(cleanColors())} />
       <input
         type="hidden"
@@ -1072,44 +1111,62 @@ export default function ProductForm({ subcategories, product }: Props) {
             hint={`Square 1000×1000px · up to ${MAX_IMAGES} · ≤200 KB each. The first photo is the cover.`}
           >
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-              {form.imageUrls.map((url, idx) => (
-                <div
-                  key={url + idx}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="h-full w-full object-cover" />
-                  {idx === 0 && (
-                    <span className="absolute left-1.5 top-1.5 rounded-md bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
-                      Cover
-                    </span>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/55 to-transparent p-1.5 opacity-0 transition group-hover:opacity-100">
-                    {idx !== 0 ? (
+              {form.images.map((img, idx) => (
+                <div key={img.url + idx}>
+                  <div className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.url} alt="" className="h-full w-full object-cover" />
+                    {idx === 0 && (
+                      <span className="absolute left-1.5 top-1.5 rounded-md bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
+                        Cover
+                      </span>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/55 to-transparent p-1.5 opacity-0 transition group-hover:opacity-100">
+                      {idx !== 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => makePrimary(idx)}
+                          title="Make cover"
+                          className="rounded-md bg-white/90 px-1.5 py-1 text-[10.5px] font-semibold text-stone-700 hover:bg-white"
+                        >
+                          Make cover
+                        </button>
+                      ) : (
+                        <span />
+                      )}
                       <button
                         type="button"
-                        onClick={() => makePrimary(idx)}
-                        title="Make cover"
-                        className="rounded-md bg-white/90 px-1.5 py-1 text-[10.5px] font-semibold text-stone-700 hover:bg-white"
+                        onClick={() => removeImage(idx)}
+                        title="Remove photo"
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-stone-500 hover:bg-white hover:text-red-500"
                       >
-                        Make cover
+                        <Icon name="trash" size={14} />
                       </button>
-                    ) : (
-                      <span />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeImage(idx)}
-                      title="Remove photo"
-                      className="flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-stone-500 hover:bg-white hover:text-red-500"
-                    >
-                      <Icon name="trash" size={14} />
-                    </button>
+                    </div>
                   </div>
+
+                  {/* Which variant does this photo show? Only offered once at
+                      least one valid variant row exists; the value is a label
+                      snapshot ("Navy / M") matched against the rows on save. */}
+                  {isVariantMode && validVariantLabels.length > 0 && (
+                    <select
+                      value={validVariantLabels.includes(img.variantLabel) ? img.variantLabel : ""}
+                      onChange={(e) => setImageVariant(idx, e.target.value)}
+                      aria-label="Variant shown in this photo"
+                      className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-1.5 py-1 text-[11.5px] text-stone-700 outline-none focus:border-brand-400"
+                    >
+                      <option value="">Whole product</option>
+                      {validVariantLabels.map((label) => (
+                        <option key={label} value={label}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               ))}
 
-              {form.imageUrls.length < MAX_IMAGES && (
+              {form.images.length < MAX_IMAGES && !(isVariantMode && validVariantLabels.length === 0) && (
                 <button
                   type="button"
                   onClick={() => setCustomizing(true)}
@@ -1128,8 +1185,15 @@ export default function ProductForm({ subcategories, product }: Props) {
               )}
             </div>
 
+            {isVariantMode && validVariantLabels.length === 0 && (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[12.5px] text-amber-700">
+                Add at least one variant row (a colour or size plus a price) in Sizes / Variants
+                before uploading photos — each photo can then be linked to the variant it shows.
+              </p>
+            )}
+
             <p className="mt-3 text-[12.5px] text-stone-400">
-              {form.imageUrls.length}/{MAX_IMAGES} photos · upload any picture, then crop it to a square and shrink it to fit.
+              {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it to a square and shrink it to fit.
             </p>
             <ErrorText>{imageError ?? undefined}</ErrorText>
           </Card>

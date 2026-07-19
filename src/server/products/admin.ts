@@ -63,6 +63,12 @@ export interface ProductVariantInput {
   showStock?: boolean;
 }
 
+export interface ProductImageInput {
+  url: string;
+  /** Label of the variant this photo shows ("Navy / M"); null = whole product. */
+  variantLabel?: string | null;
+}
+
 export interface ProductInput {
   name: string;
   subcategoryId: number;
@@ -86,6 +92,12 @@ export interface ProductInput {
   metaDescription?: string | null;
   /** Image URLs in display order; first is primary. */
   imageUrls?: string[];
+  /**
+   * Images with an optional variant link, in display order; first is primary.
+   * When provided this takes precedence over imageUrls (which is kept for
+   * callers like the seed script that don't tag images).
+   */
+  images?: ProductImageInput[];
   colors?: ProductColorInput[];
   specifications?: ProductSpecificationInput[];
   /** Feature bullet points, in display order. */
@@ -94,7 +106,14 @@ export interface ProductInput {
   variants?: ProductVariantInput[];
 }
 
+/** Normalise the two image input shapes; undefined = "don't touch images". */
+function imageRowsFromInput(input: ProductInput): ProductImageInput[] | undefined {
+  if (input.images) return input.images;
+  return input.imageUrls?.map((url) => ({ url }));
+}
+
 export async function createProduct(input: ProductInput) {
+  const imageRows = imageRowsFromInput(input);
   const product = await prisma.product.create({
     data: {
       name: input.name,
@@ -112,11 +131,12 @@ export async function createProduct(input: ProductInput) {
       promoBadge: input.promoBadge ?? null,
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
-      images: input.imageUrls?.length
+      images: imageRows?.length
         ? {
             createMany: {
-              data: input.imageUrls.map((url, i) => ({
-                url,
+              data: imageRows.map((img, i) => ({
+                url: img.url,
+                variantLabel: img.variantLabel ?? null,
                 isPrimary: i === 0,
                 sortOrder: i,
               })),
@@ -215,13 +235,15 @@ export async function updateProduct(id: number, input: ProductInput) {
       },
     });
 
-    if (input.imageUrls) {
+    const imageRows = imageRowsFromInput(input);
+    if (imageRows) {
       await tx.productImage.deleteMany({ where: { productId: id } });
-      if (input.imageUrls.length > 0) {
+      if (imageRows.length > 0) {
         await tx.productImage.createMany({
-          data: input.imageUrls.map((url, i) => ({
+          data: imageRows.map((img, i) => ({
             productId: id,
-            url,
+            url: img.url,
+            variantLabel: img.variantLabel ?? null,
             isPrimary: i === 0,
             sortOrder: i,
           })),

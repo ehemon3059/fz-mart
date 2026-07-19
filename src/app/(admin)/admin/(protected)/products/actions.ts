@@ -9,6 +9,7 @@ import {
   updateProduct,
   deleteProduct,
   type ProductColorInput,
+  type ProductImageInput,
   type ProductSpecificationInput,
   type ProductVariantInput,
 } from "@/server/products/admin";
@@ -24,6 +25,35 @@ function parseImageUrls(formData: FormData): string[] {
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/**
+ * Images arrive as JSON: [{ url, variantLabel }]. variantLabel ties a photo to
+ * a variant row by its display label ("Navy / M"); it's validated against the
+ * submitted variants after parsing (see saveProduct) so a stale label from a
+ * deleted row is never persisted. Falls back to the legacy newline-delimited
+ * imageUrls field when absent.
+ */
+function parseImages(formData: FormData): ProductImageInput[] {
+  const raw = String(formData.get("images") ?? "");
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((i): i is { url: string; variantLabel?: unknown } => typeof i?.url === "string")
+          .map((i) => ({
+            url: i.url.trim(),
+            variantLabel:
+              typeof i.variantLabel === "string" && i.variantLabel.trim() ? i.variantLabel.trim() : null,
+          }))
+          .filter((i) => i.url);
+      }
+    } catch {
+      // fall through to the legacy field
+    }
+  }
+  return parseImageUrls(formData).map((url) => ({ url }));
 }
 
 function parseFeatures(formData: FormData): string[] {
@@ -120,11 +150,19 @@ export async function saveProduct(
   const promoBadge = String(formData.get("promoBadge") ?? "").trim();
   const metaTitle = String(formData.get("metaTitle") ?? "").trim();
   const metaDescription = String(formData.get("metaDescription") ?? "").trim();
-  const imageUrls = parseImageUrls(formData);
   const colors = parseColors(formData);
   const specifications = parseSpecifications(formData);
   const features = parseFeatures(formData);
   const variants = parseVariants(formData);
+  // Drop any image→variant link whose label no longer matches a submitted
+  // variant row (row deleted/renamed since the photo was tagged).
+  const variantLabels = new Set(
+    variants.map((v) => [v.colorName, v.size].filter(Boolean).join(" / ")),
+  );
+  const images = parseImages(formData).map((img) => ({
+    url: img.url,
+    variantLabel: img.variantLabel && variantLabels.has(img.variantLabel) ? img.variantLabel : null,
+  }));
 
   const fieldErrors: Record<string, string> = {};
   if (!name) fieldErrors.name = "Name is required.";
@@ -158,7 +196,7 @@ export async function saveProduct(
     promoBadge: promoBadge || null,
     metaTitle: metaTitle || null,
     metaDescription: metaDescription || null,
-    imageUrls,
+    images,
     colors,
     specifications,
     features,
