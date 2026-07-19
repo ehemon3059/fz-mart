@@ -19,9 +19,13 @@ interface VariantOption {
   id: number;
   size: string | null;
   colorName: string | null;
-  /** Paisa */
+  /** Paisa — regular price. */
   price: number;
+  /** Paisa — sale price when set (< price); null = no discount. */
+  discountPrice: number | null;
   stock: number;
+  /** Whether to show the "X in stock" count for this variant. */
+  showStock: boolean;
 }
 
 interface Props {
@@ -226,8 +230,12 @@ function VariantPurchase({
     return (variantFor(null, sz)?.stock ?? 0) > 0;
   };
 
+  // The amount actually charged for a variant — its sale price when discounted.
+  const priceOf = (v: VariantOption) => v.discountPrice ?? v.price;
+
   const selectedVariant = variantFor(needColor ? colorName : null, needSize ? size : null);
-  const effectivePrice = selectedVariant?.price ?? Math.min(...variants.map((v) => v.price));
+  const effectivePrice = selectedVariant ? priceOf(selectedVariant) : Math.min(...variants.map(priceOf));
+  const selectedHasDiscount = !!selectedVariant && selectedVariant.discountPrice != null;
   const effectiveStock = selectedVariant?.stock ?? 0;
   const maxQty = Math.max(effectiveStock, 1);
   const allSoldOut = variants.every((v) => v.stock <= 0);
@@ -257,6 +265,7 @@ function VariantPurchase({
       return false;
     }
     const label = [colorName, size].filter(Boolean).join(" / ");
+    const unit = priceOf(selectedVariant!);
     addItem(
       {
         productId,
@@ -264,12 +273,12 @@ function VariantPurchase({
         variantLabel: label || null,
         slug,
         name: label ? `${name} — ${label}` : name,
-        unitPrice: selectedVariant!.price,
+        unitPrice: unit,
         imageUrl,
       },
       quantity,
     );
-    trackAddToCart({ value: (selectedVariant!.price * quantity) / 100 });
+    trackAddToCart({ value: (unit * quantity) / 100 });
     void recordAddToCart(productId); // server-side funnel (fire-and-forget)
     return true;
   }
@@ -366,7 +375,12 @@ function VariantPurchase({
         {selectedVariant ? (
           <>
             <span className="text-lg font-bold text-gray-900">{formatTaka(effectivePrice)}</span>
-            <span className="ml-2 text-gray-500">· {effectiveStock} in stock</span>
+            {selectedHasDiscount && (
+              <span className="ml-2 text-gray-400 line-through">{formatTaka(selectedVariant.price)}</span>
+            )}
+            {selectedVariant.showStock && (
+              <span className="ml-2 text-gray-500">· {effectiveStock} in stock</span>
+            )}
           </>
         ) : (
           <span className="text-gray-500">

@@ -105,7 +105,12 @@ export async function createOrder(input: CreateOrderInput) {
           );
         }
 
-        const unitPrice = variant.price;
+        // Honor a variant sale price when set (and below the regular price);
+        // this is the sole authority on what's charged, never the client value.
+        const unitPrice =
+          variant.discountPrice != null && variant.discountPrice < variant.price
+            ? variant.discountPrice
+            : variant.price;
         subtotal += unitPrice * item.quantity;
         couponLines.push({
           productId: product.id,

@@ -54,9 +54,13 @@ export interface ProductVariantInput {
   size?: string | null;
   /** Matches a ProductColor.name. Null for a size-only variant (e.g. oil). */
   colorName?: string | null;
-  /** Paisa */
+  /** Paisa — regular price. */
   price: number;
+  /** Paisa — optional sale price (< price). Null/omitted = no discount. */
+  discountPrice?: number | null;
   stock: number;
+  /** Show the stock count on the storefront for this variant. Default true. */
+  showStock?: boolean;
 }
 
 export interface ProductInput {
@@ -153,7 +157,9 @@ export async function createProduct(input: ProductInput) {
                 size: v.size ?? null,
                 colorName: v.colorName ?? null,
                 price: v.price,
+                discountPrice: v.discountPrice ?? null,
                 stock: v.stock,
+                showStock: v.showStock ?? true,
                 sortOrder: i,
               })),
             },
@@ -269,7 +275,9 @@ export async function updateProduct(id: number, input: ProductInput) {
             size: v.size ?? null,
             colorName: v.colorName ?? null,
             price: v.price,
+            discountPrice: v.discountPrice ?? null,
             stock: v.stock,
+            showStock: v.showStock ?? true,
             sortOrder: i,
           })),
         });

@@ -50,8 +50,10 @@ function parseColors(formData: FormData): ProductColorInput[] {
 }
 
 /**
- * Variants arrive as JSON: { size, colorName, price (taka), stock }.
- * Price → paisa here. A row needs at least a size or a colour, and price > 0.
+ * Variants arrive as JSON: { size, colorName, price (taka), discountPrice (taka),
+ * stock, showStock }. Prices → paisa here. A row needs at least a size or a
+ * colour, and price > 0. A discount is only kept when it's a positive amount
+ * below the regular price.
  */
 function parseVariants(formData: FormData): ProductVariantInput[] {
   const raw = String(formData.get("variants") ?? "[]");
@@ -59,13 +61,22 @@ function parseVariants(formData: FormData): ProductVariantInput[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .map((v) => ({
-        size: typeof v?.size === "string" && v.size.trim() ? v.size.trim() : null,
-        colorName:
-          typeof v?.colorName === "string" && v.colorName.trim() ? v.colorName.trim() : null,
-        price: takaToPaisa(Number(v?.price) || 0),
-        stock: Math.max(0, Math.floor(Number(v?.stock) || 0)),
-      }))
+      .map((v) => {
+        const price = takaToPaisa(Number(v?.price) || 0);
+        const rawDiscount = Number(v?.discountPrice);
+        const discountPaisa =
+          Number.isFinite(rawDiscount) && rawDiscount > 0 ? takaToPaisa(rawDiscount) : null;
+        return {
+          size: typeof v?.size === "string" && v.size.trim() ? v.size.trim() : null,
+          colorName:
+            typeof v?.colorName === "string" && v.colorName.trim() ? v.colorName.trim() : null,
+          price,
+          // Ignore a discount that isn't strictly below the regular price.
+          discountPrice: discountPaisa != null && discountPaisa < price ? discountPaisa : null,
+          stock: Math.max(0, Math.floor(Number(v?.stock) || 0)),
+          showStock: v?.showStock !== false,
+        };
+      })
       .filter((v) => (v.size || v.colorName) && v.price > 0);
   } catch {
     return [];

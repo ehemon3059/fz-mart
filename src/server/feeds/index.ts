@@ -43,9 +43,16 @@ export async function getFeedItems(): Promise<FeedItem[]> {
     .filter((p) => p.images.length > 0) // feeds require an image
     .map((p) => {
       const hasVariants = p.variants.length > 0;
-      const basePrice = hasVariants ? Math.min(...p.variants.map((v) => v.price)) : p.price;
-      const hasDiscount =
-        !hasVariants && p.discountPrice != null && p.discountPrice < p.price;
+      // Feeds want the regular price in `price` and the reduced one in
+      // `sale_price`. For variant products we advertise the lowest regular price
+      // and, if any variant is on sale, the lowest effective (discounted) price.
+      const regularBase = hasVariants ? Math.min(...p.variants.map((v) => v.price)) : p.price;
+      const effectiveBase = hasVariants
+        ? Math.min(...p.variants.map((v) => v.discountPrice ?? v.price))
+        : p.discountPrice != null && p.discountPrice < p.price
+          ? p.discountPrice
+          : p.price;
+      const hasDiscount = effectiveBase < regularBase;
 
       const inStock = hasVariants ? p.variants.some((v) => v.stock > 0) : p.stock > 0;
 
@@ -66,8 +73,8 @@ export async function getFeedItems(): Promise<FeedItem[]> {
           .map((i) => absoluteUrl(i.url)),
         // For a discounted item feeds expect the REGULAR price in `price` and
         // the reduced price in `sale_price`.
-        price: priceString(hasDiscount ? p.price : basePrice),
-        salePrice: hasDiscount ? priceString(p.discountPrice!) : null,
+        price: priceString(regularBase),
+        salePrice: hasDiscount ? priceString(effectiveBase) : null,
         available: inStock,
         brand: SITE_NAME,
         productType: `${p.subcategory.category.name} > ${p.subcategory.name}`,

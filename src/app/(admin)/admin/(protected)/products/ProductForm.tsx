@@ -32,9 +32,13 @@ interface VariantRow {
   color: string;
   /** Size/option label, e.g. "M" or "1 Litre", or "" for none. */
   size: string;
-  /** Price in Taka, as a string for the input. */
+  /** Regular price in Taka, as a string for the input. */
   price: string;
+  /** Optional sale price in Taka; "" = no discount. */
+  discountPrice: string;
   stock: string;
+  /** Show the stock count on the storefront for this variant. */
+  showStock: boolean;
 }
 
 /**
@@ -131,7 +135,9 @@ function initialFromProduct(p?: Product): FormState {
         color: v.colorName ?? "",
         size: v.size ?? "",
         price: String(v.price / 100),
+        discountPrice: v.discountPrice != null ? String(v.discountPrice / 100) : "",
         stock: String(v.stock),
+        showStock: v.showStock ?? true,
       })) ?? [],
   };
 }
@@ -458,7 +464,10 @@ export default function ProductForm({ subcategories, product }: Props) {
   const setVariant = (idx: number, val: Partial<VariantRow>) =>
     set("variants", form.variants.map((v, i) => (i === idx ? { ...v, ...val } : v)));
   const addVariant = () =>
-    set("variants", [...form.variants, { color: "", size: "", price: "", stock: "0" }]);
+    set("variants", [
+      ...form.variants,
+      { color: "", size: "", price: "", discountPrice: "", stock: "0", showStock: true },
+    ]);
   const removeVariant = (idx: number) => set("variants", form.variants.filter((_, i) => i !== idx));
 
   // Serialize variants for the hidden input / submit: a row needs a colour or a
@@ -468,12 +477,19 @@ export default function ProductForm({ subcategories, product }: Props) {
     isVariantMode
       ? form.variants
           .filter((v) => (v.color.trim() || v.size.trim()) && Number(v.price) > 0)
-          .map((v) => ({
-            colorName: v.color.trim() || null,
-            size: v.size.trim() || null,
-            price: Number(v.price),
-            stock: Math.max(0, Number(v.stock) || 0),
-          }))
+          .map((v) => {
+            const price = Number(v.price);
+            const disc = Number(v.discountPrice);
+            return {
+              colorName: v.color.trim() || null,
+              size: v.size.trim() || null,
+              price,
+              // Only a positive discount strictly below the price counts.
+              discountPrice: v.discountPrice.trim() && disc > 0 && disc < price ? disc : null,
+              stock: Math.max(0, Number(v.stock) || 0),
+              showStock: v.showStock,
+            };
+          })
       : [];
 
   // The product row always needs a base price & stock. In variant mode they're
@@ -482,7 +498,9 @@ export default function ProductForm({ subcategories, product }: Props) {
   const derivedBase = () => {
     const rows = cleanVariants();
     if (rows.length === 0) return { priceTaka: "" as number | "", stock: 0 };
-    const priceTaka = Math.min(...rows.map((r) => r.price));
+    // "From" price reflects the lowest amount a shopper actually pays, so use the
+    // discounted price where one is set.
+    const priceTaka = Math.min(...rows.map((r) => r.discountPrice ?? r.price));
     const stock = rows.reduce((sum, r) => sum + r.stock, 0);
     return { priceTaka, stock };
   };
@@ -794,20 +812,28 @@ export default function ProductForm({ subcategories, product }: Props) {
               </p>
             )}
             {form.variants.length > 0 && (
-              <div className="mb-2 hidden grid-cols-[150px_1fr_120px_100px_36px] gap-2 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400 sm:grid">
+              <div className="mb-2 hidden grid-cols-[140px_1fr_110px_110px_90px_36px] gap-2 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400 sm:grid">
                 <span>Colour</span>
                 <span>Size / option</span>
                 <span>Price</span>
+                <span>Discount</span>
                 <span>Stock</span>
                 <span />
               </div>
             )}
             <div className="space-y-2">
-              {form.variants.map((v, idx) => (
+              {form.variants.map((v, idx) => {
+                const priceNum = Number(v.price);
+                const discNum = Number(v.discountPrice);
+                const discValid = v.discountPrice.trim() !== "" && discNum > 0 && discNum < priceNum;
+                const discInvalid = v.discountPrice.trim() !== "" && !discValid;
+                const discPct = discValid ? Math.round((1 - discNum / priceNum) * 100) : 0;
+                return (
                 <div
                   key={idx}
-                  className="grid grid-cols-2 items-center gap-2 rounded-lg border border-stone-200 bg-stone-50/60 p-2 sm:grid-cols-[150px_1fr_120px_100px_36px]"
+                  className="rounded-lg border border-stone-200 bg-stone-50/60 p-2"
                 >
+                  <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[140px_1fr_110px_110px_90px_36px]">
                   <select
                     value={v.color}
                     onChange={(e) => setVariant(idx, { color: e.target.value })}
@@ -844,6 +870,24 @@ export default function ProductForm({ subcategories, product }: Props) {
                       className="w-full min-w-0 bg-transparent px-2 py-2 text-[13.5px] text-stone-800 outline-none"
                     />
                   </div>
+                  <div
+                    className={[
+                      "flex items-center overflow-hidden rounded-md border bg-white",
+                      discInvalid ? "border-red-300" : "border-stone-200",
+                    ].join(" ")}
+                  >
+                    <span className="border-r border-stone-200 bg-stone-50 px-2 py-2 text-[13px] font-semibold text-stone-500">৳</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={v.discountPrice}
+                      onChange={(e) => setVariant(idx, { discountPrice: e.target.value })}
+                      placeholder="—"
+                      title="Sale price (optional). Leave blank for no discount."
+                      className="w-full min-w-0 bg-transparent px-2 py-2 text-[13.5px] text-stone-800 outline-none"
+                    />
+                  </div>
                   <input
                     type="number"
                     min="0"
@@ -860,8 +904,32 @@ export default function ProductForm({ subcategories, product }: Props) {
                   >
                     <Icon name="trash" size={15} />
                   </button>
+                  </div>
+
+                  {/* Row footer: discount feedback + storefront stock visibility. */}
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-0.5">
+                    <span className="text-[12px]">
+                      {discInvalid ? (
+                        <span className="font-medium text-red-600">Discount must be below the price.</span>
+                      ) : discValid ? (
+                        <span className="font-semibold text-brand-600">−{discPct}% off · sells at ৳{discNum}</span>
+                      ) : (
+                        <span className="text-stone-400">No discount</span>
+                      )}
+                    </span>
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[12px] font-medium text-stone-600">
+                      <input
+                        type="checkbox"
+                        checked={v.showStock}
+                        onChange={(e) => setVariant(idx, { showStock: e.target.checked })}
+                        className="h-3.5 w-3.5 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      Show stock count on site
+                    </label>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <button
               type="button"

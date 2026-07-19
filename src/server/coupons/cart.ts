@@ -5,7 +5,8 @@ import type { CouponCartLine } from "@/server/coupons";
 // Authoritative server-side cart pricing (paisa) from a set of cart lines,
 // used by the coupon preview so discounts are computed against REAL prices,
 // never the client-submitted ones — mirrors the price selection in
-// createOrder.ts (variant price wins; else discountPrice when genuinely lower).
+// createOrder.ts (a variant's own sale price wins, else its regular price; for
+// unsized products, the product discountPrice when genuinely lower).
 
 /**
  * Turn client cart items into coupon cart lines: each with its authoritative
@@ -31,7 +32,11 @@ export async function cartLinesForCoupon(
     if (product.variants.length > 0) {
       const variant = product.variants.find((v) => v.id === item.variantId);
       if (!variant) continue;
-      lineTotal = variant.price * item.quantity;
+      const unit =
+        variant.discountPrice != null && variant.discountPrice < variant.price
+          ? variant.discountPrice
+          : variant.price;
+      lineTotal = unit * item.quantity;
     } else {
       const unit =
         product.discountPrice != null && product.discountPrice < product.price

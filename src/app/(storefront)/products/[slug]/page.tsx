@@ -98,8 +98,10 @@ export default async function ProductPage({
   // With sizes/variants, each option has its own price — the header shows a
   // "from" price and the AddToCartPanel handles per-size price & stock.
   const hasVariants = product.variants.length > 0;
+  // "From" price is the lowest amount a shopper actually pays — the discounted
+  // price where a variant has one.
   const minVariantPrice = hasVariants
-    ? Math.min(...product.variants.map((v) => v.price))
+    ? Math.min(...product.variants.map((v) => v.discountPrice ?? v.price))
     : effectivePrice;
 
   const category = product.subcategory.category;
@@ -238,7 +240,9 @@ export default async function ProductPage({
               size: v.size,
               colorName: v.colorName,
               price: v.price,
+              discountPrice: v.discountPrice,
               stock: v.stock,
+              showStock: v.showStock,
             }))}
           />
 
