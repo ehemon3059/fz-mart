@@ -1,8 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { setBrandPalette } from "@/server/settings/theme";
-import { normalizeHex, type BrandPalette } from "@/lib/theme-colors";
+import { setBrandPalette, setThemeLayout } from "@/server/settings/theme";
+import {
+  normalizeHex,
+  CARD_STYLES,
+  SURFACE_PRESETS,
+  type BrandPalette,
+  type CardStyle,
+  type SurfacePreset,
+} from "@/lib/theme-colors";
 import { requirePermission } from "@/server/admin/guard";
 import { getConversionConfig, saveConversionConfig } from "@/server/settings/conversion";
 import { setLogoUrl } from "@/server/settings/branding";
@@ -62,6 +69,47 @@ export async function saveTheme(formData: FormData): Promise<ActionResult> {
 
   await setBrandPalette(palette);
   // Repaint the whole storefront (every page reads the palette from the layout).
+  revalidatePath("/", "layout");
+  revalidatePath("/admin/settings/appearance");
+  return { success: true };
+}
+
+// Surface theme + layout: preset, optional custom background, product card
+// style, and the home-page product count. setThemeLayout re-validates and
+// clamps every field, so invalid input can never be persisted.
+export async function saveLayout(formData: FormData): Promise<ActionResult> {
+  await requirePermission("settings");
+
+  const preset = String(formData.get("preset") ?? "");
+  const cardStyle = String(formData.get("productCardStyle") ?? "");
+  if (!(SURFACE_PRESETS as readonly string[]).includes(preset)) {
+    return { error: "Please choose a valid theme preset." };
+  }
+  if (!(CARD_STYLES as readonly string[]).includes(cardStyle)) {
+    return { error: "Please choose a valid product card style." };
+  }
+
+  // An empty background field clears the override (falls back to the preset).
+  const rawBg = String(formData.get("customBgColor") ?? "").trim();
+  const customBgColor = rawBg === "" ? null : normalizeHex(rawBg);
+  if (rawBg !== "" && !customBgColor) {
+    return { error: "The custom background is not a valid hex code (e.g. #0b1220)." };
+  }
+
+  const count = Number(formData.get("homeProductCount"));
+  if (!Number.isFinite(count)) {
+    return { error: "Home product count must be a number." };
+  }
+
+  await setThemeLayout({
+    preset: preset as SurfacePreset,
+    customBgColor,
+    productCardStyle: cardStyle as CardStyle,
+    homeProductCount: count,
+  });
+
+  // Repaint the whole storefront: the layout reads the theme and the home page
+  // reads the product count.
   revalidatePath("/", "layout");
   revalidatePath("/admin/settings/appearance");
   return { success: true };

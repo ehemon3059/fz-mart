@@ -1,10 +1,11 @@
-import { getBrandPalette } from "@/server/settings/theme";
+import { getBrandPalette, getThemeLayout } from "@/server/settings/theme";
 import { getConversionConfig } from "@/server/settings/conversion";
 import { getLogoUrl } from "@/server/settings/branding";
 import { getCompanyInfo } from "@/server/settings/company";
 import { getSiteUrlSetting, primeSiteUrl } from "@/server/settings/site";
 import { siteUrl } from "@/lib/seo";
 import AppearanceForm from "./AppearanceForm";
+import LayoutForm from "./LayoutForm";
 import ChatSettingsForm from "./ChatSettingsForm";
 import CompanyInfoForm from "./CompanyInfoForm";
 import LogoForm from "./LogoForm";
@@ -14,8 +15,9 @@ export const metadata = { title: "Appearance — FZ-Mart Admin" };
 
 export default async function AppearanceSettingsPage() {
   await primeSiteUrl();
-  const [palette, conversion, logoUrl, configuredUrl, companyInfo] = await Promise.all([
+  const [palette, layout, conversion, logoUrl, configuredUrl, companyInfo] = await Promise.all([
     getBrandPalette(),
+    getThemeLayout(),
     getConversionConfig(),
     getLogoUrl(),
     getSiteUrlSetting(),
@@ -41,6 +43,10 @@ export default async function AppearanceSettingsPage() {
 
       <div className="mt-6">
         <AppearanceForm initial={palette} />
+      </div>
+
+      <div className="mt-6">
+        <LayoutForm initial={layout} />
       </div>
 
       <div className="mt-8">

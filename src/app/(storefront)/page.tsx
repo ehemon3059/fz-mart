@@ -3,6 +3,8 @@ import { listActiveBanners } from "@/server/banners";
 import { listFeaturedProducts, listNewArrivals, listBestSellers } from "@/server/products";
 import { getActiveFlashSale } from "@/server/flash-sales";
 import { getNewsletterCopy } from "@/server/settings/newsletter";
+import { getThemeLayout } from "@/server/settings/theme";
+import { HOME_PRODUCT_MAX } from "@/lib/theme-colors";
 
 import Hero from "@/components/storefront/Hero";
 import TrustStrip from "@/components/storefront/TrustStrip";
@@ -12,16 +14,22 @@ import ProductSection from "@/components/storefront/ProductSection";
 import Newsletter from "@/components/storefront/Newsletter";
 
 export default async function HomePage() {
-  const [categories, banners, newArrivals, bestSellers, featuredGrid, flashSale, newsletter] =
+  const [categories, banners, newArrivals, bestSellers, featuredAll, flashSale, newsletter, layout] =
     await Promise.all([
       listActiveCategories(),
       listActiveBanners(),
       listNewArrivals(5),
       listBestSellers(5),
-      listFeaturedProducts(10),
+      // Fetch the max the admin could ask for (cache key is limit-agnostic) and
+      // slice to the configured count below, so changing the count reflects
+      // immediately without waiting on the product cache to expire.
+      listFeaturedProducts(HOME_PRODUCT_MAX),
       getActiveFlashSale(),
       getNewsletterCopy(),
+      getThemeLayout(),
     ]);
+
+  const featuredGrid = featuredAll.slice(0, layout.homeProductCount);
 
   // A campaign's curated picks override discountPrice with their salePrice
   // (when set) so ProductCard renders the time-boxed price without needing

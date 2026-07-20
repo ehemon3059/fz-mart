@@ -7,7 +7,7 @@ export default function CategoryNav({ categories }: { categories: Cat[] }) {
   return (
     <nav className="catnav">
       <div className="wrap">
-        <Link href="/products" className="allcat">
+        <Link href="/category" className="allcat">
           <MenuIcon size={15} /> All Categories
         </Link>
         {categories.slice(0, 8).map((cat) => (

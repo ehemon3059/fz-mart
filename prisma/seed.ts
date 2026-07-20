@@ -157,6 +157,23 @@ async function main() {
     }
   }
 
+  // ── Theme & layout defaults ───────────────────────────────
+  // Rows in the generic Setting table under the "theme" group. update:{} means
+  // re-running the seed never clobbers an admin's saved choice.
+  const themeDefaults: Record<string, string> = {
+    preset: "theme-light",
+    customBgColor: "",
+    productCardStyle: "modern",
+    homeProductCount: "10",
+  };
+  for (const [key, value] of Object.entries(themeDefaults)) {
+    await prisma.setting.upsert({
+      where: { group_key: { group: "theme", key } },
+      update: {},
+      create: { group: "theme", key, value },
+    });
+  }
+
   // ── Homepage banner ───────────────────────────────────────
   const banners = await prisma.banner.count();
   if (banners === 0) {

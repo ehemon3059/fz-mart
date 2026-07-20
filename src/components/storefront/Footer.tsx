@@ -7,11 +7,11 @@ const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
   {
     heading: "Shop",
     links: [
-      { label: "Electronics", href: "/products" },
-      { label: "Fashion", href: "/products" },
-      { label: "Home & Living", href: "/products" },
-      { label: "Grocery", href: "/products" },
-      { label: "Beauty", href: "/products" },
+      { label: "Electronics", href: "/category/electronics" },
+      { label: "Fashion", href: "/category/fashion" },
+      { label: "Home & Living", href: "/category/home-living" },
+      { label: "Grocery", href: "/category/grocery" },
+      { label: "Beauty", href: "/category/beauty" },
     ],
   },
   {

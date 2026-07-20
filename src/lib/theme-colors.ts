@@ -92,3 +92,96 @@ export function derivePalette(base: string): BrandPalette {
     brandTint2: mix(brand, "#ffffff", 0.28),
   };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Surface theme + layout
+//
+// Separate from the brand palette (which drives accents). These control the
+// page background / card / text "surface" and a few layout knobs the admin
+// can tune from Settings → Appearance. Values are stored as rows in the same
+// generic `theme` Setting group — see server/settings/theme.ts.
+// ─────────────────────────────────────────────────────────────
+
+export const SURFACE_PRESETS = ["theme-light", "theme-dark", "theme-ocean", "theme-forest"] as const;
+export type SurfacePreset = (typeof SURFACE_PRESETS)[number];
+
+export const CARD_STYLES = ["modern", "classic", "minimal"] as const;
+export type CardStyle = (typeof CARD_STYLES)[number];
+
+/** Bounds for the home-page product count (clamped server-side). */
+export const HOME_PRODUCT_MIN = 1;
+export const HOME_PRODUCT_MAX = 48;
+
+/**
+ * The CSS-variable set each surface preset overrides on the `.fz` wrapper.
+ * Keys mirror the base variables declared in styles/storefront.css so the
+ * whole storefront re-themes without touching any component.
+ */
+export interface SurfaceVars {
+  bg: string;
+  card: string;
+  ink: string;
+  inkSoft: string;
+  inkMute: string;
+  line: string;
+}
+
+export const SURFACE_PRESET_VARS: Record<SurfacePreset, SurfaceVars> = {
+  // Light is the storefront's original look — keep these in sync with the
+  // defaults in styles/storefront.css.
+  "theme-light":  { bg: "#fafaf9", card: "#ffffff", ink: "#23211e", inkSoft: "#5c5852", inkMute: "#8a857d", line: "#ecebe8" },
+  "theme-dark":   { bg: "#0b1220", card: "#111827", ink: "#e5e7eb", inkSoft: "#9ca3af", inkMute: "#6b7280", line: "#1f2937" },
+  "theme-ocean":  { bg: "#f0f9ff", card: "#ffffff", ink: "#0c2740", inkSoft: "#33617f", inkMute: "#6b93ad", line: "#cfeafe" },
+  "theme-forest": { bg: "#f3faf4", card: "#ffffff", ink: "#14271a", inkSoft: "#3c5a45", inkMute: "#6f8a78", line: "#cdebd4" },
+};
+
+/** Human labels for the admin picker. */
+export const SURFACE_PRESET_LABELS: Record<SurfacePreset, string> = {
+  "theme-light": "Light",
+  "theme-dark": "Dark",
+  "theme-ocean": "Ocean",
+  "theme-forest": "Forest",
+};
+
+export const CARD_STYLE_LABELS: Record<CardStyle, string> = {
+  modern: "Modern",
+  classic: "Classic",
+  minimal: "Minimal",
+};
+
+export interface ThemeLayout {
+  preset: SurfacePreset;
+  /** Optional page-background override (#rrggbb) that wins over the preset. */
+  customBgColor: string | null;
+  productCardStyle: CardStyle;
+  homeProductCount: number;
+}
+
+export const DEFAULT_LAYOUT: ThemeLayout = {
+  preset: "theme-light",
+  customBgColor: null,
+  productCardStyle: "modern",
+  homeProductCount: 10,
+};
+
+/**
+ * Validate + clamp the raw string values read from the `theme` Setting group
+ * into a typed, safe ThemeLayout. Anything invalid falls back to the default,
+ * so a malformed row can never break rendering.
+ */
+export function coerceLayout(raw: Record<string, string | undefined>): ThemeLayout {
+  const count = parseInt(raw.homeProductCount ?? "", 10);
+  const bg = normalizeHex(raw.customBgColor ?? "");
+  return {
+    preset: (SURFACE_PRESETS as readonly string[]).includes(raw.preset ?? "")
+      ? (raw.preset as SurfacePreset)
+      : DEFAULT_LAYOUT.preset,
+    customBgColor: bg,
+    productCardStyle: (CARD_STYLES as readonly string[]).includes(raw.productCardStyle ?? "")
+      ? (raw.productCardStyle as CardStyle)
+      : DEFAULT_LAYOUT.productCardStyle,
+    homeProductCount: Number.isFinite(count)
+      ? Math.min(HOME_PRODUCT_MAX, Math.max(HOME_PRODUCT_MIN, count))
+      : DEFAULT_LAYOUT.homeProductCount,
+  };
+}
