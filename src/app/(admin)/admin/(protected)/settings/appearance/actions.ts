@@ -13,6 +13,7 @@ import {
 import { requirePermission } from "@/server/admin/guard";
 import { getConversionConfig, saveConversionConfig } from "@/server/settings/conversion";
 import { setLogoUrl } from "@/server/settings/branding";
+import { getPublicBaseUrl } from "@/integrations/storage";
 import { setSiteUrl } from "@/server/settings/site";
 import { saveCompanyInfo } from "@/server/settings/company";
 import { invalidateCache } from "@/lib/cache";
@@ -115,13 +116,25 @@ export async function saveLayout(formData: FormData): Promise<ActionResult> {
   return { success: true };
 }
 
+// True when `value` is a branding image URL we produced ourselves — either the
+// local dev path (/uploads/branding/<file>) or a URL under the configured R2
+// bucket's branding/ folder. We never persist an arbitrary caller-supplied URL,
+// and the key is restricted to a plain UUID.ext (no path traversal / query).
+function isOwnBrandingImage(value: string): boolean {
+  if (/^\/uploads\/branding\/[\w.-]+$/.test(value)) return true;
+  const base = getPublicBaseUrl();
+  if (base && value.startsWith(`${base}/`)) {
+    const key = value.slice(base.length + 1);
+    return /^branding\/[\w.-]+$/.test(key);
+  }
+  return false;
+}
+
 // Store logo. An empty string clears it (revert to the default text wordmark).
-// A non-empty value must be a path we produced under /uploads/branding/ — we
-// never persist an arbitrary caller-supplied URL.
 export async function saveLogo(url: string): Promise<ActionResult> {
   await requirePermission("settings");
   const trimmed = (url ?? "").trim();
-  if (trimmed !== "" && !/^\/uploads\/branding\/[\w.-]+$/.test(trimmed)) {
+  if (trimmed !== "" && !isOwnBrandingImage(trimmed)) {
     return { error: "Invalid logo image. Please upload the image again." };
   }
   await setLogoUrl(trimmed);

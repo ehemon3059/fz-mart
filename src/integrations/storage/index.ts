@@ -76,6 +76,12 @@ export function isStorageConfigured(): boolean {
   return readConfig() !== null;
 }
 
+/** Public base URL the bucket is served from (no trailing slash), or null when
+ *  storage isn't configured (dev falls back to local /uploads paths). */
+export function getPublicBaseUrl(): string | null {
+  return readConfig()?.publicBaseUrl ?? null;
+}
+
 let cachedClient: { client: S3Client; config: StorageConfig } | null = null;
 
 function getClient(): { client: S3Client; config: StorageConfig } {
