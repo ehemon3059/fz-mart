@@ -39,6 +39,12 @@ export const ArrowRight = (p: P) => (
 export const MenuIcon = (p: P) => (
   <Svg {...p} strokeWidth={2.2}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></Svg>
 );
+export const HomeIcon = (p: P) => (
+  <Svg {...p} strokeWidth={2}><path d="M3 11 12 3l9 8" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></Svg>
+);
+export const GridIcon = (p: P) => (
+  <Svg {...p} strokeWidth={2}><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></Svg>
+);
 export const PinIcon = (p: P) => (
   <Svg {...p} strokeWidth={2}><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z" /><circle cx="12" cy="10" r="3" /></Svg>
 );

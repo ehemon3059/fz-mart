@@ -9,6 +9,7 @@ import HeaderCart from "./HeaderCart";
 import HeaderAccount from "./HeaderAccount";
 import CategoryNav from "./CategoryNav";
 import HeaderSearch from "./HeaderSearch";
+import MobileTabBar from "./MobileTabBar";
 import LocaleSwitcher from "./LocaleSwitcher";
 import { PinIcon } from "./icons";
 
@@ -80,13 +81,19 @@ export default async function Header() {
           />
 
           <div className="hdr-actions">
-            <HeaderAccount displayName={displayName} />
+            {/* Account hides on mobile — it lives in the bottom tab bar instead. */}
+            <div className="hdr-account">
+              <HeaderAccount displayName={displayName} />
+            </div>
             <HeaderCart />
           </div>
         </div>
       </header>
 
       <CategoryNav categories={categories} />
+
+      {/* Mobile-only fixed bottom navigation. */}
+      <MobileTabBar loggedIn={!!session} />
     </>
   );
 }

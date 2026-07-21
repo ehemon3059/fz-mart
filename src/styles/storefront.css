@@ -591,3 +591,31 @@
   .fz .news input,.fz .news .n-btn{flex:0 0 auto;width:100%;max-width:100%;height:50px;border-radius:12px;}
   .fz .news input{font-size:16px;padding:0 16px;}
 }
+
+/* ---------- mobile bottom tab bar ---------- */
+.fz .mtab{display:none;}
+@media(max-width:760px){
+  /* Header: drop the search bar and account button — both move to the
+     bottom tab bar, leaving a clean logo + cart masthead. */
+  .fz .hdr-search,.fz .hdr-account{display:none;}
+  /* Stack the two side promos (New season, then Free shipping) vertically. */
+  .fz .promo-col{flex-direction:column;}
+  /* Keep the floating chat buttons clear of the fixed bottom bar. */
+  .fz .chat-fab{bottom:78px;}
+  /* Room at the bottom so the fixed bar never covers page content/footer. */
+  .fz{padding-bottom:64px;}
+
+  .fz .mtab{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;
+    background:var(--card);border-top:1px solid var(--line);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    box-shadow:0 -2px 12px -6px rgba(20,18,14,.18);
+  }
+  .fz .mtab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:4px 0;color:var(--ink-soft);font-size:11px;font-weight:600;line-height:1;}
+  .fz .mtab-item:active{color:var(--brand-dark);}
+  .fz .mtab-ic{position:relative;display:flex;}
+  .fz .mtab-badge{position:absolute;top:-6px;left:13px;min-width:16px;height:16px;padding:0 4px;
+    border-radius:999px;background:var(--sale);color:#fff;font-size:10px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;border:2px solid var(--card);}
+}
