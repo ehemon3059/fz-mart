@@ -10,6 +10,7 @@ import HeaderAccount from "./HeaderAccount";
 import CategoryNav from "./CategoryNav";
 import HeaderSearch from "./HeaderSearch";
 import MobileTabBar from "./MobileTabBar";
+import MobileMenu from "./MobileMenu";
 import LocaleSwitcher from "./LocaleSwitcher";
 import { PinIcon } from "./icons";
 
@@ -57,6 +58,12 @@ export default async function Header() {
       {/* main bar */}
       <header className="hdr">
         <div className="wrap">
+          {/* Mobile-only hamburger (left). Hidden on desktop via CSS. */}
+          <MobileMenu
+            categories={categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
+            displayName={displayName}
+          />
+
           <Link href="/" className="logo" aria-label="FZ Mart home">
             {logoUrl ? (
               // Admin-uploaded logo, sized to the fixed 120×40 slot.
