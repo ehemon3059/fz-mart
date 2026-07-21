@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCartStore } from "@/lib/cart-store";
+import { useMobileMenu } from "@/lib/mobile-menu-store";
 import { HomeIcon, GridIcon, BagIcon, SearchIcon, UserIcon } from "./icons";
 
 // Fixed bottom navigation shown only on mobile (hidden ≥761px via CSS).
@@ -10,6 +11,7 @@ import { HomeIcon, GridIcon, BagIcon, SearchIcon, UserIcon } from "./icons";
 export default function MobileTabBar({ loggedIn }: { loggedIn: boolean }) {
   const items = useCartStore((s) => s.items);
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
+  const openMenu = useMobileMenu((s) => s.setOpen);
 
   return (
     <nav className="mtab" aria-label="Primary mobile navigation">
@@ -17,10 +19,10 @@ export default function MobileTabBar({ loggedIn }: { loggedIn: boolean }) {
         <HomeIcon size={21} />
         <span>Home</span>
       </Link>
-      <Link href="/category" className="mtab-item">
+      <button type="button" className="mtab-item" onClick={() => openMenu(true)}>
         <GridIcon size={21} />
         <span>Menu</span>
-      </Link>
+      </button>
       <Link href="/cart" className="mtab-item">
         <span className="mtab-ic">
           <BagIcon size={21} />

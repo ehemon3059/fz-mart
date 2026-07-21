@@ -51,7 +51,9 @@ export default function CheckoutForm({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
   const [provider, setProvider] = useState(paymentOptions.providers[0]?.key ?? "");
   const [note, setNote] = useState("");
-  const [agree, setAgree] = useState(false);
+  // Pre-checked by default so the Place Order button is enabled on load; the
+  // customer can still un-tick it to withhold agreement.
+  const [agree, setAgree] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -323,6 +325,14 @@ export default function CheckoutForm({
             />
           </div>
           <div className="co-field">
+            <input
+              name="customerEmail"
+              type="email"
+              className="co-input"
+              placeholder="Email (optional)"
+            />
+          </div>
+          <div className="co-field">
             <fieldset className="co-zones">
               <legend className="co-zones-lg">Delivery location</legend>
               {/* Submitted value for the server action — kept in sync with the
@@ -351,14 +361,6 @@ export default function CheckoutForm({
                 })}
               </div>
             </fieldset>
-          </div>
-          <div className="co-field">
-            <input
-              name="customerEmail"
-              type="email"
-              className="co-input"
-              placeholder="Email (optional)"
-            />
           </div>
         </div>
       </div>

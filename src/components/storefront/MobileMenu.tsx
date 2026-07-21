@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { MenuIcon, UserIcon, ArrowRight, HeartIcon } from "./icons";
+import { useMobileMenu } from "@/lib/mobile-menu-store";
 import { logout } from "@/app/(storefront)/login/logout";
 
 type Cat = { id: number; name: string; slug: string };
@@ -18,7 +19,8 @@ export default function MobileMenu({
   categories: Cat[];
   displayName: string | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const open = useMobileMenu((s) => s.open);
+  const setOpen = useMobileMenu((s) => s.setOpen);
   const pathname = usePathname();
 
   // Close on navigation.
