@@ -16,6 +16,13 @@ export interface ThemePreset {
   id: string;
   name: string;
   palette: BrandPalette;
+  /**
+   * When true, the storefront renders primary brand buttons/badges with a
+   * glossy brand→white gradient that darkens on hover (see the
+   * `.fz[data-brand-gloss="on"]` rules in styles/storefront.css). Flat solid
+   * fills are used for every other preset.
+   */
+  gloss?: boolean;
 }
 
 // Hand-tuned presets. The first (Pink Purple) is the project default.
@@ -39,10 +46,30 @@ export const THEME_PRESETS: ThemePreset[] = [
     id: "golden",
     name: "Golden Elegance",
     palette: { brand: "#caa14b", brandDark: "#96721f", brandTint: "#fdf8ec", brandTint2: "#f3e3b8" },
+    gloss: true,
   },
 ];
 
 export const DEFAULT_PALETTE: BrandPalette = THEME_PRESETS[0].palette;
+
+/** True when two palettes are the exact same four hex values. */
+function palettesEqual(a: BrandPalette, b: BrandPalette): boolean {
+  return (
+    a.brand === b.brand &&
+    a.brandDark === b.brandDark &&
+    a.brandTint === b.brandTint &&
+    a.brandTint2 === b.brandTint2
+  );
+}
+
+/**
+ * True when the saved palette matches a preset flagged `gloss` (Golden
+ * Elegance). The storefront can't see the preset id — only the four hex
+ * values — so it re-derives the glossy flag by matching the palette here.
+ */
+export function isGlossyPalette(p: BrandPalette): boolean {
+  return THEME_PRESETS.some((preset) => preset.gloss === true && palettesEqual(preset.palette, p));
+}
 
 const HEX6 = /^#?[0-9a-fA-F]{6}$/;
 const HEX3 = /^#?[0-9a-fA-F]{3}$/;

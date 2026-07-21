@@ -5,6 +5,7 @@ import { Icon } from "@/components/icons";
 import {
   THEME_PRESETS,
   derivePalette,
+  isGlossyPalette,
   normalizeHex,
   type BrandPalette,
 } from "@/lib/theme-colors";
@@ -31,6 +32,17 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
     () => THEME_PRESETS.find((p) => paletteMatches(p.palette, palette))?.id ?? null,
     [palette],
   );
+
+  // Glossy presets (Golden Elegance) preview primary brand fills as a
+  // brand→white gradient with an inset sheen — mirrors the storefront's
+  // `.fz[data-brand-gloss="on"]` rules so the preview stays truthful.
+  const glossy = useMemo(() => isGlossyPalette(palette), [palette]);
+  const brandFill = glossy
+    ? `linear-gradient(180deg, color-mix(in srgb, ${palette.brand} 76%, #fff) 0%, ${palette.brand} 46%, ${palette.brandDark} 100%)`
+    : palette.brand;
+  const glossShadow = glossy
+    ? `inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 color-mix(in srgb, ${palette.brandDark} 70%, #000)`
+    : undefined;
 
   function pickPreset(p: BrandPalette) {
     setPalette(p);
@@ -159,13 +171,13 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
             <button
               type="button"
               className="w-full rounded-xl px-4 py-2.5 text-[14px] font-bold text-white"
-              style={{ backgroundColor: palette.brand }}
+              style={{ background: brandFill, border: glossy ? `1px solid ${palette.brandDark}` : undefined, boxShadow: glossShadow }}
             >
               Add to cart
             </button>
             {/* badges + tint chip */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-md px-2 py-1 text-[11px] font-bold text-white" style={{ backgroundColor: palette.brand }}>
+              <span className="rounded-md px-2 py-1 text-[11px] font-bold text-white" style={{ background: brandFill }}>
                 NEW
               </span>
               <span

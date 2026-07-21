@@ -11,7 +11,7 @@ import { headers } from "next/headers";
 import { organizationJsonLd } from "@/lib/jsonld";
 import { getGtmId, getPixelId } from "@/server/settings/tracking";
 import { getBrandPalette, getThemeLayout } from "@/server/settings/theme";
-import { SURFACE_PRESET_VARS } from "@/lib/theme-colors";
+import { SURFACE_PRESET_VARS, isGlossyPalette } from "@/lib/theme-colors";
 import { getLocalePrefs } from "@/i18n/server";
 import { I18nProvider } from "@/i18n/provider";
 import "@/styles/storefront.css";
@@ -37,6 +37,10 @@ export default async function StorefrontLayout({
   // inline custom properties on the wrapper — applied during SSR so there's no
   // colour flash. A custom background colour, when set, wins over the preset.
   const surface = SURFACE_PRESET_VARS[layout.preset];
+  // Golden Elegance opts into a glossy brand→white gradient on primary buttons
+  // (see `.fz[data-brand-gloss="on"]` in storefront.css). Other presets fall
+  // through to flat solid fills.
+  const brandGloss = isGlossyPalette(palette) ? "on" : undefined;
   const themeVars = {
     "--brand": palette.brand,
     "--brand-dark": palette.brandDark,
@@ -54,7 +58,7 @@ export default async function StorefrontLayout({
     // `.fz` scopes the storefront design system — every storefront.css rule
     // lives under it, so it never leaks into the admin area or your Tailwind.
     <I18nProvider value={{ locale: prefs.locale, dict: prefs.dict, banglaDigits: prefs.banglaDigits }}>
-      <div className="fz" style={themeVars} lang={prefs.locale} data-card={layout.productCardStyle}>
+      <div className="fz" style={themeVars} lang={prefs.locale} data-card={layout.productCardStyle} data-brand-gloss={brandGloss}>
         <JsonLd data={organizationJsonLd()} />
         <GtmScript gtmId={gtmId} nonce={nonce} />
         <PixelScript pixelId={pixelId} nonce={nonce} />
