@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getDictionary } from "@/i18n/server";
 import { getCompanyInfo } from "@/server/settings/company";
+import { getLogoUrl } from "@/server/settings/branding";
+import { LOGO_WIDTH, LOGO_HEIGHT } from "@/lib/logo-spec";
 import { FacebookIcon, InstagramIcon, YoutubeIcon, TwitterIcon, PinIcon, PhoneIcon, MailIcon } from "./icons";
 
 const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
@@ -45,7 +47,11 @@ const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
 ];
 
 export default async function Footer() {
-  const [dict, company] = await Promise.all([getDictionary(), getCompanyInfo()]);
+  const [dict, company, logoUrl] = await Promise.all([
+    getDictionary(),
+    getCompanyInfo(),
+    getLogoUrl(),
+  ]);
 
   const socials = [
     { href: company.facebookUrl, label: "Facebook", Icon: FacebookIcon },
@@ -59,9 +65,23 @@ export default async function Footer() {
       <div className="wrap">
         <div className="ft-top">
           <div className="ft-brand">
-            <Link href="/" className="logo">
-              <span className="mark"><span>FZ</span></span>
-              <span><b>FZ</b><i>Mart</i></span>
+            <Link href="/" className="logo" aria-label="FZ Mart home">
+              {logoUrl ? (
+                // Admin-uploaded logo, sized to the fixed 120×40 slot — mirrors Header.tsx.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt="FZ Mart"
+                  width={LOGO_WIDTH}
+                  height={LOGO_HEIGHT}
+                  style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT, objectFit: "contain" }}
+                />
+              ) : (
+                <>
+                  <span className="mark"><span>FZ</span></span>
+                  <span><b>FZ</b><i>Mart</i></span>
+                </>
+              )}
             </Link>
             {company.description && <p>{company.description}</p>}
 

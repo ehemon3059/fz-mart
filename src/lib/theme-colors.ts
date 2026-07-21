@@ -36,9 +36,9 @@ export const THEME_PRESETS: ThemePreset[] = [
     palette: { brand: "#2f6bdb", brandDark: "#1f4fb0", brandTint: "#e8eefc", brandTint2: "#c2d4f7" },
   },
   {
-    id: "orange",
-    name: "Sunset Orange",
-    palette: { brand: "#f97316", brandDark: "#c2540f", brandTint: "#fff1e6", brandTint2: "#fbd2ad" },
+    id: "golden",
+    name: "Golden Elegance",
+    palette: { brand: "#caa14b", brandDark: "#96721f", brandTint: "#fdf8ec", brandTint2: "#f3e3b8" },
   },
 ];
 
