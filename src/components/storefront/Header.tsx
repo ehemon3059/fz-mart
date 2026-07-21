@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { getDictionary } from "@/i18n/server";
 import { getLogoUrl } from "@/server/settings/branding";
-import { LOGO_WIDTH, LOGO_HEIGHT } from "@/lib/logo-spec";
+import { LOGO_DISPLAY_WIDTH, LOGO_DISPLAY_HEIGHT, LOGO_MAX_DISPLAY_WIDTH } from "@/lib/logo-spec";
 import HeaderCart from "./HeaderCart";
 import HeaderAccount from "./HeaderAccount";
 import CategoryNav from "./CategoryNav";
@@ -66,14 +66,21 @@ export default async function Header() {
 
           <Link href="/" className="logo" aria-label="FZ Mart home">
             {logoUrl ? (
-              // Admin-uploaded logo, sized to the fixed 120×40 slot.
+              // Admin-uploaded logo. Constrain by CSS height and let the width
+              // auto-size (capped) so a high-res source downsamples into the box
+              // and stays sharp on every device. Width is undistorted.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={logoUrl}
                 alt="FZ Mart"
-                width={LOGO_WIDTH}
-                height={LOGO_HEIGHT}
-                style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT, objectFit: "contain" }}
+                width={LOGO_DISPLAY_WIDTH}
+                height={LOGO_DISPLAY_HEIGHT}
+                style={{
+                  height: LOGO_DISPLAY_HEIGHT,
+                  width: "auto",
+                  maxWidth: LOGO_MAX_DISPLAY_WIDTH,
+                  objectFit: "contain",
+                }}
               />
             ) : (
               <>

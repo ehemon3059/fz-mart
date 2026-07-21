@@ -3,8 +3,12 @@
 import { useState, useTransition } from "react";
 import ImageCustomizer from "@/components/admin/ImageCustomizer";
 import {
-  LOGO_WIDTH,
-  LOGO_HEIGHT,
+  LOGO_DISPLAY_WIDTH,
+  LOGO_DISPLAY_HEIGHT,
+  LOGO_MAX_DISPLAY_WIDTH,
+  LOGO_SOURCE_WIDTH,
+  LOGO_SOURCE_HEIGHT,
+  LOGO_MIN_LONG_EDGE,
   LOGO_MAX_BYTES,
   validateLogoImage,
 } from "@/lib/logo-spec";
@@ -77,8 +81,9 @@ export default function LogoForm({ initialLogoUrl }: { initialLogoUrl: string | 
     }
   }
 
-  // The customizer hands back a PNG already cropped to 120×40 and under the
-  // weight cap, so it just needs uploading.
+  // The customizer hands back a high-res PNG cropped to the source size
+  // (LOGO_SOURCE_WIDTH×LOGO_SOURCE_HEIGHT) and under the weight cap, so it just
+  // needs uploading.
   async function handleCustomized(file: File) {
     setCustomizing(false);
     setError(null);
@@ -112,12 +117,14 @@ export default function LogoForm({ initialLogoUrl }: { initialLogoUrl: string | 
       <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
         <h2 className="text-[17px] font-bold text-stone-900">Store logo</h2>
         <p className="mt-1 text-[13.5px] text-stone-500">
-          Shown in the storefront header. Upload a{" "}
+          Shown in the storefront header. Upload a logo at least{" "}
           <b>
-            {LOGO_WIDTH}×{LOGO_HEIGHT}px
+            {LOGO_SOURCE_WIDTH}×{LOGO_SOURCE_HEIGHT}px
           </b>{" "}
-          image (max {Math.round(LOGO_MAX_BYTES / 1024)} KB). PNG with a transparent background
-          works best. Leave empty to use the default text logo.
+          (min {LOGO_MIN_LONG_EDGE}px on the long side, max{" "}
+          {Math.round(LOGO_MAX_BYTES / 1024)} KB). PNG or WebP with a transparent background works
+          best. It’s displayed at {LOGO_DISPLAY_WIDTH}×{LOGO_DISPLAY_HEIGHT} and scaled down so it
+          stays sharp on every screen. Leave empty to use the default text logo.
         </p>
 
         {/* Preview */}
@@ -129,9 +136,14 @@ export default function LogoForm({ initialLogoUrl }: { initialLogoUrl: string | 
               <img
                 src={logoUrl}
                 alt="Store logo"
-                width={LOGO_WIDTH}
-                height={LOGO_HEIGHT}
-                style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT, objectFit: "contain" }}
+                width={LOGO_DISPLAY_WIDTH}
+                height={LOGO_DISPLAY_HEIGHT}
+                style={{
+                  height: LOGO_DISPLAY_HEIGHT,
+                  width: "auto",
+                  maxWidth: LOGO_MAX_DISPLAY_WIDTH,
+                  objectFit: "contain",
+                }}
               />
             ) : (
               <span className="text-[13px] italic text-stone-400">
@@ -144,10 +156,10 @@ export default function LogoForm({ initialLogoUrl }: { initialLogoUrl: string | 
         {/* Upload + crop */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-[13px] font-semibold text-stone-700 hover:border-stone-400">
-            Upload {LOGO_WIDTH}×{LOGO_HEIGHT} image
+            Upload logo
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/png,image/webp,image/jpeg"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -198,8 +210,8 @@ export default function LogoForm({ initialLogoUrl }: { initialLogoUrl: string | 
       {customizing && (
         <ImageCustomizer
           label="Store logo"
-          targetWidth={LOGO_WIDTH}
-          targetHeight={LOGO_HEIGHT}
+          targetWidth={LOGO_SOURCE_WIDTH}
+          targetHeight={LOGO_SOURCE_HEIGHT}
           maxBytes={LOGO_MAX_BYTES}
           format="png"
           onClose={() => setCustomizing(false)}
