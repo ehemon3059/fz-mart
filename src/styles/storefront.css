@@ -677,10 +677,20 @@
   .fz .hdr-menu-btn:active{background:var(--bg);}
   .fz .hdr .logo{flex:1;justify-content:center;order:2;}
   .fz .hdr-actions{order:3;}
-  /* Search bar: own row, full width, hidden category selector for a clean pill. */
-  .fz .hdr-search{display:block;order:4;flex:1 0 100%;width:100%;}
+  /* Search bar: own row, full width. The row sits on a brand-coloured band
+     (req 5); inside it a white rounded pill holds the input and a circular
+     brand-coloured icon button on the right (reqs 1–4). */
+  .fz .hdr-search{display:block;order:4;flex:1 0 100%;width:100%;
+    margin:6px -20px -10px;padding:12px 16px;background:var(--brand);}
+  .fz .hdr-search .search{height:52px;padding:0 5px 0 0;border:0;border-radius:999px;
+    background:#fff;box-shadow:0 1px 3px rgba(20,18,14,.12);overflow:visible;}
   .fz .hdr-search .search .cat-sel{display:none;}
-  .fz .hdr-search .search input{padding-left:18px;}
+  .fz .hdr-search .search input{padding-left:20px;}
+  /* Round circle button with only the search icon (label hidden). */
+  .fz .hdr-search .search > button{width:42px;height:42px;padding:0;flex-shrink:0;
+    border-radius:50%;justify-content:center;background:var(--brand);}
+  .fz .hdr-search .search > button:hover{background:var(--brand-dark);}
+  .fz .hdr-search .search-btn-label{display:none;}
 
   .fz .mdraw-root{display:block;position:fixed;inset:0;z-index:200;}
   .fz .mdraw-overlay{position:absolute;inset:0;background:rgba(0,0,0,.45);animation:mdrawFade .2s ease;}

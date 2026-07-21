@@ -4,7 +4,7 @@
 export const en = {
   common: {
     search: "Search",
-    searchPlaceholder: "Search for products, brands and more…",
+    searchPlaceholder: "Search for products",
     allCategories: "All Categories",
     trackOrder: "Track Order",
     helpCenter: "Help Center",

@@ -77,8 +77,8 @@ export default function HeaderSearch({ categories }: { categories: Cat[] }) {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => suggestions.length > 0 && setOpen(true)}
         />
-        <button type="submit">
-          <SearchIcon size={17} /> {dict.common.search}
+        <button type="submit" aria-label={dict.common.search}>
+          <SearchIcon size={17} /> <span className="search-btn-label">{dict.common.search}</span>
         </button>
       </form>
 
