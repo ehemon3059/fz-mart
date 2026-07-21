@@ -65,7 +65,7 @@ export default function HeaderSearch({ categories }: { categories: Cat[] }) {
   }, [open]);
 
   return (
-    <div ref={boxRef} className="hdr-search" style={{ flex: 1, position: "relative" }}>
+    <div ref={boxRef} className="hdr-search">
       <form className="search" action="/search" method="get" role="search">
         <CategorySelect categories={categories} />
         <input

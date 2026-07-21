@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCartStore } from "@/lib/cart-store";
 import { useMobileMenu } from "@/lib/mobile-menu-store";
-import { HomeIcon, GridIcon, BagIcon, SearchIcon, UserIcon } from "./icons";
+import { HomeIcon, GridIcon, BagIcon, UserIcon } from "./icons";
 
 // Fixed bottom navigation shown only on mobile (hidden ≥761px via CSS).
 // Cart count comes from the persisted client store, so this is a client
@@ -29,10 +29,6 @@ export default function MobileTabBar({ loggedIn }: { loggedIn: boolean }) {
           {count > 0 && <span className="mtab-badge">{count}</span>}
         </span>
         <span>Cart</span>
-      </Link>
-      <Link href="/search" className="mtab-item">
-        <SearchIcon size={21} />
-        <span>Search</span>
       </Link>
       <Link href={loggedIn ? "/account" : "/login"} className="mtab-item">
         <UserIcon size={21} />
