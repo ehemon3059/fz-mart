@@ -155,12 +155,11 @@ export default function TopProgressBar() {
           z-index: 2147483647;
           transform-origin: 0 50%;
           transform: scaleX(0);
-          background: linear-gradient(
-            90deg,
-            var(--brand, #c026d3),
-            var(--brand-dark, #a21caf)
-          );
-          box-shadow: 0 0 8px var(--brand, #c026d3), 0 0 3px var(--brand, #c026d3);
+          /* Colour comes from the active theme's third preset swatch
+             (--brand-tint-2), injected per-request by the storefront layout via
+             --topbar-color. Falls back to the default palette's third colour. */
+          background: var(--topbar-color, #f3c4f9);
+          box-shadow: 0 0 8px var(--topbar-color, #f3c4f9), 0 0 3px var(--topbar-color, #f3c4f9);
           transition: transform 0.2s ease, opacity 0.2s ease 0.1s;
           pointer-events: none;
         }

@@ -58,6 +58,10 @@ export default async function StorefrontLayout({
     // `.fz` scopes the storefront design system — every storefront.css rule
     // lives under it, so it never leaks into the admin area or your Tailwind.
     <I18nProvider value={{ locale: prefs.locale, dict: prefs.dict, banglaDigits: prefs.banglaDigits }}>
+      {/* The top loading bar lives in the root layout, outside `.fz`, so it
+          can't inherit the brand vars. Feed it the palette's third swatch
+          (brandTint2) directly — this is what admin picks per storefront. */}
+      <style>{`.topbar-progress{--topbar-color:${palette.brandTint2};}`}</style>
       <div className="fz" style={themeVars} lang={prefs.locale} data-card={layout.productCardStyle} data-brand-gloss={brandGloss}>
         <JsonLd data={organizationJsonLd()} />
         <GtmScript gtmId={gtmId} nonce={nonce} />
