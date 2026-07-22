@@ -33,15 +33,17 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
     [palette],
   );
 
-  // Glossy presets (Golden Elegance) preview primary brand fills as a
-  // brand→white gradient with an inset sheen — mirrors the storefront's
-  // `.fz[data-brand-gloss="on"]` rules so the preview stays truthful.
+  // Glossy presets (Golden Elegance) preview primary brand fills with the exact
+  // Golden UI Kit gold gradient, double-ring border and inset sheen — mirrors
+  // the storefront's `.fz[data-brand-gloss="on"]` rules so the preview stays
+  // truthful. Badges use the softer two-stop gold.
   const glossy = useMemo(() => isGlossyPalette(palette), [palette]);
   const brandFill = glossy
-    ? `linear-gradient(180deg, color-mix(in srgb, ${palette.brand} 76%, #fff) 0%, ${palette.brand} 46%, ${palette.brandDark} 100%)`
+    ? "linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%)"
     : palette.brand;
+  const badgeFill = glossy ? "linear-gradient(180deg,#d7b45f,#a97f2a)" : palette.brand;
   const glossShadow = glossy
-    ? `inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 color-mix(in srgb, ${palette.brandDark} 70%, #000)`
+    ? "0 2px 2px rgba(255,255,255,.55) inset, 0 -4px 8px rgba(110,78,16,.35) inset, 0 0 0 2px #ecd07d, 0 0 0 3px rgba(120,86,20,.5), 0 8px 16px rgba(120,86,20,.4)"
     : undefined;
 
   function pickPreset(p: BrandPalette) {
@@ -171,13 +173,13 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
             <button
               type="button"
               className="w-full rounded-xl px-4 py-2.5 text-[14px] font-bold text-white"
-              style={{ background: brandFill, border: glossy ? `1px solid ${palette.brandDark}` : undefined, boxShadow: glossShadow }}
+              style={{ background: brandFill, border: glossy ? "1px solid transparent" : undefined, boxShadow: glossShadow, textShadow: glossy ? "0 1px 1px rgba(120,88,20,.45)" : undefined }}
             >
               Add to cart
             </button>
             {/* badges + tint chip */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-md px-2 py-1 text-[11px] font-bold text-white" style={{ background: brandFill }}>
+              <span className="rounded-md px-2 py-1 text-[11px] font-bold text-white" style={{ background: badgeFill }}>
                 NEW
               </span>
               <span

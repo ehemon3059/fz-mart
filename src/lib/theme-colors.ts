@@ -129,7 +129,7 @@ export function derivePalette(base: string): BrandPalette {
 // generic `theme` Setting group — see server/settings/theme.ts.
 // ─────────────────────────────────────────────────────────────
 
-export const SURFACE_PRESETS = ["theme-light", "theme-dark", "theme-ocean", "theme-forest"] as const;
+export const SURFACE_PRESETS = ["theme-light", "theme-dark", "theme-ocean", "theme-golden"] as const;
 export type SurfacePreset = (typeof SURFACE_PRESETS)[number];
 
 export const CARD_STYLES = ["modern", "classic", "minimal"] as const;
@@ -159,7 +159,11 @@ export const SURFACE_PRESET_VARS: Record<SurfacePreset, SurfaceVars> = {
   "theme-light":  { bg: "#fafaf9", card: "#ffffff", ink: "#23211e", inkSoft: "#5c5852", inkMute: "#8a857d", line: "#ecebe8" },
   "theme-dark":   { bg: "#0b1220", card: "#111827", ink: "#e5e7eb", inkSoft: "#9ca3af", inkMute: "#6b7280", line: "#1f2937" },
   "theme-ocean":  { bg: "#f0f9ff", card: "#ffffff", ink: "#0c2740", inkSoft: "#33617f", inkMute: "#6b93ad", line: "#cfeafe" },
-  "theme-forest": { bg: "#f3faf4", card: "#ffffff", ink: "#14271a", inkSoft: "#3c5a45", inkMute: "#6f8a78", line: "#cdebd4" },
+  // Golden — warm cream surface with gold-brown text, matching the Golden UI
+  // Kit. Pairs with the "Golden Elegance" brand palette for the full glossy
+  // look (glossy gold buttons come from `.fz[data-brand-gloss="on"]`). The page
+  // itself gets a subtle cream gradient via `.fz[data-surface="theme-golden"]`.
+  "theme-golden": { bg: "#faf3df", card: "#fffdf7", ink: "#3d3418", inkSoft: "#8a7a52", inkMute: "#a99a6c", line: "#ece0bd" },
 };
 
 /** Human labels for the admin picker. */
@@ -167,7 +171,7 @@ export const SURFACE_PRESET_LABELS: Record<SurfacePreset, string> = {
   "theme-light": "Light",
   "theme-dark": "Dark",
   "theme-ocean": "Ocean",
-  "theme-forest": "Forest",
+  "theme-golden": "Golden",
 };
 
 export const CARD_STYLE_LABELS: Record<CardStyle, string> = {
@@ -199,9 +203,12 @@ export const DEFAULT_LAYOUT: ThemeLayout = {
 export function coerceLayout(raw: Record<string, string | undefined>): ThemeLayout {
   const count = parseInt(raw.homeProductCount ?? "", 10);
   const bg = normalizeHex(raw.customBgColor ?? "");
+  // The retired "theme-forest" preset was replaced by "theme-golden"; migrate
+  // any stored value so an existing selection keeps rendering.
+  const rawPreset = raw.preset === "theme-forest" ? "theme-golden" : raw.preset;
   return {
-    preset: (SURFACE_PRESETS as readonly string[]).includes(raw.preset ?? "")
-      ? (raw.preset as SurfacePreset)
+    preset: (SURFACE_PRESETS as readonly string[]).includes(rawPreset ?? "")
+      ? (rawPreset as SurfacePreset)
       : DEFAULT_LAYOUT.preset,
     customBgColor: bg,
     productCardStyle: (CARD_STYLES as readonly string[]).includes(raw.productCardStyle ?? "")

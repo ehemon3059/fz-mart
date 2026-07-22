@@ -62,7 +62,7 @@ export default async function StorefrontLayout({
           can't inherit the brand vars. Feed it the palette's third swatch
           (brandTint2) directly — this is what admin picks per storefront. */}
       <style>{`.topbar-progress{--topbar-color:${palette.brandTint2};}`}</style>
-      <div className="fz" style={themeVars} lang={prefs.locale} data-card={layout.productCardStyle} data-brand-gloss={brandGloss}>
+      <div className="fz" style={themeVars} lang={prefs.locale} data-card={layout.productCardStyle} data-brand-gloss={brandGloss} data-surface={layout.preset}>
         <JsonLd data={organizationJsonLd()} />
         <GtmScript gtmId={gtmId} nonce={nonce} />
         <PixelScript pixelId={pixelId} nonce={nonce} />

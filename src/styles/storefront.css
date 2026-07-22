@@ -383,47 +383,52 @@
 /* wishlist "saved" state: filled brand even at rest */
 .fz .btn-brand-outline.is-active{background:var(--brand);color:#fff;}
 
-/* ---------- glossy brand fills (Golden Elegance preset only) ----------
+/* ---------- glossy golden fills (Golden Elegance preset only) ----------
    Opt-in via data-brand-gloss="on" on the .fz wrapper (set in the storefront
-   layout when the saved palette matches a preset flagged `gloss`). Primary
-   brand surfaces get a brand→white glossy gradient with an inset sheen; hover
-   darkens smoothly via filter (a gradient background can't tween on its own).
-   Scoped to this attribute so every other preset keeps its flat solid fills. */
+   layout when the saved palette matches a preset flagged `gloss`). The exact
+   gold gradient, double-ring border and inset sheen come straight from the
+   Golden UI Kit so primary surfaces read as pressed, polished metal. Scoped to
+   this attribute so every other preset keeps its flat solid fills. */
 .fz[data-brand-gloss="on"] .btn-brand-solid,
 .fz[data-brand-gloss="on"] .btn-brand-outline.is-active,
 .fz[data-brand-gloss="on"] .search > button,
 .fz[data-brand-gloss="on"] .news .n-btn,
-.fz[data-brand-gloss="on"] .prod-tab.on,
-.fz[data-brand-gloss="on"] .badge.new,
 .fz[data-brand-gloss="on"] .c-add.is-added,
 .fz[data-brand-gloss="on"] .c-add:hover:not(:disabled){
-  background:linear-gradient(180deg,
-    color-mix(in srgb, var(--brand) 76%, #fff) 0%,
-    var(--brand) 46%,
-    var(--brand-dark) 100%);
-  border-color:var(--brand-dark);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),
-    inset 0 -1px 0 color-mix(in srgb, var(--brand-dark) 70%, #000),
-    0 6px 16px -9px color-mix(in srgb, var(--brand) 65%, transparent);
+  background:linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%);
+  border-color:transparent;color:#fff;
+  text-shadow:0 1px 1px rgba(120,88,20,.45);
+  box-shadow:0 2px 2px rgba(255,255,255,.55) inset,
+    0 -4px 8px rgba(110,78,16,.35) inset,
+    0 0 0 2px #ecd07d,
+    0 0 0 3px rgba(120,86,20,.5),
+    0 8px 16px rgba(120,86,20,.4);
   transition:filter .18s ease, box-shadow .18s ease, transform .18s ease;
 }
-/* smaller surfaces don't need the drop shadow, just the gradient + sheen */
+/* badges / tabs: softer gold — a two-stop gradient with a sheen, no heavy ring */
 .fz[data-brand-gloss="on"] .badge.new,
 .fz[data-brand-gloss="on"] .prod-tab.on{
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.45);
+  background:linear-gradient(180deg,#d7b45f,#a97f2a);color:#fff;
+  text-shadow:0 1px 1px rgba(120,88,20,.5);
+  box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 3px 8px rgba(150,114,31,.3);
 }
-/* hover: keep the gloss, darken slightly (restates the gradient to beat the
-   base solid-fill hover rules, then dims it smoothly) */
+/* hover: keep the gloss, just brighten a touch (a gradient can't tween on its
+   own, so restate it to beat the base solid-fill hover, then filter it) */
 .fz[data-brand-gloss="on"] .btn-brand-solid:hover:not(:disabled),
 .fz[data-brand-gloss="on"] .btn-brand-outline:hover:not(:disabled),
 .fz[data-brand-gloss="on"] .search > button:hover,
 .fz[data-brand-gloss="on"] .news .n-btn:hover{
-  background:linear-gradient(180deg,
-    color-mix(in srgb, var(--brand) 76%, #fff) 0%,
-    var(--brand) 46%,
-    var(--brand-dark) 100%);
-  border-color:var(--brand-dark);
-  filter:brightness(.92) saturate(1.03);
+  background:linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%);
+  border-color:transparent;color:#fff;
+  filter:brightness(1.06);
+}
+
+/* ---------- golden surface (Theme & layout → "Golden") ----------
+   The page itself gets the Kit's warm cream gradient; small elements keep the
+   solid --bg cream. Independent of the brand palette above. */
+.fz[data-surface="theme-golden"]{
+  background:linear-gradient(160deg,#fffdf7 0%,#f7f0dd 100%);
+  background-attachment:fixed;
 }
 
 /* ---------- flash sale ---------- */
