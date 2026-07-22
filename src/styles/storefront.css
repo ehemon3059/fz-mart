@@ -649,24 +649,22 @@
   /* Room at the bottom so the fixed bar never covers page content/footer. */
   .fz{padding-bottom:64px;}
 
+  /* Whole bar background uses the active theme preset (brand colour), including
+     the safe-area free space below it; icons/labels flip to white for contrast. */
   .fz .mtab{
     display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;
-    background:var(--card);border-top:1px solid var(--line);
+    background:var(--brand);border-top:1px solid var(--brand-dark);
     padding:6px 4px calc(6px + env(safe-area-inset-bottom));
     box-shadow:0 -2px 12px -6px rgba(20,18,14,.18);
   }
   .fz .mtab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
-    padding:4px 0;color:var(--ink-soft);font-size:11px;font-weight:600;line-height:1;
+    padding:4px 0;color:#fff;font-size:11px;font-weight:600;line-height:1;
     background:none;border:0;font-family:inherit;cursor:pointer;}
-  .fz .mtab-item:active{color:var(--brand-dark);}
+  .fz .mtab-item:active{color:rgba(255,255,255,.7);}
   .fz .mtab-ic{position:relative;display:flex;}
-  /* Menu tab: icon sits on a rounded brand-coloured badge (theme preset). */
-  .fz .mtab-menu-ic{width:40px;height:34px;margin:-6px 0;border-radius:12px;color:#fff;
-    align-items:center;justify-content:center;background:var(--brand);}
-  .fz .mtab-item:active .mtab-menu-ic{background:var(--brand-dark);}
   .fz .mtab-badge{position:absolute;top:-6px;left:13px;min-width:16px;height:16px;padding:0 4px;
     border-radius:999px;background:var(--sale);color:#fff;font-size:10px;font-weight:700;
-    display:flex;align-items:center;justify-content:center;border:2px solid var(--card);}
+    display:flex;align-items:center;justify-content:center;border:2px solid var(--brand);}
 }
 
 /* ---------- mobile slide-in menu ---------- */

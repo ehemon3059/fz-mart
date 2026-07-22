@@ -20,9 +20,7 @@ export default function MobileTabBar({ loggedIn }: { loggedIn: boolean }) {
         <span>Home</span>
       </Link>
       <button type="button" className="mtab-item" onClick={() => openMenu(true)}>
-        <span className="mtab-ic mtab-menu-ic">
-          <GridIcon size={21} />
-        </span>
+        <GridIcon size={21} />
         <span>Menu</span>
       </button>
       <Link href="/cart" className="mtab-item">
