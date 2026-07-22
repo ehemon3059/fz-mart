@@ -17,10 +17,14 @@ async function ipGuard(): Promise<boolean> {
   return limit.allowed;
 }
 
-export async function cancelOrderAction(orderNo: string, phone: string): Promise<SelfServiceResult> {
+export async function cancelOrderAction(
+  orderNo: string,
+  phone: string,
+  reason?: string,
+): Promise<SelfServiceResult> {
   if (!(await ipGuard())) return { error: "Too many requests. Please wait a few minutes." };
   try {
-    await cancelOwnOrder(orderNo, phone);
+    await cancelOwnOrder(orderNo, phone, reason);
   } catch (err) {
     if (err instanceof SelfServiceError) return { error: err.message };
     throw err;

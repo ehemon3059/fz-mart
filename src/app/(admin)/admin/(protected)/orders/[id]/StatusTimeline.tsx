@@ -6,6 +6,7 @@ interface LogEntry {
   fromStatus: OrderStatus | null;
   toStatus: OrderStatus;
   changedBy: string | null;
+  note: string | null;
   createdAt: Date;
 }
 
@@ -39,6 +40,11 @@ export default function StatusTimeline({ logs }: { logs: LogEntry[] }) {
                 {log.createdAt.toLocaleString("en-BD")}
                 {log.changedBy ? ` · by ${log.changedBy}` : " · system"}
               </p>
+              {log.note && (
+                <p className="mt-1 rounded bg-gray-50 px-2 py-1 text-xs italic text-gray-600">
+                  “{log.note}”
+                </p>
+              )}
             </div>
           </li>
         );

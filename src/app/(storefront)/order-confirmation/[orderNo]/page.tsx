@@ -65,11 +65,26 @@ export default async function OrderConfirmationPage({
         />
       </div>
 
-      <div className="flex justify-center gap-4 text-sm">
-        <Link href={`/track?orderNo=${order.orderNo}`} className="underline">
+      <div className="flex flex-col sm:flex-row justify-center gap-3 pt-1">
+        <Link
+          href={`/track?orderNo=${order.orderNo}`}
+          className="btn-brand-solid inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold"
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
           Track this order
         </Link>
-        <Link href="/" className="underline">
+        <Link
+          href="/"
+          className="btn-brand-outline inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold"
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="8" cy="21" r="1" />
+            <circle cx="19" cy="21" r="1" />
+            <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+          </svg>
           Continue shopping
         </Link>
       </div>

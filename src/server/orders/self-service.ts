@@ -23,12 +23,22 @@ async function findOwnedOrder(orderNo: string, phone: string) {
   return order;
 }
 
-/** Cancel a still-PENDING order. Releases reserved stock and logs the change. */
-export async function cancelOwnOrder(orderNo: string, phone: string): Promise<void> {
+/**
+ * Cancel a still-PENDING order. Releases reserved stock and logs the change.
+ * The customer's cancellation reason (a preset or free text) is stored on the
+ * status-log `note` so the admin can see why on the order timeline.
+ */
+export async function cancelOwnOrder(
+  orderNo: string,
+  phone: string,
+  reason?: string | null,
+): Promise<void> {
   const order = await findOwnedOrder(orderNo, phone);
   if (order.status !== "PENDING") {
     throw new SelfServiceError("This order can no longer be cancelled — it's already being processed.");
   }
+
+  const cleanReason = reason?.trim().slice(0, 500) || null;
 
   await prisma.$transaction(async (tx) => {
     // Guard against a race with an admin who just advanced the status.
@@ -38,7 +48,13 @@ export async function cancelOwnOrder(orderNo: string, phone: string): Promise<vo
     }
     await tx.order.update({ where: { id: order.id }, data: { status: "CANCELLED" } });
     await tx.orderStatusLog.create({
-      data: { orderId: order.id, fromStatus: "PENDING", toStatus: "CANCELLED", changedBy: "customer" },
+      data: {
+        orderId: order.id,
+        fromStatus: "PENDING",
+        toStatus: "CANCELLED",
+        changedBy: "customer",
+        note: cleanReason,
+      },
     });
     await restockOrderItems(tx, order.id);
   });
