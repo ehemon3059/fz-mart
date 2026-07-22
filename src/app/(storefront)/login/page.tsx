@@ -13,7 +13,10 @@ export default async function LoginPage({
     <div className="font-manrope mx-auto flex w-full max-w-[440px] flex-col px-5 py-12 sm:py-16">
       {/* Brand mark */}
       <div className="mb-7 flex justify-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
+        <span
+          className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-soft"
+          style={{ background: "var(--brand)" }}
+        >
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
             <path d="M3 6h18" />

@@ -44,7 +44,10 @@ export default function LoginForm({ next }: { next: string }) {
   if (sentTo) {
     return (
       <div className="text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+        <div
+          className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+          style={{ background: "var(--brand-tint)", color: "var(--brand-dark)" }}
+        >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="3" y="5" width="18" height="14" rx="2" />
             <path d="m3 7 9 6 9-6" />
@@ -59,7 +62,8 @@ export default function LoginForm({ next }: { next: string }) {
         <button
           type="button"
           onClick={() => setSentTo(null)}
-          className="mt-6 text-[13px] font-semibold text-brand-600 transition hover:text-brand-700"
+          className="mt-6 text-[13px] font-semibold transition"
+          style={{ color: "var(--brand-dark)" }}
         >
           Use a different email
         </button>
@@ -109,7 +113,15 @@ export default function LoginForm({ next }: { next: string }) {
               autoFocus
               placeholder="you@example.com"
               aria-label="Email address"
-              className="w-full rounded-lg border border-stone-300 py-2.5 pl-10 pr-3 text-[14px] outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "var(--brand)";
+                e.currentTarget.style.boxShadow = "0 0 0 4px var(--brand-tint)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "";
+                e.currentTarget.style.boxShadow = "";
+              }}
+              className="w-full rounded-lg border border-stone-300 py-2.5 pl-10 pr-3 text-[14px] outline-none transition"
             />
           </div>
 
@@ -122,7 +134,7 @@ export default function LoginForm({ next }: { next: string }) {
           <button
             type="submit"
             disabled={pending}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-2.5 text-[14px] font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-brand-solid flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-[14px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? (
               <>
