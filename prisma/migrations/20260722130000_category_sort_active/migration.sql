@@ -21,17 +21,21 @@
 -- 1. Sibling-ordering index.
 CREATE INDEX `Category_parentId_sortOrder_idx` ON `Category`(`parentId`, `sortOrder`);
 
--- 2. Backfill sortOrder = rank within parent by (name, id). A temp table holds
+-- 2. Backfill sortOrder = rank within parent by (name, id). A helper table holds
 --    the computed ranks so the UPDATE doesn't read the table it writes (avoids
---    MySQL/TiDB error 1093). ROW_NUMBER partitions by parentId; all roots share
---    the NULL partition and are numbered together by name.
-CREATE TEMPORARY TABLE `_cat_rank` AS
+--    MySQL/TiDB error 1093). A plain table is used, not CREATE TEMPORARY TABLE
+--    ... AS SELECT — TiDB does not implement `CREATE TABLE ... SELECT` (1105).
+--    ROW_NUMBER partitions by parentId; all roots share the NULL partition and
+--    are numbered together by name.
+DROP TABLE IF EXISTS `_cat_rank`;
+CREATE TABLE `_cat_rank` (`id` INTEGER NOT NULL, `rn` INTEGER NOT NULL);
+INSERT INTO `_cat_rank` (`id`, `rn`)
   SELECT `id`,
-         CAST(ROW_NUMBER() OVER (PARTITION BY `parentId` ORDER BY `name` ASC, `id` ASC) - 1 AS SIGNED) AS `rn`
+         CAST(ROW_NUMBER() OVER (PARTITION BY `parentId` ORDER BY `name` ASC, `id` ASC) - 1 AS SIGNED)
   FROM `Category`;
 
 UPDATE `Category` c
   JOIN `_cat_rank` r ON r.`id` = c.`id`
   SET c.`sortOrder` = r.`rn`;
 
-DROP TEMPORARY TABLE `_cat_rank`;
+DROP TABLE `_cat_rank`;

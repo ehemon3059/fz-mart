@@ -25,12 +25,16 @@ ALTER TABLE `Category` ADD COLUMN `_legacySubId` INTEGER NULL;
 ALTER TABLE `Product` ADD COLUMN `categoryId` INTEGER NULL;
 
 -- ── 2. Backfill ─────────────────────────────────────────────────────────────
--- Snapshot the existing (root) category slugs into a temp table so the INSERT
+-- Snapshot the existing (root) category slugs into a helper table so the INSERT
 -- below can test for slug collisions without selecting from the table it writes
--- to (MySQL/TiDB error 1093). Subcategory slugs are unique among themselves, so
--- the only possible clash is with an original category slug; on clash we suffix
--- with the subcategory id to stay globally unique.
-CREATE TEMPORARY TABLE `_existing_cat_slugs` AS SELECT `slug` FROM `Category`;
+-- to (MySQL/TiDB error 1093). A plain table is used, not CREATE TEMPORARY TABLE
+-- ... AS SELECT — TiDB does not implement `CREATE TABLE ... SELECT` (error 1105).
+-- Subcategory slugs are unique among themselves, so the only possible clash is
+-- with an original category slug; on clash we suffix with the subcategory id to
+-- stay globally unique.
+DROP TABLE IF EXISTS `_existing_cat_slugs`;
+CREATE TABLE `_existing_cat_slugs` (`slug` VARCHAR(191) NOT NULL);
+INSERT INTO `_existing_cat_slugs` (`slug`) SELECT `slug` FROM `Category`;
 
 INSERT INTO `Category`
   (`parentId`, `name`, `slug`, `imageUrl`, `description`, `sortOrder`, `isActive`, `createdAt`, `updatedAt`, `_legacySubId`)
@@ -47,7 +51,7 @@ SELECT
   s.`id`
 FROM `Subcategory` s;
 
-DROP TEMPORARY TABLE `_existing_cat_slugs`;
+DROP TABLE `_existing_cat_slugs`;
 
 -- Repoint every product to the freshly-created child category.
 UPDATE `Product` p
