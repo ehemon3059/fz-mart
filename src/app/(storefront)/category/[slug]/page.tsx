@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getCategoryBySlug } from "@/server/categories";
+import { getCategoryBySlug, listActiveCategories } from "@/server/categories";
 import { listProductsByCategorySlug } from "@/server/products";
+import { ancestorsOf } from "@/server/categories/tree";
 import { SITE_NAME, absoluteUrl, pageTitle, truncate } from "@/lib/seo";
 import { breadcrumbJsonLd } from "@/lib/jsonld";
 import ProductCard from "@/components/storefront/ProductCard";
@@ -38,20 +39,37 @@ export default async function CategoryPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const category = await getCategoryBySlug(slug);
+  const [category, allCats] = await Promise.all([getCategoryBySlug(slug), listActiveCategories()]);
   if (!category) notFound();
 
   const products = await listProductsByCategorySlug(slug);
+  // Direct child nodes (drill-down chips) and the ancestor chain (breadcrumb).
+  const children = allCats.filter((c) => c.parentId === category.id);
+  const ancestors = ancestorsOf(category.id, allCats);
 
   return (
     <div className="space-y-6">
       <JsonLd
         data={breadcrumbJsonLd([
           { name: "Home", path: "/" },
+          ...ancestors.map((a) => ({ name: a.name, path: `/category/${a.slug}` })),
           { name: category.name },
         ])}
       />
       <div>
+        {ancestors.length > 0 && (
+          <nav className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+            {ancestors.map((a) => (
+              <span key={a.id} className="flex items-center gap-1.5">
+                <Link href={`/category/${a.slug}`} className="hover:text-gray-800">
+                  {a.name}
+                </Link>
+                <span className="text-gray-300">›</span>
+              </span>
+            ))}
+            <span className="text-gray-700">{category.name}</span>
+          </nav>
+        )}
         <div className="flex items-start gap-4">
           {category.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -68,12 +86,12 @@ export default async function CategoryPage({
             )}
           </div>
         </div>
-        {category.subcategories.length > 0 && (
+        {children.length > 0 && (
           <div className="mt-4 flex gap-3 flex-wrap text-sm">
-            {category.subcategories.map((sub) => (
+            {children.map((sub) => (
               <Link
                 key={sub.id}
-                href={`/category/${category.slug}#${sub.slug}`}
+                href={`/category/${sub.slug}`}
                 className="flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-gray-700 hover:border-black"
               >
                 {sub.imageUrl ? (

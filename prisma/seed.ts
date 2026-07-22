@@ -36,20 +36,22 @@ async function main() {
     create: { id: 2, name: "Outside Dhaka", charge: TK(120), sortOrder: 1 },
   });
 
-  // ── Catalog: Category → Subcategory → Products ────────────
+  // ── Catalog: self-referencing Category tree → Products ────────────
+  // Electronics (root) → Accessories (child). Products can hang off any node;
+  // here they sit on the "Accessories" child to exercise a 2-level path.
   const electronics = await prisma.category.upsert({
     where: { slug: "electronics" },
     update: {},
     create: { name: "Electronics", slug: "electronics", sortOrder: 0 },
   });
 
-  const accessories = await prisma.subcategory.upsert({
+  const accessories = await prisma.category.upsert({
     where: { slug: "accessories" },
     update: {},
     create: {
       name: "Accessories",
       slug: "accessories",
-      categoryId: electronics.id,
+      parentId: electronics.id,
       sortOrder: 0,
     },
   });
@@ -97,7 +99,7 @@ async function main() {
       },
       create: {
         ...p,
-        subcategoryId: accessories.id,
+        categoryId: accessories.id,
       },
     });
 

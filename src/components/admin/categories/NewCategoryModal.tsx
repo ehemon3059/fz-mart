@@ -9,6 +9,10 @@ interface Props {
   onClose: () => void;
   /** Called after a successful create so the list can refresh. */
   onCreated: () => void;
+  /** When set, the new node is created as a child of this category. */
+  parentId?: number | null;
+  /** Parent's name, shown in the dialog header for context. */
+  parentName?: string | null;
 }
 
 function Toggle({
@@ -46,7 +50,7 @@ function Toggle({
   );
 }
 
-export function NewCategoryModal({ open, onClose, onCreated }: Props) {
+export function NewCategoryModal({ open, onClose, onCreated, parentId, parentName }: Props) {
   const [name, setName] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
@@ -82,6 +86,7 @@ export function NewCategoryModal({ open, onClose, onCreated }: Props) {
     formData.set("name", name);
     formData.set("sortOrder", String(sortOrder));
     if (isActive) formData.set("isActive", "on");
+    if (parentId != null) formData.set("parentId", String(parentId));
 
     startTransition(async () => {
       const result = await saveCategory(null, formData);
@@ -107,7 +112,9 @@ export function NewCategoryModal({ open, onClose, onCreated }: Props) {
         style={{ animation: "fz-pop .2s ease" }}
       >
         <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
-          <h2 className="text-[17px] font-bold tracking-tight text-stone-900">New Category</h2>
+          <h2 className="text-[17px] font-bold tracking-tight text-stone-900">
+            {parentName ? `New sub-category in “${parentName}”` : "New Category"}
+          </h2>
           <button
             type="button"
             onClick={onClose}

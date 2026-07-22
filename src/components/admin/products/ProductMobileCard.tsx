@@ -32,7 +32,7 @@ export function ProductMobileCard({ p, isConfirm, onDeleteFirst, onDeleteConfirm
             )}
           </div>
           <p className="mt-0.5 text-[12.5px] text-stone-400">
-            {p.subcategory.category.name} / {p.subcategory.name}
+            {p.category.name}
           </p>
           {p.promoBadge && (
             <div className="mt-1.5">

@@ -133,7 +133,7 @@ export async function saveProduct(
 ): Promise<ActionResult> {
   await requirePermission("products");
   const name = String(formData.get("name") ?? "").trim();
-  const subcategoryId = Number(formData.get("subcategoryId"));
+  const categoryId = Number(formData.get("categoryId"));
   const description = String(formData.get("description") ?? "").trim();
   const priceTaka = Number(formData.get("price"));
   const discountPriceTaka = formData.get("discountPrice")
@@ -166,7 +166,7 @@ export async function saveProduct(
 
   const fieldErrors: Record<string, string> = {};
   if (!name) fieldErrors.name = "Name is required.";
-  if (!subcategoryId) fieldErrors.subcategoryId = "Please select a category.";
+  if (!categoryId) fieldErrors.categoryId = "Please select a category.";
   if (!Number.isFinite(priceTaka) || priceTaka <= 0) {
     fieldErrors.price = "Price must be a positive number.";
   }
@@ -183,7 +183,7 @@ export async function saveProduct(
 
   const input = {
     name,
-    subcategoryId,
+    categoryId,
     description,
     price: takaToPaisa(priceTaka),
     discountPrice: discountPriceTaka != null ? takaToPaisa(discountPriceTaka) : null,

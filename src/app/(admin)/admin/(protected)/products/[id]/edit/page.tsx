@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getProductById } from "@/server/products/admin";
-import { listAllSubcategories } from "@/server/categories/admin";
+import { listAllCategories } from "@/server/categories/admin";
 import { listStockHistory } from "@/server/inventory";
 import ProductForm from "../../ProductForm";
 import StockPanel from "./StockPanel";
@@ -12,9 +12,9 @@ export default async function EditProductPage({
 }) {
   const { id } = await params;
   const productId = Number(id);
-  const [product, subcategories, history] = await Promise.all([
+  const [product, categories, history] = await Promise.all([
     getProductById(productId),
-    listAllSubcategories(),
+    listAllCategories(),
     listStockHistory(productId),
   ]);
   if (!product) notFound();
@@ -22,7 +22,7 @@ export default async function EditProductPage({
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
-      <ProductForm subcategories={subcategories} product={product} />
+      <ProductForm categories={categories} product={product} />
 
       <div className="mx-auto w-full max-w-[960px] px-5 lg:px-8">
         <StockPanel

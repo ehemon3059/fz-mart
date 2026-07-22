@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getCategoryById } from "@/server/categories/admin";
+import { getCategoryById, listAllCategories } from "@/server/categories/admin";
 import CategoryForm from "../../CategoryForm";
 
 export const metadata = { title: "Edit Category — FZ-Mart Admin" };
@@ -10,8 +10,11 @@ export default async function EditCategoryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const category = await getCategoryById(Number(id));
+  const [category, allCategories] = await Promise.all([
+    getCategoryById(Number(id)),
+    listAllCategories(),
+  ]);
   if (!category) notFound();
 
-  return <CategoryForm category={category} />;
+  return <CategoryForm category={category} allCategories={allCategories} />;
 }

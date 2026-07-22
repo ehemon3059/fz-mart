@@ -37,7 +37,7 @@ export function ProductRow({ p, isConfirm, onDeleteFirst, onDeleteConfirm, onDel
               </span>
             </div>
             <p className="mt-0.5 text-[12.5px] text-stone-400">
-              {p.subcategory.category.name} / {p.subcategory.name}
+              {p.category.name}
             </p>
           </div>
         </div>

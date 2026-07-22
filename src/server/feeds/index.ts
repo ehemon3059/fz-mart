@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { paisaToTaka } from "@/lib/money";
 import { SITE_NAME, absoluteUrl, stripHtml, truncate } from "@/lib/seo";
 import { primeSiteUrl } from "@/server/settings/site";
+import { ancestorsOf } from "@/server/categories/tree";
 
 // Product feed data for Facebook Catalog and Google Merchant. One normalized
 // shape here; the two endpoints (CSV / XML) just serialise it differently.
@@ -29,15 +30,18 @@ function priceString(paisa: number): string {
 
 export async function getFeedItems(): Promise<FeedItem[]> {
   await primeSiteUrl(); // ensure absolute URLs use the admin-configured domain
-  const products = await prisma.product.findMany({
-    where: { status: "ACTIVE" },
-    include: {
-      images: { orderBy: { sortOrder: "asc" } },
-      variants: true,
-      subcategory: { include: { category: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [products, cats] = await Promise.all([
+    prisma.product.findMany({
+      where: { status: "ACTIVE" },
+      include: {
+        images: { orderBy: { sortOrder: "asc" } },
+        variants: true,
+        category: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.category.findMany({ select: { id: true, parentId: true, name: true } }),
+  ]);
 
   return products
     .filter((p) => p.images.length > 0) // feeds require an image
@@ -77,7 +81,10 @@ export async function getFeedItems(): Promise<FeedItem[]> {
         salePrice: hasDiscount ? priceString(effectiveBase) : null,
         available: inStock,
         brand: SITE_NAME,
-        productType: `${p.subcategory.category.name} > ${p.subcategory.name}`,
+        // Full category path, e.g. "Electronics > Network > Routers".
+        productType: [...ancestorsOf(p.categoryId, cats).map((c) => c.name), p.category.name].join(
+          " > ",
+        ),
       };
     });
 }

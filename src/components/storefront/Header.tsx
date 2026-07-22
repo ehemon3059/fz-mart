@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listActiveCategories } from "@/server/categories";
+import { buildTree } from "@/server/categories/tree";
 import { prisma } from "@/lib/prisma";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { getDictionary } from "@/i18n/server";
@@ -24,6 +25,10 @@ export default async function Header() {
     getDictionary(),
     getLogoUrl(),
   ]);
+
+  // Top-level departments for the compact lists (mobile menu + search scope);
+  // the mega-menu (CategoryNav) gets the full flat tree and drills in itself.
+  const rootCategories = buildTree(categories).map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
 
   let displayName: string | null = null;
   if (session) {
@@ -59,10 +64,7 @@ export default async function Header() {
       <header className="hdr">
         <div className="wrap">
           {/* Mobile-only hamburger (left). Hidden on desktop via CSS. */}
-          <MobileMenu
-            categories={categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
-            displayName={displayName}
-          />
+          <MobileMenu categories={rootCategories} displayName={displayName} />
 
           <Link href="/" className="logo" aria-label="FZ Mart home">
             {logoUrl ? (
@@ -90,9 +92,7 @@ export default async function Header() {
             )}
           </Link>
 
-          <HeaderSearch
-            categories={categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug }))}
-          />
+          <HeaderSearch categories={rootCategories} />
 
           <div className="hdr-actions">
             {/* Account hides on mobile — it lives in the bottom tab bar instead. */}

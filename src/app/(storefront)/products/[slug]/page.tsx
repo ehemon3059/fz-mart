@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProductBySlug, listRelatedProducts } from "@/server/products";
+import { listActiveCategories } from "@/server/categories";
+import { ancestorsOf } from "@/server/categories/tree";
 import { getRatingSummary } from "@/server/products/reviews";
 import { formatTaka } from "@/lib/money";
 import { SITE_NAME, absoluteUrl, pageTitle, stripHtml, truncate } from "@/lib/seo";
@@ -79,10 +81,11 @@ export default async function ProductPage({
   // are filtered inside trackFunnelEvent.
   trackFunnelEvent("PRODUCT_VIEW", { productId: product.id, dedupeSeconds: 86400 });
 
-  const [ratingSummary, relatedProducts, customer] = await Promise.all([
+  const [ratingSummary, relatedProducts, customer, allCats] = await Promise.all([
     getRatingSummary(product.id),
-    listRelatedProducts(product.id, product.subcategoryId),
+    listRelatedProducts(product.id, product.categoryId),
     getCurrentCustomer(),
+    listActiveCategories(),
   ]);
   const wishlisted = customer ? await isWishlisted(customer.customerId, product.id) : false;
 
@@ -104,7 +107,9 @@ export default async function ProductPage({
     ? Math.min(...product.variants.map((v) => v.discountPrice ?? v.price))
     : effectivePrice;
 
-  const category = product.subcategory.category;
+  const category = product.category;
+  // Full ancestor chain (root → … → parent) for the breadcrumb trail.
+  const categoryTrail = [...ancestorsOf(category.id, allCats), category];
   const inStock = hasVariants ? product.variants.some((v) => v.stock > 0) : product.stock > 0;
 
   const structuredData = [
@@ -122,7 +127,7 @@ export default async function ProductPage({
     }),
     breadcrumbJsonLd([
       { name: "Home", path: "/" },
-      { name: category.name, path: `/category/${category.slug}` },
+      ...categoryTrail.map((c) => ({ name: c.name, path: `/category/${c.slug}` })),
       { name: product.name },
     ]),
   ];

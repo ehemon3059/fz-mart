@@ -5,15 +5,16 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import ImageCustomizer from "@/components/admin/ImageCustomizer";
 import { saveProduct } from "./actions";
-import type { listAllSubcategories } from "@/server/categories/admin";
+import type { listAllCategories } from "@/server/categories/admin";
 import type { getProductById } from "@/server/products/admin";
+import { buildTree, ancestorsOf, type TreeNode } from "@/server/categories/tree";
 
 /* Product photos are square 1000×1000 thumbnails, kept light so the catalog
    and product pages stay fast. Up to 10 per product; the first is the cover. */
 const PRODUCT_IMG = { width: 1000, height: 1000, maxBytes: 200 * 1024 };
 const MAX_IMAGES = 10;
 
-type Subcategory = Awaited<ReturnType<typeof listAllSubcategories>>[number];
+type Category = Awaited<ReturnType<typeof listAllCategories>>[number];
 type Product = NonNullable<Awaited<ReturnType<typeof getProductById>>>;
 
 interface ImageRow {
@@ -62,7 +63,7 @@ type PricingMode = "simple" | "variant";
 interface FormState {
   pricingMode: PricingMode;
   name: string;
-  subcategoryId: string; // string for select value
+  categoryId: string; // string for select value — any node in the category tree
   description: string;
   price: number | ""; // paisa
   discountPrice: number | ""; // paisa
@@ -83,7 +84,7 @@ interface FormState {
 }
 
 interface Props {
-  subcategories: Subcategory[];
+  categories: Category[];
   product?: Product;
 }
 
@@ -102,7 +103,7 @@ function initialFromProduct(p?: Product): FormState {
     return {
       pricingMode: "simple",
       name: "",
-      subcategoryId: "",
+      categoryId: "",
       description: "",
       price: "",
       discountPrice: "",
@@ -129,7 +130,7 @@ function initialFromProduct(p?: Product): FormState {
   return {
     pricingMode: (p.variants?.length ?? 0) > 0 ? "variant" : "simple",
     name: p.name,
-    subcategoryId: String(p.subcategoryId),
+    categoryId: String(p.categoryId),
     description: p.description ?? "",
     price: p.price,
     discountPrice: p.discountPrice ?? "",
@@ -284,57 +285,69 @@ function Toggle({
   );
 }
 
-/* ─────────── grouped subcategory select ─────────── */
-function SubcategorySelect({
+/* ─────────── category tree select ───────────
+   Products can live on ANY node — a root, a mid-level, or a leaf — so the
+   picker lists every category indented by depth and shows the chosen node's
+   full breadcrumb underneath for confirmation. */
+function CategorySelect({
   value,
   onChange,
   error,
-  subcategories,
+  categories,
 }: {
   value: string;
   onChange: (v: string) => void;
   error?: string;
-  subcategories: Subcategory[];
+  categories: Category[];
 }) {
-  const groups = useMemo(() => {
-    const map = new Map<string, Subcategory[]>();
-    subcategories.forEach((s) => {
-      const g = s.category.name;
-      if (!map.has(g)) map.set(g, []);
-      map.get(g)!.push(s);
-    });
-    return [...map.entries()];
-  }, [subcategories]);
+  const options = useMemo(() => {
+    const out: { id: number; label: string }[] = [];
+    const walk = (nodes: TreeNode<Category>[], depth: number) => {
+      for (const n of nodes) {
+        out.push({ id: n.id, label: `${"  ".repeat(depth)}${depth ? "└ " : ""}${n.name}` });
+        walk(n.children, depth + 1);
+      }
+    };
+    walk(buildTree(categories), 0);
+    return out;
+  }, [categories]);
+
+  const breadcrumb = useMemo(() => {
+    const id = Number(value);
+    if (!value || Number.isNaN(id)) return "";
+    const self = categories.find((c) => c.id === id);
+    if (!self) return "";
+    return [...ancestorsOf(id, categories).map((c) => c.name), self.name].join(" › ");
+  }, [value, categories]);
 
   return (
-    <div
-      className={[
-        "relative flex items-center overflow-hidden rounded-lg border bg-white transition focus-within:ring-4",
-        error
-          ? "border-red-300 focus-within:border-red-500 focus-within:ring-red-50"
-          : "border-stone-200 focus-within:border-brand-500 focus-within:ring-brand-50",
-      ].join(" ")}
-    >
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required
-        className="w-full appearance-none bg-transparent px-3 py-2.5 pr-9 text-[14px] text-stone-800 outline-none"
+    <div>
+      <div
+        className={[
+          "relative flex items-center overflow-hidden rounded-lg border bg-white transition focus-within:ring-4",
+          error
+            ? "border-red-300 focus-within:border-red-500 focus-within:ring-red-50"
+            : "border-stone-200 focus-within:border-brand-500 focus-within:ring-brand-50",
+        ].join(" ")}
       >
-        <option value="">Select category…</option>
-        {groups.map(([cat, subs]) => (
-          <optgroup key={cat} label={cat}>
-            {subs.map((s) => (
-              <option key={s.id} value={s.id}>
-                {cat} / {s.name}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-      <span className="pointer-events-none absolute right-3 text-stone-400">
-        <Icon name="chevronDown" size={16} />
-      </span>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required
+          className="w-full appearance-none bg-transparent px-3 py-2.5 pr-9 text-[14px] text-stone-800 outline-none"
+        >
+          <option value="">Select category…</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span className="pointer-events-none absolute right-3 text-stone-400">
+          <Icon name="chevronDown" size={16} />
+        </span>
+      </div>
+      {breadcrumb && <p className="mt-1.5 text-[12.5px] text-stone-500">In: {breadcrumb}</p>}
     </div>
   );
 }
@@ -397,7 +410,7 @@ function LivePreview({ form, basePricePaisa, fromPrice }: { form: FormState; bas
 }
 
 /* ─────────── main form ─────────── */
-export default function ProductForm({ subcategories, product }: Props) {
+export default function ProductForm({ categories, product }: Props) {
   const isEdit = !!product;
   const [form, setForm] = useState<FormState>(() => initialFromProduct(product));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -602,7 +615,7 @@ export default function ProductForm({ subcategories, product }: Props) {
 
     const clientErrors: Record<string, string> = { ...liveErrors };
     if (!form.name.trim()) clientErrors.name = "Name is required.";
-    if (!form.subcategoryId) clientErrors.subcategoryId = "Please select a category.";
+    if (!form.categoryId) clientErrors.categoryId = "Please select a category.";
     if (isVariantMode) {
       // Variants carry the price/stock; require at least one valid row.
       if (cleanVariants().length === 0) {
@@ -628,7 +641,7 @@ export default function ProductForm({ subcategories, product }: Props) {
     <form onSubmit={handleSubmit} className="font-manrope mx-auto w-full max-w-[1200px] px-5 py-6 pb-32 lg:px-8 lg:pb-10">
       {/* hidden inputs for the server action — saveProduct expects taka, not paisa */}
       <input type="hidden" name="name" value={form.name} />
-      <input type="hidden" name="subcategoryId" value={form.subcategoryId} />
+      <input type="hidden" name="categoryId" value={form.categoryId} />
       <input type="hidden" name="description" value={form.description} />
       <input type="hidden" name="price" value={(() => { const p = submitPriceTaka(); return p === "" ? "" : String(p); })()} />
       <input type="hidden" name="discountPrice" value={isVariantMode ? "" : paisaToTakaStr(form.discountPrice)} />
@@ -1277,13 +1290,13 @@ export default function ProductForm({ subcategories, product }: Props) {
 
           <Card icon="grid" title="Organization">
             <Label required>Category</Label>
-            <SubcategorySelect
-              value={form.subcategoryId}
-              onChange={(v) => set("subcategoryId", v)}
-              error={errors.subcategoryId}
-              subcategories={subcategories}
+            <CategorySelect
+              value={form.categoryId}
+              onChange={(v) => set("categoryId", v)}
+              error={errors.categoryId}
+              categories={categories}
             />
-            <ErrorText>{errors.subcategoryId}</ErrorText>
+            <ErrorText>{errors.categoryId}</ErrorText>
           </Card>
 
           <Card icon="eye" title="Visibility">

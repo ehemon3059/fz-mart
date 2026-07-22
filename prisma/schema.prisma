@@ -18,48 +18,48 @@ datasource db {
 // Catalog
 // ─────────────────────────────────────────────────────────────
 
+// Self-referencing category tree of arbitrary depth. A root has parentId=null;
+// any node can hold both children (sub-categories) AND products, so admins can
+// place a product at whatever level makes sense. The old two-model
+// Category/Subcategory split was collapsed into this single tree — see
+// prisma/migrations/*_add_category_tree. Prisma can't `include` unbounded
+// depth, so the app fetches all rows flat and assembles the tree in JS
+// (src/server/categories/tree.ts).
 model Category {
-  id              Int           @id @default(autoincrement())
+  id              Int        @id @default(autoincrement())
+  // null = root; otherwise the parent node. Restrict delete: a node with
+  // children can't be removed until they're moved/deleted (enforced in
+  // server/categories/admin.ts with a friendly error).
+  parentId        Int?
   name            String
-  slug            String        @unique
+  slug            String     @unique
   // Optional hero image + short blurb shown on the storefront category pages.
   imageUrl        String?
-  description     String?       @db.Text
-  sortOrder       Int           @default(0)
-  isActive        Boolean       @default(true)
+  description     String?    @db.Text
+  sortOrder       Int        @default(0)
+  isActive        Boolean    @default(true)
   // Optional SEO overrides (Phase 2). When blank the storefront falls back to
   // a sensible default derived from the name — see lib/seo.ts.
   metaTitle       String?
-  metaDescription String?       @db.Text
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  subcategories   Subcategory[]
+  metaDescription String?    @db.Text
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  parent          Category?  @relation("CatTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  children        Category[] @relation("CatTree")
+  products        Product[]
   coupons         Coupon[]
 
-  @@index([isActive, sortOrder])
-}
-
-model Subcategory {
-  id          Int       @id @default(autoincrement())
-  categoryId  Int
-  name        String
-  slug        String    @unique
-  // Optional image + short blurb shown on the storefront subcategory listings.
-  imageUrl    String?
-  description String?   @db.Text
-  sortOrder   Int       @default(0)
-  isActive    Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  products   Product[]
-
-  @@index([categoryId, isActive, sortOrder])
+  @@index([parentId, isActive, sortOrder])
+  // Ordering siblings within a parent (sortOrder, then name) — the isActive
+  // column sits between parentId and sortOrder in the index above, so that one
+  // can't serve this ordering.
+  @@index([parentId, sortOrder])
 }
 
 model Product {
   id                 Int                    @id @default(autoincrement())
-  subcategoryId      Int
+  // Any node in the Category tree — a root, a mid-level, or a leaf.
+  categoryId         Int
   name               String
   slug               String                 @unique
   description        String?                @db.Text
@@ -87,7 +87,9 @@ model Product {
   metaDescription    String?                @db.Text
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
-  subcategory        Subcategory            @relation(fields: [subcategoryId], references: [id])
+  // Restrict: a category can't be deleted while products reference it (the
+  // admin delete flow blocks this up front — see getCategoryDeleteImpact).
+  category           Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   images             ProductImage[]
   orderItems         OrderItem[]
   flashSales         FlashSaleProduct[]
@@ -103,7 +105,7 @@ model Product {
   cartItems          CustomerCartItem[]
   cartEvents         CartEvent[]
 
-  @@index([subcategoryId, status])
+  @@index([categoryId, status])
   @@index([isFeatured, status])
   // Full-text search over name + description. The default parser is
   // whitespace/punctuation based, which handles space-separated Bangla words;

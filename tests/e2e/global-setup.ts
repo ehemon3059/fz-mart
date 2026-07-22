@@ -50,13 +50,13 @@ export default async function globalSetup(): Promise<void> {
     update: {},
     create: { name: "E2E Tests", slug: "e2e-tests", sortOrder: 99 },
   });
-  const subcategory = await prisma.subcategory.upsert({
+  const subcategory = await prisma.category.upsert({
     where: { slug: "e2e-tests-sub" },
     update: {},
     create: {
       name: "E2E Tests Sub",
       slug: "e2e-tests-sub",
-      categoryId: category.id,
+      parentId: category.id,
       sortOrder: 99,
     },
   });
@@ -74,7 +74,7 @@ export default async function globalSetup(): Promise<void> {
       create: {
         ...p,
         description: "Automated test product — safe to delete.",
-        subcategoryId: subcategory.id,
+        categoryId: subcategory.id,
       },
     });
     const imageCount = await prisma.productImage.count({ where: { productId: product.id } });

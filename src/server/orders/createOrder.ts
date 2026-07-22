@@ -2,6 +2,7 @@ import { Prisma, type PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateOrderNo } from "./orderNo";
 import { redeemCoupon, type CouponCartLine } from "@/server/coupons";
+import { lineageIds } from "@/server/categories/tree";
 
 // Checkout is the riskiest code in the app. Everything the browser sends
 // (price, product name, displayed totals) is for UI only — this function
@@ -67,9 +68,11 @@ export async function createOrder(input: CreateOrderInput) {
     const productIds = input.items.map((i) => i.productId);
     const products = await tx.product.findMany({
       where: { id: { in: productIds }, status: "ACTIVE" },
-      include: { variants: true, subcategory: { select: { categoryId: true } } },
+      include: { variants: true },
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
+    // Category lineage (product node + ancestors) for CATEGORY-scoped coupons.
+    const cats = await tx.category.findMany({ select: { id: true, parentId: true } });
 
     let subtotal = 0;
     const orderItemsData: Prisma.OrderItemCreateManyOrderInput[] = [];
@@ -114,7 +117,7 @@ export async function createOrder(input: CreateOrderInput) {
         subtotal += unitPrice * item.quantity;
         couponLines.push({
           productId: product.id,
-          categoryId: product.subcategory.categoryId,
+          categoryIds: lineageIds(product.categoryId, cats),
           lineTotal: unitPrice * item.quantity,
         });
         orderItemsData.push({
@@ -161,7 +164,7 @@ export async function createOrder(input: CreateOrderInput) {
       subtotal += unitPrice * item.quantity;
       couponLines.push({
         productId: product.id,
-        categoryId: product.subcategory.categoryId,
+        categoryIds: lineageIds(product.categoryId, cats),
         lineTotal: unitPrice * item.quantity,
       });
       orderItemsData.push({

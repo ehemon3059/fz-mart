@@ -3,16 +3,17 @@ import { slugify } from "@/lib/slugify";
 import { deleteImage } from "@/integrations/storage";
 import { invalidateProductCaches } from "./cache";
 import { productInStock, notifyBackInStock } from "./stock-notify";
+import { ancestorsOf } from "@/server/categories/tree";
 
-async function getSlugsForInvalidation(subcategoryId: number) {
-  const subcategory = await prisma.subcategory.findUnique({
-    where: { id: subcategoryId },
-    include: { category: true },
+// A category listing page shows products from the node AND all its ancestors'
+// pages, so a product write must clear the node's slug plus every ancestor's.
+async function categorySlugsForInvalidation(categoryId: number): Promise<string[]> {
+  const all = await prisma.category.findMany({
+    select: { id: true, parentId: true, slug: true },
   });
-  return {
-    subcategorySlug: subcategory?.slug,
-    categorySlug: subcategory?.category.slug,
-  };
+  const self = all.find((c) => c.id === categoryId);
+  if (!self) return [];
+  return [self.slug, ...ancestorsOf(categoryId, all).map((c) => c.slug)];
 }
 
 export async function listAllProducts() {
@@ -20,7 +21,7 @@ export async function listAllProducts() {
     orderBy: { createdAt: "desc" },
     include: {
       images: { orderBy: { sortOrder: "asc" } },
-      subcategory: { include: { category: true } },
+      category: true,
     },
   });
 }
@@ -71,7 +72,8 @@ export interface ProductImageInput {
 
 export interface ProductInput {
   name: string;
-  subcategoryId: number;
+  /** Any node in the Category tree — root, mid-level, or leaf. */
+  categoryId: number;
   description?: string;
   /** Paisa */
   price: number;
@@ -118,7 +120,7 @@ export async function createProduct(input: ProductInput) {
     data: {
       name: input.name,
       slug: slugify(input.name),
-      subcategoryId: input.subcategoryId,
+      categoryId: input.categoryId,
       description: input.description,
       price: input.price,
       discountPrice: input.discountPrice ?? null,
@@ -191,14 +193,10 @@ export async function createProduct(input: ProductInput) {
     },
   });
 
-  const { subcategorySlug, categorySlug } = await getSlugsForInvalidation(
-    input.subcategoryId,
-  );
   await invalidateProductCaches({
     productId: product.id,
     slug: product.slug,
-    subcategorySlug,
-    categorySlug,
+    categorySlugs: await categorySlugsForInvalidation(input.categoryId),
   });
 
   return product;
@@ -207,7 +205,7 @@ export async function createProduct(input: ProductInput) {
 export async function updateProduct(id: number, input: ProductInput) {
   const before = await prisma.product.findUnique({
     where: { id },
-    include: { subcategory: { include: { category: true } } },
+    include: { category: true },
   });
   // Snapshot stock state before the edit, to detect an out-of-stock → in-stock
   // transition that should fire "back in stock" alerts.
@@ -219,7 +217,7 @@ export async function updateProduct(id: number, input: ProductInput) {
       data: {
         name: input.name,
         slug: slugify(input.name),
-        subcategoryId: input.subcategoryId,
+        categoryId: input.categoryId,
         description: input.description,
         price: input.price,
         discountPrice: input.discountPrice ?? null,
@@ -313,21 +311,18 @@ export async function updateProduct(id: number, input: ProductInput) {
     return updated;
   });
 
-  const { subcategorySlug, categorySlug } = await getSlugsForInvalidation(
-    input.subcategoryId,
-  );
+  const categorySlugs = await categorySlugsForInvalidation(input.categoryId);
+  // If the product moved to a different node, also clear the old node's chain.
+  const previousCategorySlugs =
+    before && before.categoryId !== input.categoryId
+      ? await categorySlugsForInvalidation(before.categoryId)
+      : undefined;
   await invalidateProductCaches({
     productId: product.id,
     slug: product.slug,
     previousSlug: before?.slug !== product.slug ? before?.slug : undefined,
-    subcategorySlug,
-    categorySlug,
-    previousSubcategorySlug:
-      before?.subcategory.slug !== subcategorySlug ? before?.subcategory.slug : undefined,
-    previousCategorySlug:
-      before?.subcategory.category.slug !== categorySlug
-        ? before?.subcategory.category.slug
-        : undefined,
+    categorySlugs,
+    previousCategorySlugs,
   });
 
   // Restock alert: if this edit took the product from out-of-stock to
@@ -345,7 +340,6 @@ export async function deleteProduct(id: number) {
   const product = await prisma.product.findUnique({
     where: { id },
     include: {
-      subcategory: { include: { category: true } },
       images: { select: { url: true } },
       colors: { select: { imageUrl: true } },
     },
@@ -357,8 +351,7 @@ export async function deleteProduct(id: number) {
     await invalidateProductCaches({
       productId: product.id,
       slug: product.slug,
-      subcategorySlug: product.subcategory.slug,
-      categorySlug: product.subcategory.category.slug,
+      categorySlugs: await categorySlugsForInvalidation(product.categoryId),
     });
     // Best-effort cleanup of stored objects (no-ops for seed/external URLs).
     const urls = [

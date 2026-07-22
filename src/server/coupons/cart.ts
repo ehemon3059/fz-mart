@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { CheckoutItemInput } from "@/server/orders/createOrder";
 import type { CouponCartLine } from "@/server/coupons";
+import { lineageIds } from "@/server/categories/tree";
 
 // Authoritative server-side cart pricing (paisa) from a set of cart lines,
 // used by the coupon preview so discounts are computed against REAL prices,
@@ -10,8 +11,8 @@ import type { CouponCartLine } from "@/server/coupons";
 
 /**
  * Turn client cart items into coupon cart lines: each with its authoritative
- * line total AND the top-level categoryId (via subcategory → category), so the
- * coupon engine can scope discounts to a category or a single product.
+ * line total AND its full category lineage (node + ancestors), so the coupon
+ * engine can scope discounts to any category level or a single product.
  */
 export async function cartLinesForCoupon(
   items: CheckoutItemInput[],
@@ -19,9 +20,11 @@ export async function cartLinesForCoupon(
   if (items.length === 0) return [];
   const products = await prisma.product.findMany({
     where: { id: { in: items.map((i) => i.productId) }, status: "ACTIVE" },
-    include: { variants: true, subcategory: { select: { categoryId: true } } },
+    include: { variants: true },
   });
   const byId = new Map(products.map((p) => [p.id, p]));
+  // Category lineage for CATEGORY-scoped coupons (product node + ancestors).
+  const cats = await prisma.category.findMany({ select: { id: true, parentId: true } });
 
   const lines: CouponCartLine[] = [];
   for (const item of items) {
@@ -48,7 +51,7 @@ export async function cartLinesForCoupon(
 
     lines.push({
       productId: product.id,
-      categoryId: product.subcategory.categoryId,
+      categoryIds: lineageIds(product.categoryId, cats),
       lineTotal,
     });
   }

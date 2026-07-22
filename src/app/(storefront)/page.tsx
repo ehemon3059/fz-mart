@@ -1,4 +1,5 @@
 import { listActiveCategories } from "@/server/categories";
+import { buildTree } from "@/server/categories/tree";
 import { listActiveBanners } from "@/server/banners";
 import { listFeaturedProducts, listNewArrivals, listBestSellers } from "@/server/products";
 import { getActiveFlashSale } from "@/server/flash-sales";
@@ -30,6 +31,8 @@ export default async function HomePage() {
     ]);
 
   const featuredGrid = featuredAll.slice(0, layout.homeProductCount);
+  // Home tiles show top-level departments with a live sub-count.
+  const rootCategories = buildTree(categories);
 
   // A campaign's curated picks override discountPrice with their salePrice
   // (when set) so ProductCard renders the time-boxed price without needing
@@ -44,7 +47,7 @@ export default async function HomePage() {
     <>
       <Hero banners={banners} />
       <TrustStrip />
-      <CategoryTiles categories={categories} />
+      <CategoryTiles categories={rootCategories} />
       {flashSale && (
         <FlashSale
           title={flashSale.name}

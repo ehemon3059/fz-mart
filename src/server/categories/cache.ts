@@ -1,12 +1,12 @@
 import { invalidateCache } from "@/lib/cache";
 
 // WHAT CLEARS EACH KEY:
-//   categories:active        -> any category/subcategory create/update/delete
-//   category:slug:<slug>     -> that category's own edit/delete
+//   categories:active        -> any category node create/update/delete/move
+//   category:slug:<slug>     -> that node's own edit/delete
 //
-// listActiveCategories() drives the site-wide nav, so any subcategory change
-// invalidates it too — there's no cheap way to know which categories a
-// subcategory touched without re-deriving it, so we clear the one shared key.
+// listActiveCategories() drives the site-wide nav, so any node change
+// invalidates it too — there's no cheap way to know which slugs a tree change
+// touched without re-deriving it, so we clear the one shared key.
 
 export const categoryCacheKeys = {
   active: () => "categories:active",

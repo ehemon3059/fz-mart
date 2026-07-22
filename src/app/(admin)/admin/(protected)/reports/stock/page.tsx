@@ -37,9 +37,7 @@ export default async function StockReportPage() {
             {rows.map((row) => (
               <tr key={row.id}>
                 <td className="px-4 py-2 font-medium">{row.name}</td>
-                <td className="px-4 py-2 text-gray-500">
-                  {row.categoryName} / {row.subcategoryName}
-                </td>
+                <td className="px-4 py-2 text-gray-500">{row.categoryPath}</td>
                 <td className="px-4 py-2">
                   <span
                     className={

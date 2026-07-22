@@ -1,16 +1,24 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
 import { saveCategory } from "./actions";
+import { buildTree, collectDescendantIds, type TreeNode } from "@/server/categories/tree";
+
+interface CatLite {
+  id: number;
+  name: string;
+  parentId: number | null;
+}
 
 interface Props {
   category?: {
     id: number;
     name: string;
+    parentId: number | null;
     imageUrl: string | null;
     description: string | null;
     sortOrder: number;
@@ -18,6 +26,27 @@ interface Props {
     metaTitle: string | null;
     metaDescription: string | null;
   };
+  /** All categories (flat) for the parent picker. */
+  allCategories: CatLite[];
+  /** Pre-selected parent when creating a child from the tree ("Add sub"). */
+  defaultParentId?: number | null;
+}
+
+/** Flatten the tree into indented <option>s, disabling the node being edited
+ *  and its descendants so a category can't be moved inside itself. */
+function parentOptions(cats: CatLite[], excludeId?: number): { id: number; label: string }[] {
+  const excluded = excludeId != null ? new Set(collectDescendantIds(excludeId, cats)) : new Set<number>();
+  const out: { id: number; label: string }[] = [];
+  const walk = (nodes: TreeNode<CatLite>[], depth: number) => {
+    for (const n of nodes) {
+      if (!excluded.has(n.id)) {
+        out.push({ id: n.id, label: `${"— ".repeat(depth)}${n.name}` });
+        walk(n.children, depth + 1);
+      }
+    }
+  };
+  walk(buildTree(cats), 0);
+  return out;
 }
 
 function Toggle({
@@ -55,10 +84,14 @@ function Toggle({
   );
 }
 
-export default function CategoryForm({ category }: Props) {
+export default function CategoryForm({ category, allCategories, defaultParentId }: Props) {
   const isEdit = !!category;
   const router = useRouter();
   const [name, setName] = useState(category?.name ?? "");
+  const [parentId, setParentId] = useState<string>(
+    String(category?.parentId ?? defaultParentId ?? ""),
+  );
+  const options = useMemo(() => parentOptions(allCategories, category?.id), [allCategories, category?.id]);
   const [imageUrl, setImageUrl] = useState(category?.imageUrl ?? "");
   const [description, setDescription] = useState(category?.description ?? "");
   const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 0);
@@ -85,6 +118,7 @@ export default function CategoryForm({ category }: Props) {
   return (
     <form onSubmit={handleSubmit} className="font-manrope mx-auto w-full max-w-[640px] px-5 py-6 pb-32 lg:px-8 lg:pb-10">
       <input type="hidden" name="name" value={name} />
+      <input type="hidden" name="parentId" value={parentId} />
       <input type="hidden" name="imageUrl" value={imageUrl} />
       <input type="hidden" name="description" value={description} />
       <input type="hidden" name="sortOrder" value={String(sortOrder)} />
@@ -153,6 +187,25 @@ export default function CategoryForm({ category }: Props) {
                   className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 flex items-baseline gap-1.5 text-[13px] font-semibold text-stone-700">
+                <span>Parent category</span>
+                <span className="ml-auto text-[12px] font-normal text-stone-400">blank = top level</span>
+              </label>
+              <select
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value)}
+                className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-800 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
+              >
+                <option value="">— None (top-level category) —</option>
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>

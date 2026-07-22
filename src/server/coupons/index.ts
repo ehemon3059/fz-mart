@@ -20,13 +20,14 @@ export interface CouponResult {
 }
 
 /**
- * One cart line as seen by the coupon engine. `categoryId` is the top-level
- * Category the product's subcategory belongs to (needed for CATEGORY-scoped
- * coupons); `lineTotal` is the authoritative server-side price × qty in paisa.
+ * One cart line as seen by the coupon engine. `categoryIds` is the product's
+ * full category lineage — its own node plus every ancestor — so a CATEGORY
+ * coupon set on any level in that chain matches. `lineTotal` is the
+ * authoritative server-side price × qty in paisa.
  */
 export interface CouponCartLine {
   productId: number;
-  categoryId: number;
+  categoryIds: number[];
   lineTotal: number;
 }
 
@@ -47,7 +48,7 @@ function eligibleSubtotal(
   }
   if (coupon.appliesTo === "CATEGORY") {
     return lines
-      .filter((l) => l.categoryId === coupon.categoryId)
+      .filter((l) => coupon.categoryId != null && l.categoryIds.includes(coupon.categoryId))
       .reduce((sum, l) => sum + l.lineTotal, 0);
   }
   return lines.reduce((sum, l) => sum + l.lineTotal, 0);

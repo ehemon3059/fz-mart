@@ -5,7 +5,7 @@ type Cat = {
   id: number;
   name: string;
   slug: string;
-  subcategories?: { id: number }[];
+  children?: { id: number }[];
 };
 
 export default function CategoryTiles({ categories }: { categories: Cat[] }) {
@@ -26,7 +26,7 @@ export default function CategoryTiles({ categories }: { categories: Cat[] }) {
       <div className="cat-tiles">
         {categories.slice(0, 12).map((cat) => {
           const v = categoryVisual(cat.name);
-          const count = cat.subcategories?.length ?? 0;
+          const count = cat.children?.length ?? 0;
           return (
             <Link key={cat.id} href={`/category/${cat.slug}`} className="cat-tile">
               <span

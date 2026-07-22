@@ -7,16 +7,15 @@ import { invalidateCache } from "@/lib/cache";
 // WHAT CLEARS EACH KEY:
 //   product:slug:<slug>            -> editing/deleting that product
 //   products:featured              -> any product's isFeatured/status/price/stock change
-//   products:subcategory:<slug>    -> any product move/add/remove within that subcategory
 //   products:category:<slug>       -> any product move/add/remove within that category
 //
-// A single product edit can touch all four, since a product belongs to one
-// subcategory which belongs to one category — see invalidateProductCaches.
+// A category page lists products from that node AND all descendants, so a
+// single product write clears the product's own category slug PLUS every
+// ancestor slug (passed in as `categorySlugs`) — see invalidateProductCaches.
 
 export const productCacheKeys = {
   bySlug: (slug: string) => `product:slug:${slug}`,
   featured: () => "products:featured",
-  bySubcategorySlug: (slug: string) => `products:subcategory:${slug}`,
   byCategorySlug: (slug: string) => `products:category:${slug}`,
   newArrivals: () => "products:new-arrivals",
   // Order-driven (sums OrderItem quantities), not product-write-driven —
@@ -27,18 +26,19 @@ export const productCacheKeys = {
 
 /**
  * Call this after creating, updating, or deleting a product. Pass the
- * product's CURRENT subcategory/category slugs, and — if it just moved
- * subcategories — the PREVIOUS ones too, so the old listing's stale entry
- * is cleared as well.
+ * product's CURRENT category slug (+ its ancestor slugs), and — if it just
+ * moved categories — the PREVIOUS ones too, so every affected listing's stale
+ * entry is cleared as well. `categorySlug`/`previousCategorySlug` are
+ * convenience singulars merged into the same set.
  */
 export async function invalidateProductCaches(params: {
   productId?: number;
   slug?: string;
   previousSlug?: string;
-  subcategorySlug?: string;
-  previousSubcategorySlug?: string;
   categorySlug?: string;
   previousCategorySlug?: string;
+  categorySlugs?: string[];
+  previousCategorySlugs?: string[];
 }): Promise<void> {
   const keys = new Set<string>();
   keys.add(productCacheKeys.featured());
@@ -47,18 +47,13 @@ export async function invalidateProductCaches(params: {
   if (params.previousSlug) keys.add(productCacheKeys.bySlug(params.previousSlug));
   if (params.productId) keys.add(productCacheKeys.related(params.productId));
 
-  if (params.subcategorySlug) {
-    keys.add(productCacheKeys.bySubcategorySlug(params.subcategorySlug));
-  }
-  if (params.previousSubcategorySlug) {
-    keys.add(productCacheKeys.bySubcategorySlug(params.previousSubcategorySlug));
-  }
-  if (params.categorySlug) {
-    keys.add(productCacheKeys.byCategorySlug(params.categorySlug));
-  }
-  if (params.previousCategorySlug) {
-    keys.add(productCacheKeys.byCategorySlug(params.previousCategorySlug));
-  }
+  const catSlugs = [
+    ...(params.categorySlug ? [params.categorySlug] : []),
+    ...(params.previousCategorySlug ? [params.previousCategorySlug] : []),
+    ...(params.categorySlugs ?? []),
+    ...(params.previousCategorySlugs ?? []),
+  ];
+  for (const slug of catSlugs) keys.add(productCacheKeys.byCategorySlug(slug));
 
   await Promise.all(Array.from(keys).map((key) => invalidateCache(key)));
 }

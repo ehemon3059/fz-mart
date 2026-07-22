@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { listActiveCategories } from "@/server/categories";
+import { buildTree } from "@/server/categories/tree";
 import { CategoryIcon, categoryVisual } from "@/components/storefront/icons";
 
-// "All categories" destination — the full department directory. Each category
-// lists its subcategories so shoppers can drill down: category → subcategory
-// (anchored on the category page) → products.
+// "All categories" destination — the full department directory. Each top-level
+// category lists its direct sub-categories so shoppers can drill down through
+// the tree: category → sub-category → … → products.
 export default async function AllCategoriesPage() {
-  const categories = await listActiveCategories();
+  const flat = await listActiveCategories();
+  const categories = buildTree(flat);
 
   return (
     <div className="cat-dir">
@@ -24,7 +26,7 @@ export default async function AllCategoriesPage() {
         <div className="cat-grid">
           {categories.map((cat, i) => {
             const v = categoryVisual(cat.name);
-            const subCount = cat.subcategories.length;
+            const subCount = cat.children.length;
             return (
               <div
                 key={cat.id}
@@ -56,9 +58,9 @@ export default async function AllCategoriesPage() {
 
                 {subCount > 0 && (
                   <ul className="cat-c-subs">
-                    {cat.subcategories.map((sub) => (
+                    {cat.children.map((sub) => (
                       <li key={sub.id}>
-                        <Link href={`/category/${cat.slug}#${sub.slug}`}>{sub.name}</Link>
+                        <Link href={`/category/${sub.slug}`}>{sub.name}</Link>
                       </li>
                     ))}
                   </ul>

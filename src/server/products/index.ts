@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getOrSetCache } from "@/lib/cache";
 import { productCacheKeys } from "./cache";
+import { listActiveCategories } from "@/server/categories";
+import { collectDescendantIds } from "@/server/categories/tree";
 
 // Service layer for products. Pages/components call these functions, never
 // Prisma directly — caching lives here, in one place, so the whole app
@@ -27,8 +29,9 @@ const productWithDetails = {
   specifications: { orderBy: { sortOrder: "asc" } },
   features: { orderBy: { sortOrder: "asc" } },
   variants: { orderBy: { sortOrder: "asc" } },
-  // Needed for breadcrumbs + SEO on the product page.
-  subcategory: { include: { category: true } },
+  // The product's own category node. The full ancestor chain for breadcrumbs +
+  // SEO is derived on the page from the cached category tree (ancestorsOf).
+  category: true,
 } satisfies Prisma.ProductInclude;
 
 export async function getProductBySlug(slug: string) {
@@ -40,13 +43,13 @@ export async function getProductBySlug(slug: string) {
   );
 }
 
-/** Same subcategory, excludes the current product — powers "Recommended for you". */
-export async function listRelatedProducts(productId: number, subcategoryId: number, limit = 4) {
+/** Same category node, excludes the current product — powers "Recommended for you". */
+export async function listRelatedProducts(productId: number, categoryId: number, limit = 4) {
   return getOrSetCache(productCacheKeys.related(productId), CATALOG_TTL_SECONDS, () =>
     prisma.product.findMany({
       where: {
         status: "ACTIVE",
-        subcategoryId,
+        categoryId,
         id: { not: productId },
       },
       include: productWithImages,
@@ -118,35 +121,26 @@ export async function listProducts(sort: ProductSort = "new", limit = 60) {
   return listNewArrivals(limit);
 }
 
-export async function listProductsBySubcategorySlug(subcategorySlug: string) {
-  return getOrSetCache(
-    productCacheKeys.bySubcategorySlug(subcategorySlug),
-    CATALOG_TTL_SECONDS,
-    () =>
-      prisma.product.findMany({
-        where: {
-          status: "ACTIVE",
-          subcategory: { slug: subcategorySlug, isActive: true },
-        },
-        include: productWithImages,
-        orderBy: { createdAt: "desc" },
-      }),
-  );
-}
-
+/**
+ * Products in a category AND all of its descendants — so a shopper viewing a
+ * parent node sees everything beneath it, not just items pinned directly to it.
+ * Descendant ids come from the cached tree (collectDescendantIds).
+ */
 export async function listProductsByCategorySlug(categorySlug: string) {
   return getOrSetCache(
     productCacheKeys.byCategorySlug(categorySlug),
     CATALOG_TTL_SECONDS,
-    () =>
-      prisma.product.findMany({
-        where: {
-          status: "ACTIVE",
-          subcategory: { isActive: true, category: { slug: categorySlug, isActive: true } },
-        },
+    async () => {
+      const cats = await listActiveCategories();
+      const node = cats.find((c) => c.slug === categorySlug);
+      if (!node) return [];
+      const ids = collectDescendantIds(node.id, cats);
+      return prisma.product.findMany({
+        where: { status: "ACTIVE", categoryId: { in: ids } },
         include: productWithImages,
         orderBy: { createdAt: "desc" },
-      }),
+      });
+    },
   );
 }
 

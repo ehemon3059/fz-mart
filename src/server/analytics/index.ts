@@ -53,18 +53,26 @@ export interface CategorySales {
 /** Delivered-order revenue grouped by top-level category (all-time). */
 export async function getSalesByCategory(limit = 8): Promise<CategorySales[]> {
   return getOrSetCache("analytics:category-sales", TTL, async () => {
+    // Roll revenue up to each product's ROOT (top-level) category. The
+    // recursive CTE maps every category node to the id of its tree root, so
+    // products placed on deep nodes still aggregate under their top category.
     const rows = await prisma.$queryRaw<
       { category: string; revenue: bigint; qty: bigint }[]
     >`
-      SELECT c.name AS category,
+      WITH RECURSIVE cat_root AS (
+        SELECT id, id AS rootId FROM Category WHERE parentId IS NULL
+        UNION ALL
+        SELECT c.id, cr.rootId FROM Category c JOIN cat_root cr ON c.parentId = cr.id
+      )
+      SELECT r.name AS category,
              SUM(oi.unitPrice * oi.quantity) AS revenue,
              SUM(oi.quantity) AS qty
       FROM OrderItem oi
       JOIN \`Order\` o ON o.id = oi.orderId AND o.status = 'DELIVERED'
       JOIN Product p ON p.id = oi.productId
-      JOIN Subcategory sc ON sc.id = p.subcategoryId
-      JOIN Category c ON c.id = sc.categoryId
-      GROUP BY c.id, c.name
+      JOIN cat_root cm ON cm.id = p.categoryId
+      JOIN Category r ON r.id = cm.rootId
+      GROUP BY r.id, r.name
       ORDER BY revenue DESC
       LIMIT ${limit}
     `;

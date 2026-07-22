@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getOrSetCache } from "@/lib/cache";
 import { siteUrl } from "@/lib/seo";
 import { primeSiteUrl } from "@/server/settings/site";
+import { keepReachable } from "@/server/categories/tree";
 
 // Served at /sitemap.xml. Auto-updating: regenerated from the DB, cached in
 // Redis for an hour so a crawler hit doesn't scan the whole catalogue every
@@ -31,7 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }),
       prisma.category.findMany({
         where: { isActive: true },
-        select: { slug: true, updatedAt: true },
+        select: { id: true, parentId: true, slug: true, updatedAt: true },
       }),
       prisma.page.findMany({
         where: { status: "PUBLISHED" },
@@ -43,7 +44,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       { url: `${base}/`, lastModified: new Date().toISOString(), changeFrequency: "daily", priority: 1 },
       { url: `${base}/products`, lastModified: new Date().toISOString(), changeFrequency: "daily", priority: 0.8 },
     ];
-    for (const c of categories) {
+    // Drop categories whose parent chain isn't fully active — an inactive
+    // parent hides its whole subtree from the sitemap too.
+    for (const c of keepReachable(categories)) {
       list.push({
         url: `${base}/category/${c.slug}`,
         lastModified: c.updatedAt.toISOString(),

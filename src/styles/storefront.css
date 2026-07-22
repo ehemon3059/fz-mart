@@ -157,6 +157,28 @@
 .fz .catnav .spacer{flex:1;}
 .fz .catnav .deal-link{color:var(--sale);font-weight:700;display:flex;align-items:center;gap:6px;}
 
+/* ---------- All Categories mega-menu ----------
+   Hover-driven cascading columns over the self-referencing category tree. */
+.fz .megamenu-root{position:relative;}
+/* The nav scrolls horizontally on mobile; on desktop let the flyout escape the
+   scroll box so it isn't clipped. */
+@media(min-width:761px){.fz .catnav .wrap{overflow:visible;}}
+.fz .megamenu{position:absolute;top:100%;left:0;z-index:80;display:flex;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow-hover);overflow:hidden;animation:fz-pop .14s ease;}
+.fz .megamenu-col{list-style:none;margin:0;padding:8px;min-width:214px;
+  max-height:min(70vh,460px);overflow-y:auto;border-right:1px solid var(--line);}
+.fz .megamenu-col:last-child{border-right:0;}
+.fz a.megamenu-item{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:500;color:var(--ink-soft);
+  white-space:nowrap;transition:background .12s,color .12s;}
+.fz a.megamenu-item:hover,.fz a.megamenu-item.is-active{background:var(--brand-tint);color:var(--brand-dark);}
+.fz .megamenu-caret{color:var(--ink-mute);font-size:15px;line-height:1;}
+.fz a.megamenu-item.is-active .megamenu-caret{color:var(--brand-dark);}
+/* Touch devices can't hover columns — hide the flyout; the bar links + the
+   /category page cover browsing there. */
+@media(max-width:760px){.fz .megamenu{display:none;}}
+
 /* ---------- hero ---------- */
 .fz section.hero{padding-top:24px;}
 .fz .hero-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
@@ -742,6 +764,7 @@
 }
 @keyframes mdrawIn{from{transform:translateX(-100%);}to{transform:translateX(0);}}
 @keyframes mdrawFade{from{opacity:0;}to{opacity:1;}}
+@keyframes fz-pop{from{opacity:0;transform:translateY(-4px) scale(.99);}to{opacity:1;transform:none;}}
 @media (prefers-reduced-motion: reduce){
   .fz .mdraw-panel,.fz .mdraw-overlay{animation:none;}
 }

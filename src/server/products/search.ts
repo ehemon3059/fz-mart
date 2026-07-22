@@ -1,6 +1,19 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getOrSetCache } from "@/lib/cache";
+import { listActiveCategories } from "@/server/categories";
+import { collectDescendantIds } from "@/server/categories/tree";
+
+/**
+ * Resolve a category slug to the set of category ids it covers — the node plus
+ * every descendant — so a search scoped to a parent finds items in its whole
+ * subtree. Returns [] when the slug matches nothing (caller renders no results).
+ */
+async function categoryIdsForSlug(slug: string): Promise<number[]> {
+  const cats = await listActiveCategories();
+  const node = cats.find((c) => c.slug === slug);
+  return node ? collectDescendantIds(node.id, cats) : [];
+}
 
 // Full-text product search built on the MySQL FULLTEXT index (see the
 // @@fulltext on Product in schema.prisma). We drop to $queryRaw here because
@@ -56,7 +69,10 @@ const EFFECTIVE_PRICE = Prisma.sql`
   (CASE WHEN p.discountPrice IS NOT NULL AND p.discountPrice < p.price
         THEN p.discountPrice ELSE p.price END)`;
 
-function buildConditions(q: SearchQuery): { where: Prisma.Sql; relevance: Prisma.Sql | null } {
+function buildConditions(
+  q: SearchQuery,
+  categoryIds: number[] | null,
+): { where: Prisma.Sql; relevance: Prisma.Sql | null } {
   const conditions: Prisma.Sql[] = [Prisma.sql`p.status = 'ACTIVE'`];
   let relevance: Prisma.Sql | null = null;
 
@@ -73,13 +89,13 @@ function buildConditions(q: SearchQuery): { where: Prisma.Sql; relevance: Prisma
   }
 
   if (q.categorySlug) {
-    conditions.push(Prisma.sql`
-      EXISTS (
-        SELECT 1 FROM Subcategory sc
-        JOIN Category c ON c.id = sc.categoryId
-        WHERE sc.id = p.subcategoryId AND sc.isActive = 1
-          AND c.isActive = 1 AND c.slug = ${q.categorySlug}
-      )`);
+    // categoryIds = the node + its descendants (resolved by the caller). An
+    // empty set means the slug matched nothing → force zero results.
+    conditions.push(
+      categoryIds && categoryIds.length > 0
+        ? Prisma.sql`p.categoryId IN (${Prisma.join(categoryIds)})`
+        : Prisma.sql`1 = 0`,
+    );
   }
 
   if (q.minPrice != null) conditions.push(Prisma.sql`${EFFECTIVE_PRICE} >= ${q.minPrice}`);
@@ -129,7 +145,8 @@ export async function searchProducts(q: SearchQuery): Promise<SearchResult> {
   const offset = (page - 1) * pageSize;
   const sort: SearchSort = q.sort ?? (q.keyword?.trim() ? "relevance" : "newest");
 
-  const { where, relevance } = buildConditions(q);
+  const categoryIds = q.categorySlug ? await categoryIdsForSlug(q.categorySlug) : null;
+  const { where, relevance } = buildConditions(q, categoryIds);
 
   // Best-selling needs a per-product sales total; join it lazily only when
   // that sort is chosen so ordinary searches don't pay for the aggregate.
