@@ -38,7 +38,9 @@
   padding:3px 8px;border-radius:999px;}
 
 /* ---------- top utility bar ---------- */
-.fz .util{background:var(--ink);color:#e9e7e2;font-size:12.5px;}
+/* Top utility bar tracks the theme's second preset swatch (--brand-dark),
+   so it re-colours whenever the admin changes the palette. */
+.fz .util{background:var(--brand-dark);color:#e9e7e2;font-size:12.5px;}
 .fz .util .wrap{display:flex;align-items:center;justify-content:space-between;height:36px;}
 .fz .util-left{display:flex;align-items:center;gap:8px;color:#cfccc5;}
 .fz .util-dot{width:5px;height:5px;border-radius:50%;background:var(--brand);}
