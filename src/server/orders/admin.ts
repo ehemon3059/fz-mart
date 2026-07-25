@@ -78,6 +78,112 @@ export async function listOrders(filter: OrderListFilter = {}): Promise<OrderLis
   };
 }
 
+export interface CancelledOrderRow {
+  id: number;
+  orderNo: string;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  total: number;
+  /** True when the order was placed by a signed-in customer. */
+  loggedIn: boolean;
+  /** The customer's cancellation reason, if they gave one. */
+  reason: string | null;
+  /** Who cancelled — "customer", an admin username, or null (system). */
+  cancelledBy: string | null;
+  /** When the order moved to CANCELLED (falls back to updatedAt). */
+  cancelledAt: Date;
+  createdAt: Date;
+}
+
+export interface CancelledOrdersResult {
+  rows: CancelledOrderRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}
+
+/**
+ * Cancelled-orders view for the admin panel. Returns each cancelled order with
+ * the customer details (name / phone / address), whether they were logged in,
+ * and the cancellation reason + timestamp pulled from the CANCELLED status log.
+ * Searchable by order no. / name / phone, filterable by cancellation date.
+ */
+export async function listCancelledOrders(
+  filter: { search?: string; from?: Date; to?: Date; page?: number; pageSize?: number } = {},
+): Promise<CancelledOrdersResult> {
+  const pageSize = filter.pageSize ?? ORDERS_PAGE_SIZE;
+  const page = Math.max(1, filter.page ?? 1);
+
+  const where: Prisma.OrderWhereInput = { status: "CANCELLED" };
+
+  const search = filter.search?.trim();
+  if (search) {
+    where.OR = [
+      { orderNo: { contains: search } },
+      { customerName: { contains: search } },
+      { customerPhone: { contains: search } },
+    ];
+  }
+
+  // Date range filters on WHEN the order was cancelled — i.e. the CANCELLED
+  // status-log timestamp — not when the order was placed.
+  if (filter.from || filter.to) {
+    where.statusLogs = {
+      some: {
+        toStatus: "CANCELLED",
+        createdAt: {
+          ...(filter.from ? { gte: filter.from } : {}),
+          ...(filter.to ? { lte: filter.to } : {}),
+        },
+      },
+    };
+  }
+
+  const [orders, total] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      include: {
+        statusLogs: {
+          where: { toStatus: "CANCELLED" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.order.count({ where }),
+  ]);
+
+  const rows: CancelledOrderRow[] = orders.map((o) => {
+    const log = o.statusLogs[0];
+    return {
+      id: o.id,
+      orderNo: o.orderNo,
+      customerName: o.customerName,
+      customerPhone: o.customerPhone,
+      address: o.address,
+      total: o.total,
+      loggedIn: o.customerId !== null,
+      reason: log?.note ?? null,
+      cancelledBy: log?.changedBy ?? null,
+      cancelledAt: log?.createdAt ?? o.updatedAt,
+      createdAt: o.createdAt,
+    };
+  });
+
+  return {
+    rows,
+    total,
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
 export async function getOrderById(id: number) {
   return prisma.order.findUnique({
     where: { id },

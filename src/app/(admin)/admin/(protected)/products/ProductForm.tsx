@@ -29,11 +29,6 @@ interface ColorRow {
   imageUrl: string;
 }
 
-interface SpecRow {
-  label: string;
-  value: string;
-}
-
 interface VariantRow {
   /** Colour name for this option, or "" for none. */
   color: string;
@@ -78,8 +73,6 @@ interface FormState {
   isFeatured: boolean;
   images: ImageRow[]; // photo URLs + optional variant link; first is the cover
   colors: ColorRow[];
-  specifications: SpecRow[];
-  features: string[];
   variants: VariantRow[];
 }
 
@@ -118,8 +111,6 @@ function initialFromProduct(p?: Product): FormState {
       isFeatured: false,
       images: [],
       colors: [],
-      specifications: [],
-      features: [],
       variants: [],
     };
   }
@@ -145,8 +136,6 @@ function initialFromProduct(p?: Product): FormState {
     isFeatured: p.isFeatured,
     images: imageRows,
     colors: p.colors?.map((c) => ({ name: c.name, hexCode: c.hexCode, imageUrl: c.imageUrl ?? "" })) ?? [],
-    specifications: p.specifications?.map((s) => ({ label: s.label, value: s.value })) ?? [],
-    features: p.features?.map((f) => f.text) ?? [],
     // A variant's colour swatch/image used to live in the shared ProductColor
     // list, matched by name. Colours are now entered per row, so backfill hex &
     // image from that list for existing products.
@@ -493,16 +482,6 @@ export default function ProductForm({ categories, product }: Props) {
   const addColor = () => set("colors", [...form.colors, { name: "", hexCode: "#000000", imageUrl: "" }]);
   const removeColor = (idx: number) => set("colors", form.colors.filter((_, i) => i !== idx));
 
-  const setSpec = (idx: number, val: Partial<SpecRow>) =>
-    set("specifications", form.specifications.map((s, i) => (i === idx ? { ...s, ...val } : s)));
-  const addSpec = () => set("specifications", [...form.specifications, { label: "", value: "" }]);
-  const removeSpec = (idx: number) => set("specifications", form.specifications.filter((_, i) => i !== idx));
-
-  const setFeature = (idx: number, val: string) =>
-    set("features", form.features.map((f, i) => (i === idx ? val : f)));
-  const addFeature = () => set("features", [...form.features, ""]);
-  const removeFeature = (idx: number) => set("features", form.features.filter((_, i) => i !== idx));
-
   const setVariant = (idx: number, val: Partial<VariantRow>) =>
     set("variants", form.variants.map((v, i) => (i === idx ? { ...v, ...val } : v)));
   const addVariant = () =>
@@ -606,11 +585,6 @@ export default function ProductForm({ categories, product }: Props) {
     fd.set("stock", base.stock === "" ? "" : String(base.stock));
     fd.set("images", JSON.stringify(cleanImages()));
     fd.set("colors", JSON.stringify(cleanColors()));
-    fd.set(
-      "specifications",
-      JSON.stringify(form.specifications.filter((s) => s.label.trim() && s.value.trim())),
-    );
-    fd.set("features", form.features.filter((f) => f.trim()).join("\n"));
     fd.set("variants", JSON.stringify(cleanVariants()));
 
     const clientErrors: Record<string, string> = { ...liveErrors };
@@ -656,12 +630,6 @@ export default function ProductForm({ categories, product }: Props) {
       {form.isFeatured && <input type="hidden" name="isFeatured" value="on" />}
       <input type="hidden" name="images" value={JSON.stringify(cleanImages())} />
       <input type="hidden" name="colors" value={JSON.stringify(cleanColors())} />
-      <input
-        type="hidden"
-        name="specifications"
-        value={JSON.stringify(form.specifications.filter((s) => s.label.trim() && s.value.trim()))}
-      />
-      <input type="hidden" name="features" value={form.features.filter((f) => f.trim()).join("\n")} />
       <input type="hidden" name="variants" value={JSON.stringify(cleanVariants())} />
 
       <nav className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-stone-500">
@@ -1209,70 +1177,6 @@ export default function ProductForm({ categories, product }: Props) {
               {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it to a square and shrink it to fit.
             </p>
             <ErrorText>{imageError ?? undefined}</ErrorText>
-          </Card>
-
-          <Card icon="info" title="Specifications" hint="Label/value pairs shown in the Specification tab.">
-            <div className="space-y-2">
-              {form.specifications.map((s, idx) => (
-                <div key={idx} className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50/60 p-2">
-                  <input
-                    value={s.label}
-                    onChange={(e) => setSpec(idx, { label: e.target.value })}
-                    placeholder="Label (e.g. Material)"
-                    className="flex-1 min-w-0 bg-transparent px-1 py-2 text-[13.5px] text-stone-800 outline-none placeholder:text-stone-400"
-                  />
-                  <input
-                    value={s.value}
-                    onChange={(e) => setSpec(idx, { value: e.target.value })}
-                    placeholder="Value (e.g. Water-resistant polyester)"
-                    className="flex-1 min-w-0 bg-transparent px-1 py-2 text-[13.5px] text-stone-800 outline-none placeholder:text-stone-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeSpec(idx)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-red-50 hover:text-red-500"
-                  >
-                    <Icon name="trash" size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={addSpec}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 py-2.5 text-[13.5px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600"
-            >
-              <Icon name="plus" size={15} /> Add specification
-            </button>
-          </Card>
-
-          <Card icon="info" title="Features" hint="Bullet points shown in the Feature tab.">
-            <div className="space-y-2">
-              {form.features.map((f, idx) => (
-                <div key={idx} className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50/60 p-2">
-                  <input
-                    value={f}
-                    onChange={(e) => setFeature(idx, e.target.value)}
-                    placeholder="e.g. Padded laptop compartment"
-                    className="flex-1 min-w-0 bg-transparent px-1 py-2 text-[13.5px] text-stone-800 outline-none placeholder:text-stone-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFeature(idx)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-red-50 hover:text-red-500"
-                  >
-                    <Icon name="trash" size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={addFeature}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 py-2.5 text-[13.5px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600"
-            >
-              <Icon name="plus" size={15} /> Add feature
-            </button>
           </Card>
         </div>
 

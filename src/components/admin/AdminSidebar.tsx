@@ -25,6 +25,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/flash-sales", label: "Flash Sales", icon: "warn", area: "flash-sales" },
       { href: "/admin/coupons", label: "Coupons", icon: "tag", area: "coupons" },
       { href: "/admin/orders", label: "Orders", icon: "cart", area: "orders" },
+      { href: "/admin/orders/cancelled", label: "Cancelled Orders", icon: "ban", area: "orders" },
       { href: "/admin/returns", label: "Returns", icon: "box", area: "returns" },
       { href: "/admin/reviews", label: "Reviews", icon: "star", area: "reviews" },
     ],
@@ -80,8 +81,23 @@ export default function AdminSidebar({ username, role }: { username: string; rol
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + "/");
+  // A link is active when the path matches it — but a parent link (e.g.
+  // /admin/orders) yields to a more-specific sibling (/admin/orders/cancelled)
+  // when that sibling also matches, so only one nav item lights up.
+  const allHrefs = [
+    "/admin/dashboard",
+    ...NAV_SECTIONS.flatMap((s) => s.links.map((l) => l.href)),
+  ];
+  const isActive = (href: string) => {
+    const matches = pathname === href || pathname.startsWith(href + "/");
+    if (!matches) return false;
+    return !allHrefs.some(
+      (other) =>
+        other !== href &&
+        other.startsWith(href + "/") &&
+        (pathname === other || pathname.startsWith(other + "/")),
+    );
+  };
 
   // Hide sections/links the current role can't reach. The pages themselves are
   // still guarded server-side (area layouts) — this just keeps the nav honest.
