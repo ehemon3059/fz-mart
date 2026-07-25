@@ -7,6 +7,7 @@ import { getRatingSummary } from "@/server/products/reviews";
 import { formatTaka } from "@/lib/money";
 import { SITE_NAME, absoluteUrl, pageTitle, stripHtml, truncate } from "@/lib/seo";
 import { productJsonLd, breadcrumbJsonLd } from "@/lib/jsonld";
+import { renderMarkdown, markdownToPlainText } from "@/lib/markdown";
 import AddToCartPanel from "@/components/storefront/AddToCartPanel";
 import ProductGallery from "@/components/storefront/ProductGallery";
 import StarRating from "@/components/storefront/StarRating";
@@ -33,7 +34,9 @@ function metaDescriptionFor(
   product: NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>,
 ): string {
   if (product.metaDescription) return product.metaDescription;
-  if (product.description) return truncate(stripHtml(product.description));
+  // The description is admin-authored Markdown — flatten it before truncating
+  // so meta tags never leak `##`, `**` or table pipes.
+  if (product.description) return truncate(markdownToPlainText(stripHtml(product.description)));
   return truncate(`Buy ${product.name} at ${SITE_NAME}. Cash on delivery available across Bangladesh.`);
 }
 
@@ -198,10 +201,6 @@ export default async function ProductPage({
             </p>
           )}
 
-          {product.description && (
-            <p className="text-gray-700 whitespace-pre-line">{product.description}</p>
-          )}
-
           {product.specifications.length > 0 && (
             <div>
               <h3 className="font-semibold text-gray-900">Specification</h3>
@@ -258,6 +257,19 @@ export default async function ProductPage({
           {!inStock && <NotifyBackInStock productId={product.id} />}
         </div>
       </div>
+
+      {/* The full product story, authored as Markdown in the admin panel.
+          Full width rather than squeezed into the buy column — it carries the
+          specs, features, shipping and warranty sections. */}
+      {product.description?.trim() && (
+        <section className="mt-12 border-t border-gray-100 pt-8">
+          <h2 className="mb-4 text-lg font-bold text-gray-900">Product details</h2>
+          <div
+            className="prose prose-sm sm:prose-base max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-h2:mt-8 prose-h2:mb-3 prose-h3:mt-5 prose-h3:mb-2 prose-p:text-gray-700 prose-li:text-gray-700 prose-li:my-1 prose-strong:text-gray-900 prose-a:text-green-700 prose-hr:my-8 prose-table:text-sm prose-th:text-left first:prose-h2:mt-0"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(product.description) }}
+          />
+        </section>
+      )}
 
       <ReviewsSection productId={product.id} slug={product.slug} />
 

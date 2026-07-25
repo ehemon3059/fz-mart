@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import ImageCustomizer from "@/components/admin/ImageCustomizer";
+import DescriptionEditor from "./DescriptionEditor";
 import { saveProduct } from "./actions";
 import type { listAllCategories } from "@/server/categories/admin";
 import type { getProductById } from "@/server/products/admin";
@@ -13,6 +14,10 @@ import { buildTree, ancestorsOf, type TreeNode } from "@/server/categories/tree"
    and product pages stay fast. Up to 10 per product; the first is the cover. */
 const PRODUCT_IMG = { width: 1000, height: 1000, maxBytes: 200 * 1024 };
 const MAX_IMAGES = 10;
+/* The description is now the whole product story (specs, features, shipping,
+   warranty) written in Markdown, so it needs far more room than a blurb.
+   Well under the TEXT column limit. */
+const DESCRIPTION_MAX = 8000;
 
 type Category = Awaited<ReturnType<typeof listAllCategories>>[number];
 type Product = NonNullable<Awaited<ReturnType<typeof getProductById>>>;
@@ -692,14 +697,11 @@ export default function ProductForm({ categories, product }: Props) {
                 <ErrorText>{errors.name}</ErrorText>
               </div>
               <div>
-                <Label hint={`${form.description.length}/500`}>Description</Label>
-                <textarea
+                <Label hint="specs, features, shipping & warranty — all in one">Description</Label>
+                <DescriptionEditor
                   value={form.description}
-                  onChange={(e) => set("description", e.target.value)}
-                  rows={4}
-                  maxLength={500}
-                  placeholder="Describe your product — materials, features, what makes it special…"
-                  className="w-full resize-y rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
+                  onChange={(md) => set("description", md)}
+                  maxLength={DESCRIPTION_MAX}
                 />
               </div>
             </div>
