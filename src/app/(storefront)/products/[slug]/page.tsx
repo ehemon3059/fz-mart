@@ -4,14 +4,21 @@ import { getProductBySlug, listRelatedProducts } from "@/server/products";
 import { listActiveCategories } from "@/server/categories";
 import { ancestorsOf } from "@/server/categories/tree";
 import { getRatingSummary } from "@/server/products/reviews";
-import { formatTaka } from "@/lib/money";
+import { listActiveShippingZones } from "@/server/settings/shipping";
 import { SITE_NAME, absoluteUrl, pageTitle, stripHtml, truncate } from "@/lib/seo";
 import { productJsonLd, breadcrumbJsonLd } from "@/lib/jsonld";
 import { renderMarkdown, markdownToPlainText } from "@/lib/markdown";
 import AddToCartPanel from "@/components/storefront/AddToCartPanel";
 import ProductGallery from "@/components/storefront/ProductGallery";
-import StarRating from "@/components/storefront/StarRating";
 import ReviewsSection from "@/components/storefront/ReviewsSection";
+import Breadcrumb from "@/components/storefront/product/Breadcrumb";
+import GalleryBadges from "@/components/storefront/product/GalleryBadges";
+import BuyBoxHeader from "@/components/storefront/product/BuyBoxHeader";
+import TrustGrid from "@/components/storefront/product/TrustGrid";
+import PaymentBadges from "@/components/storefront/product/PaymentBadges";
+import ProductTabs from "@/components/storefront/product/ProductTabs";
+import ShippingPanel from "@/components/storefront/product/ShippingPanel";
+import MobileBuyBar from "@/components/storefront/product/MobileBuyBar";
 import ProductSection from "@/components/storefront/ProductSection";
 import RecentlyViewed from "@/components/storefront/RecentlyViewed";
 import WishlistButton from "@/components/storefront/WishlistButton";
@@ -84,11 +91,12 @@ export default async function ProductPage({
   // are filtered inside trackFunnelEvent.
   trackFunnelEvent("PRODUCT_VIEW", { productId: product.id, dedupeSeconds: 86400 });
 
-  const [ratingSummary, relatedProducts, customer, allCats] = await Promise.all([
+  const [ratingSummary, relatedProducts, customer, allCats, shippingZones] = await Promise.all([
     getRatingSummary(product.id),
     listRelatedProducts(product.id, product.categoryId),
     getCurrentCustomer(),
     listActiveCategories(),
+    listActiveShippingZones(),
   ]);
   const wishlisted = customer ? await isWishlisted(customer.customerId, product.id) : false;
 
@@ -136,142 +144,96 @@ export default async function ProductPage({
   ];
 
   return (
-    <div className="font-manrope mx-auto w-full max-w-[1200px] px-5 py-8">
+    <div className="font-manrope mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-5 sm:py-8">
       <JsonLd data={structuredData} />
-      <div className="grid md:grid-cols-2 gap-8">
-        <ProductGallery images={product.images} name={product.name} promoBadge={product.promoBadge} />
 
-        <div className="space-y-4">
-          <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
+      <Breadcrumb
+        items={[
+          ...categoryTrail.map((c) => ({ name: c.name, href: `/category/${c.slug}` })),
+          { name: product.name },
+        ]}
+      />
 
-          <div className="flex items-baseline gap-3">
-            {hasVariants ? (
-              <>
-                <span className="text-2xl font-semibold text-gray-900">
-                  From {formatTaka(minVariantPrice)}
-                </span>
-                {hasDiscount && (
-                  <>
-                    <span className="text-lg text-gray-400 line-through">
-                      {formatTaka(product.price)}
-                    </span>
-                    <span className="rounded-full bg-green-700 px-2 py-0.5 text-xs font-semibold text-white">
-                      {discountPct}% Disc
-                    </span>
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <span className="text-2xl font-semibold text-gray-900">
-                  {formatTaka(effectivePrice)}
-                </span>
-                {hasDiscount && (
-                  <>
-                    <span className="text-lg text-gray-400 line-through">
-                      {formatTaka(product.price)}
-                    </span>
-                    <span className="rounded-full bg-green-700 px-2 py-0.5 text-xs font-semibold text-white">
-                      {discountPct}% Disc
-                    </span>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-
-          {ratingSummary.total > 0 && (
-            <div className="flex items-center gap-2">
-              <StarRating rating={ratingSummary.average} />
-              <span className="text-sm text-gray-500">
-                ({ratingSummary.average.toFixed(1)}) {ratingSummary.total} Reviews
-              </span>
-            </div>
-          )}
-
-          {!hasVariants && (
-            <p className="text-sm">
-              {product.stock > 0 ? (
-                <span className="text-green-700 font-medium">
-                  {product.showStock ? `In stock (${product.stock} available)` : "In stock"}
-                </span>
-              ) : (
-                <span className="text-red-600 font-medium">Out of stock</span>
-              )}
-            </p>
-          )}
-
-          {product.specifications.length > 0 && (
-            <div>
-              <h3 className="font-semibold text-gray-900">Specification</h3>
-              <dl className="mt-2 divide-y divide-gray-100 text-sm">
-                {product.specifications.map((spec) => (
-                  <div key={spec.id} className="flex justify-between py-1.5">
-                    <dt className="text-gray-500">{spec.label}</dt>
-                    <dd className="font-medium text-gray-800">{spec.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
-
-          {product.features.length > 0 && (
-            <div>
-              <h3 className="font-semibold text-gray-900">Feature</h3>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                {product.features.map((feature) => (
-                  <li key={feature.id}>{feature.text}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <AddToCartPanel
-            productId={product.id}
-            slug={product.slug}
+      {/* ── hero: gallery + buy box ── */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:gap-10">
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <ProductGallery
+            images={product.images}
             name={product.name}
-            unitPrice={effectivePrice}
-            imageUrl={primaryImage}
-            stock={product.stock}
-            colors={product.colors.map((c) => ({
-              id: c.id,
-              name: c.name,
-              hexCode: c.hexCode,
-              imageUrl: c.imageUrl,
-            }))}
-            variants={product.variants.map((v) => ({
-              id: v.id,
-              size: v.size,
-              colorName: v.colorName,
-              price: v.price,
-              discountPrice: v.discountPrice,
-              stock: v.stock,
-              showStock: v.showStock,
-            }))}
+            overlay={<GalleryBadges discountPct={discountPct} promoBadge={product.promoBadge} />}
+          />
+        </div>
+
+        {/* id is the reveal anchor + scroll target for the mobile buy bar */}
+        <div id="buy-box" className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <BuyBoxHeader
+            name={product.name}
+            brandLabel={category.name}
+            rating={{ average: ratingSummary.average, total: ratingSummary.total }}
+            price={hasVariants ? minVariantPrice : effectivePrice}
+            originalPrice={hasDiscount ? product.price : null}
+            inStock={inStock}
+            isFromPrice={hasVariants}
           />
 
-          <div className="pt-2">
+          <div className="border-t border-slate-100 pt-5">
+            {/* Owns variant selection, quantity, cart store and pixel tracking. */}
+            <AddToCartPanel
+              productId={product.id}
+              slug={product.slug}
+              name={product.name}
+              unitPrice={effectivePrice}
+              imageUrl={primaryImage}
+              stock={product.stock}
+              colors={product.colors.map((c) => ({
+                id: c.id,
+                name: c.name,
+                hexCode: c.hexCode,
+                imageUrl: c.imageUrl,
+              }))}
+              variants={product.variants.map((v) => ({
+                id: v.id,
+                size: v.size,
+                colorName: v.colorName,
+                price: v.price,
+                discountPrice: v.discountPrice,
+                stock: v.stock,
+                showStock: v.showStock,
+              }))}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
             <WishlistButton productId={product.id} slug={product.slug} initialWishlisted={wishlisted} />
           </div>
 
           {!inStock && <NotifyBackInStock productId={product.id} />}
+
+          <PaymentBadges />
+          <TrustGrid />
         </div>
       </div>
 
-      {/* The full product story, authored as Markdown in the admin panel.
-          Full width rather than squeezed into the buy column — it carries the
-          specs, features, shipping and warranty sections. */}
-      {product.description?.trim() && (
-        <section className="mt-12 border-t border-gray-100 pt-8">
-          <h2 className="mb-4 text-lg font-bold text-gray-900">Product details</h2>
-          <div
-            className="prose prose-sm sm:prose-base max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-h2:mt-8 prose-h2:mb-3 prose-h3:mt-5 prose-h3:mb-2 prose-p:text-gray-700 prose-li:text-gray-700 prose-li:my-1 prose-strong:text-gray-900 prose-a:text-green-700 prose-hr:my-8 prose-table:text-sm prose-th:text-left first:prose-h2:mt-0"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(product.description) }}
+      {/* ── lower section: tabs ── */}
+      <ProductTabs
+        detailsHtml={product.description ? renderMarkdown(product.description) : ""}
+        reviewCount={ratingSummary.total}
+        shipping={
+          <ShippingPanel
+            zones={shippingZones.map((z) => ({
+              name: z.name,
+              charge: z.charge,
+              eta: /dhaka/i.test(z.name) && !/outside/i.test(z.name) ? "1–2 business days" : "2–4 business days",
+              note: "",
+            }))}
           />
-        </section>
-      )}
-
-      <ReviewsSection productId={product.id} slug={product.slug} />
+        }
+        reviews={
+          <div id="reviews">
+            <ReviewsSection productId={product.id} slug={product.slug} />
+          </div>
+        }
+      />
 
       <div className="mt-12">
         <ProductSection title="Recommended for you" products={relatedProducts} />
@@ -290,6 +252,17 @@ export default async function ProductPage({
           promoBadge: product.promoBadge,
           images: product.images.map((img) => ({ url: img.url, isPrimary: img.isPrimary })),
         }}
+      />
+
+      {/* Sticky mobile CTA — appears once the buy box scrolls out of view.
+          Extra bottom padding keeps it clear of the global mobile tab bar. */}
+      <div className="h-20 md:hidden" aria-hidden />
+      <MobileBuyBar
+        price={hasVariants ? minVariantPrice : effectivePrice}
+        originalPrice={hasDiscount ? product.price : null}
+        inStock={inStock}
+        isFromPrice={hasVariants}
+        revealAfterId="buy-box"
       />
     </div>
   );

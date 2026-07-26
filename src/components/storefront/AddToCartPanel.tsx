@@ -7,6 +7,7 @@ import { trackAddToCart } from "@/lib/pixel";
 import { recordAddToCart } from "@/app/(storefront)/funnel-actions";
 import { formatTaka } from "@/lib/money";
 import { Icon } from "@/components/icons";
+import { Banknote, ShoppingCart, Minus, Plus } from "lucide-react";
 
 interface ColorOption {
   id: number;
@@ -106,18 +107,18 @@ function QtyStepper({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm font-medium text-gray-700">Quantity:</span>
-      <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white">
+      <span className="text-[13.5px] font-semibold text-slate-700">Quantity</span>
+      <div className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <button
           type="button"
           onClick={() => setQuantity((q) => Math.max(1, q - 1))}
           disabled={disabled || quantity <= 1}
           aria-label="Decrease quantity"
-          className="flex h-9 w-9 items-center justify-center rounded-l-lg text-gray-600 transition hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <Icon name="minus" size={16} />
+          <Minus size={16} />
         </button>
-        <span className="w-10 select-none text-center text-sm font-semibold text-gray-900 tabular-nums">
+        <span className="w-11 select-none text-center text-[15px] font-bold text-slate-900 tabular-nums">
           {quantity}
         </span>
         <button
@@ -125,9 +126,9 @@ function QtyStepper({
           onClick={() => setQuantity((q) => Math.min(max, q + 1))}
           disabled={disabled || quantity >= max}
           aria-label="Increase quantity"
-          className="flex h-9 w-9 items-center justify-center rounded-r-lg text-gray-600 transition hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <Icon name="plus" size={16} />
+          <Plus size={16} />
         </button>
       </div>
     </div>
@@ -147,22 +148,26 @@ function ActionButtons({
 }) {
   return (
     <>
-      <div className="flex gap-3">
-        {/* btn-brand-* are themed via --brand in storefront.css so both buttons
-            track the admin brand palette. */}
-        <button
-          onClick={onAdd}
-          disabled={disabled}
-          className="btn-brand-outline flex-1 rounded px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Add to Cart
-        </button>
+      {/* Buy Now is the primary path and gets the full width — COD is named on
+          it because "pay when it arrives" is the single biggest objection
+          remover in this market. btn-brand-* are themed via --brand in
+          storefront.css so both buttons track the admin brand palette. */}
+      <div className="flex flex-col gap-2.5">
         <button
           onClick={onBuy}
           disabled={disabled}
-          className="btn-brand-solid flex-1 rounded px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-solid flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Buy Now
+          <Banknote size={18} />
+          Buy Now — Cash on Delivery
+        </button>
+        <button
+          onClick={onAdd}
+          disabled={disabled}
+          className="btn-brand-outline flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ShoppingCart size={17} />
+          Add to Cart
         </button>
       </div>
       {soldOut && <p className="text-sm font-medium text-red-600">Currently out of stock.</p>}

@@ -675,6 +675,11 @@
   .fz .promo-col{flex-direction:column;}
   /* Keep the floating chat buttons clear of the fixed bottom bar. */
   .fz .chat-fab{bottom:78px;}
+  /* On a product page the sticky buy bar stacks on top of the mobile tab bar.
+     While it is showing, lift both FABs above it so neither covers the CTA.
+     Driven by the bar's own data attribute, so other pages are unaffected. */
+  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .chat-fab{bottom:154px;}
+  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .scroll-top-fab{bottom:158px;}
   /* Room at the bottom so the fixed bar never covers page content/footer. */
   .fz{padding-bottom:64px;}
 

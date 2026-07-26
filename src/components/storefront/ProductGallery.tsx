@@ -14,11 +14,14 @@ interface Props {
   images: GalleryImage[];
   name: string;
   promoBadge?: string | null;
+  /** Overlay rendered over the main image (trust / discount badges). When set,
+   *  the caller owns badge display and `promoBadge` is not drawn here. */
+  overlay?: React.ReactNode;
 }
 
 const PLACEHOLDER = "/placeholder.svg";
 
-export default function ProductGallery({ images, name, promoBadge }: Props) {
+export default function ProductGallery({ images, name, promoBadge, overlay }: Props) {
   const safeImages: GalleryImage[] = images.length ? images : [{ id: 0, url: PLACEHOLDER }];
   const primaryIdx = safeImages.findIndex((i) => i.isPrimary);
   const [active, setActive] = useState(primaryIdx >= 0 ? primaryIdx : 0);
@@ -115,9 +118,9 @@ export default function ProductGallery({ images, name, promoBadge }: Props) {
           </span>
         )}
 
-        {promoBadge && (
+        {overlay ?? (promoBadge && (
           <span className="absolute left-3 top-3 rounded bg-red-600 px-2 py-1 text-xs text-white">{promoBadge}</span>
-        )}
+        ))}
 
         {hasMany && (
           <>
