@@ -5,9 +5,10 @@ import {
   parseWebhookPayload as steadfastParseWebhook,
   testCourierConnection as steadfastTest,
 } from "./index";
-import { getCourierConfig } from "@/server/settings/courier";
+import { getCourierConfig, isCourierTestMode } from "@/server/settings/courier";
 import { pathaoAdapter } from "./pathao";
 import { redxAdapter } from "./redx";
+import { steadfastSimAdapter, isTestConsignmentId } from "./steadfast-sim";
 import type { CourierAdapter } from "./types";
 
 // Adapter registry. This is the ONLY place that maps a CourierProvider enum to
@@ -41,7 +42,49 @@ const ADAPTERS: Record<CourierProvider, CourierAdapter> = {
   REDX: redxAdapter,
 };
 
-/** Resolve the adapter for a provider. Total over the enum — never throws. */
+/** Resolve the adapter for a provider. Total over the enum — never throws.
+ *  Always returns the LIVE adapter; see resolveAdapterForCreate /
+ *  resolveAdapterForShipment for the Steadfast test-mode aware variants. */
 export function resolveAdapter(provider: CourierProvider): CourierAdapter {
+  return ADAPTERS[provider];
+}
+
+/**
+ * Adapter to use when CREATING a new consignment. Steadfast honours the
+ * test-mode setting here — this is the only point where the current setting
+ * decides anything, because from creation onward the mode is frozen on the
+ * shipment row. Pathao and RedX are unaffected (they have their own sandbox
+ * story and are out of scope for Steadfast test mode).
+ */
+export async function resolveAdapterForCreate(
+  provider: CourierProvider,
+): Promise<CourierAdapter> {
+  if (provider === "STEADFAST" && (await isCourierTestMode())) {
+    return steadfastSimAdapter;
+  }
+  return ADAPTERS[provider];
+}
+
+/**
+ * Adapter to use for an EXISTING shipment (status refresh, webhook dispatch).
+ *
+ * Follows the mode the shipment was created in, never the current setting —
+ * the same frozen-provider invariant that keeps Order.courierProvider
+ * authoritative. Without this, flipping to live mode and hitting Refresh on a
+ * simulated shipment would ask the real Steadfast API about a TEST- id.
+ *
+ * `isTest` is the source of truth; the id prefix is a fallback for any row
+ * written before the column existed.
+ */
+export function resolveAdapterForShipment(
+  provider: CourierProvider,
+  shipment: { isTest?: boolean; consignmentId: string },
+): CourierAdapter {
+  if (
+    provider === "STEADFAST" &&
+    (shipment.isTest || isTestConsignmentId(shipment.consignmentId))
+  ) {
+    return steadfastSimAdapter;
+  }
   return ADAPTERS[provider];
 }

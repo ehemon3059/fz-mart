@@ -163,10 +163,15 @@
 /* The nav scrolls horizontally on mobile; on desktop let the flyout escape the
    scroll box so it isn't clipped. */
 @media(min-width:761px){.fz .catnav .wrap{overflow:visible;}}
-.fz .megamenu{position:absolute;top:100%;left:0;z-index:80;display:flex;
+/* align-items:flex-start keeps each column its natural height so the per-column
+   marginTop (set inline, = the parent row's offset) actually shifts it down
+   instead of being absorbed by flex stretching. */
+.fz .megamenu{position:absolute;top:100%;left:0;z-index:80;display:flex;align-items:flex-start;
   background:var(--card);border:1px solid var(--line);border-radius:12px;
   box-shadow:var(--shadow-hover);overflow:hidden;animation:fz-pop .14s ease;}
-.fz .megamenu-col{list-style:none;margin:0;padding:8px;min-width:214px;
+/* position:relative makes each row's offsetTop measure against its own column,
+   which is what the cascade offset math in CategoryNav assumes. */
+.fz .megamenu-col{position:relative;list-style:none;margin:0;padding:8px;min-width:214px;
   max-height:min(70vh,460px);overflow-y:auto;border-right:1px solid var(--line);}
 .fz .megamenu-col:last-child{border-right:0;}
 .fz a.megamenu-item{display:flex;align-items:center;justify-content:space-between;gap:12px;

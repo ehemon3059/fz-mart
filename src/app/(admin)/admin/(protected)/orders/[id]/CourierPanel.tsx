@@ -5,12 +5,14 @@ import type { CourierProvider } from "@prisma/client";
 import {
   createShipment,
   refreshShipmentStatus,
+  simulateShipmentStatus,
   fetchPathaoCities,
   fetchPathaoZones,
   fetchPathaoAreas,
   type CreateShipmentInput,
   type PathaoLocationResult,
 } from "./courier-actions";
+import type { CourierStatus } from "@/integrations/courier";
 
 interface PathaoLocation {
   id: number;
@@ -25,7 +27,11 @@ interface Props {
     trackingCode: string | null;
     courierStatus: string;
     lastSyncedAt: Date;
+    /** Created by the Steadfast simulator — no real parcel exists. */
+    isTest: boolean;
   } | null;
+  /** Steadfast test mode is currently ON (affects NEW consignments only). */
+  courierTestMode: boolean;
   /** Providers that have credentials configured. */
   available: CourierProvider[];
   /** Default provider for new consignments. */
@@ -38,11 +44,21 @@ const PROVIDER_LABEL: Record<CourierProvider, string> = {
   REDX: "RedX",
 };
 
+/** Courier statuses an operator can force on a simulated shipment. */
+const SIMULATABLE: { value: CourierStatus; label: string }[] = [
+  { value: "PENDING", label: "Pending" },
+  { value: "IN_TRANSIT", label: "In transit" },
+  { value: "DELIVERED", label: "Delivered" },
+  { value: "RETURNED", label: "Returned" },
+  { value: "CANCELLED", label: "Cancelled" },
+];
+
 export default function CourierPanel({
   orderId,
   shipment,
   available,
   activeProvider,
+  courierTestMode,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -62,6 +78,14 @@ export default function CourierPanel({
     setError(null);
     startTransition(async () => {
       const result = await refreshShipmentStatus(orderId);
+      if (result?.error) setError(result.error);
+    });
+  }
+
+  function handleSimulate(status: CourierStatus) {
+    setError(null);
+    startTransition(async () => {
+      const result = await simulateShipmentStatus(orderId, status);
       if (result?.error) setError(result.error);
     });
   }
@@ -93,6 +117,12 @@ export default function CourierPanel({
       <h2 className="font-semibold">Courier Shipment</h2>
       {shipment ? (
         <div className="space-y-1 text-sm">
+          {shipment.isTest && (
+            <p className="mb-2 rounded border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900">
+              SIMULATED SHIPMENT — this consignment was never sent to Steadfast.
+              No parcel exists and no COD will be collected.
+            </p>
+          )}
           <p>
             <span className="text-gray-500">Provider:</span>{" "}
             {PROVIDER_LABEL[shipment.courierName as CourierProvider] ?? shipment.courierName}
@@ -120,6 +150,32 @@ export default function CourierPanel({
           >
             {pending ? "Refreshing..." : "Refresh Status"}
           </button>
+
+          {shipment.isTest && (
+            <div className="mt-3 space-y-2 rounded border border-amber-200 bg-amber-50/60 p-3">
+              <p className="text-xs font-medium text-gray-700">
+                Simulate a courier update
+              </p>
+              <p className="text-xs text-gray-500">
+                Refresh does nothing on a simulated shipment — there is no
+                courier to poll. Use these to drive the order lifecycle instead.
+                Delivered runs the same state machine and finance log as a real
+                delivery.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {SIMULATABLE.map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => handleSimulate(s.value)}
+                    disabled={pending || shipment.courierStatus === s.value}
+                    className="rounded border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:border-amber-500 disabled:opacity-40"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : available.length === 0 ? (
         <p className="text-sm text-gray-500">
@@ -127,6 +183,13 @@ export default function CourierPanel({
         </p>
       ) : (
         <div className="space-y-3">
+          {courierTestMode && (provider === "STEADFAST" || provider === null) && (
+            <p className="rounded border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900">
+              Steadfast test mode is ON — this will create a SIMULATED
+              consignment. Nothing is sent to Steadfast and no parcel ships.
+              Turn it off in Settings &gt; Courier to ship for real.
+            </p>
+          )}
           {available.length > 1 && (
             <div>
               <label className="block text-xs text-gray-500 mb-1">Courier</label>

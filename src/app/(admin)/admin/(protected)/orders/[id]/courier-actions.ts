@@ -5,9 +5,11 @@ import type { CourierProvider } from "@prisma/client";
 import {
   shipOrder,
   syncShipmentStatus,
+  forceSimulatedStatus,
   CourierServiceError,
   type ShipOrderOptions,
 } from "@/server/courier";
+import type { CourierStatus } from "@/integrations/courier";
 import {
   getPathaoCities,
   getPathaoZones,
@@ -63,6 +65,28 @@ export async function refreshShipmentStatus(
     }
     console.error("[admin] courier status sync failed:", err);
     return { error: "Failed to sync status. See server logs." };
+  }
+  revalidatePath(`/admin/orders/${orderId}`);
+  return {};
+}
+
+/**
+ * Force a simulated shipment's status (test mode only). The service layer
+ * refuses this on real consignments, so it can't be used to fake a delivery.
+ */
+export async function simulateShipmentStatus(
+  orderId: number,
+  status: CourierStatus,
+): Promise<CourierActionResult> {
+  await requirePermission("orders");
+  try {
+    await forceSimulatedStatus(orderId, status);
+  } catch (err) {
+    if (err instanceof CourierServiceError) {
+      return { error: err.message };
+    }
+    console.error("[admin] simulated status change failed:", err);
+    return { error: "Failed to set simulated status. See server logs." };
   }
   revalidatePath(`/admin/orders/${orderId}`);
   return {};

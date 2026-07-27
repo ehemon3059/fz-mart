@@ -18,7 +18,7 @@ export default async function CourierSettingsPage() {
   // never be serialized into the browser payload — the forms edit them
   // write-only (blank input == keep current).
   const safeConfig = config
-    ? { provider: config.provider, apiUrl: config.apiUrl }
+    ? { provider: config.provider, apiUrl: config.apiUrl, testMode: config.testMode }
     : null;
   const safePathao = pathao
     ? {

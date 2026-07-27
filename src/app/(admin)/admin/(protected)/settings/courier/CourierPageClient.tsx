@@ -13,7 +13,7 @@ import {
 const CARD_ICONS = ["warn", "globe", "settings", "shield"] as const;
 
 interface Props {
-  config: { provider: string; apiUrl: string } | null;
+  config: { provider: string; apiUrl: string; testMode: boolean } | null;
   pathao: {
     storeId: string;
     senderName: string;
@@ -92,13 +92,15 @@ function CourierForm({
   config,
   t,
 }: {
-  config: { provider: string; apiUrl: string } | null;
+  config: { provider: string; apiUrl: string; testMode: boolean } | null;
   t: (typeof COURIER_COPY)[CourierLang]["form"];
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [testOk, setTestOk] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [testMode, setTestMode] = useState(config?.testMode ?? false);
   const [pending, startTransition] = useTransition();
   const [testing, startTesting] = useTransition();
 
@@ -106,6 +108,7 @@ function CourierForm({
     setError(null);
     setSuccess(false);
     setTestOk(false);
+    setNotice(null);
     startTransition(async () => {
       const result = await saveCourierSettings(formData);
       if (result?.error) {
@@ -121,6 +124,7 @@ function CourierForm({
     setError(null);
     setSuccess(false);
     setTestOk(false);
+    setNotice(null);
     const formData = new FormData(formRef.current);
     startTesting(async () => {
       const result = await testCourierSettings(formData);
@@ -128,6 +132,7 @@ function CourierForm({
         setError(result.error);
       } else {
         setTestOk(true);
+        if (result?.notice) setNotice(result.notice);
       }
     });
   }
@@ -145,6 +150,33 @@ function CourierForm({
             selector above chooses which courier is the default; this form only
             holds Steadfast's credentials, so a picker here was misleading. */}
         <input type="hidden" name="provider" value="steadfast" />
+
+        {/* Mode switch. Steadfast has no sandbox server, so test mode swaps in a
+            local simulator rather than a different base URL — the copy says so
+            plainly to avoid implying Steadfast is validating anything. */}
+        <div
+          className={`rounded-xl border p-3.5 ${
+            testMode ? "border-amber-300 bg-amber-50" : "border-stone-200 bg-stone-50"
+          }`}
+        >
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              name="testMode"
+              type="checkbox"
+              checked={testMode}
+              onChange={(e) => setTestMode(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+            />
+            <span>
+              <span className="block text-[13px] font-semibold text-stone-800">
+                {t.testModeLabel}
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-relaxed text-stone-500">
+                {testMode ? t.testModeOnHelp : t.testModeOffHelp}
+              </span>
+            </span>
+          </label>
+        </div>
 
         <div>
           <label className="mb-1 block text-[13px] font-semibold text-stone-700">{t.apiUrlLabel}</label>
@@ -194,7 +226,8 @@ function CourierForm({
         {error && <p className="text-[13px] text-red-600">{error}</p>}
         {testOk && (
           <p className="flex items-center gap-1.5 text-[13px] font-medium text-brand-600">
-            <Icon name="check" size={14} strokeWidth={2.6} /> {t.testOk}
+            <Icon name="check" size={14} strokeWidth={2.6} />{" "}
+            {notice ?? t.testOk}
           </p>
         )}
         {success && (

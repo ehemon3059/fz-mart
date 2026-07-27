@@ -669,6 +669,12 @@ model CourierShipment {
   consignmentId String   @unique
   trackingCode  String?
   courierStatus String
+  // True when this consignment was created by the Steadfast SIMULATOR (test
+  // mode) and never reached a real courier. Frozen at creation like
+  // Order.courierProvider: refresh/webhooks must follow the mode the shipment
+  // was made in, never the current setting, so flipping to live can't send a
+  // fake consignment id to the real API.
+  isTest        Boolean  @default(false)
   lastSyncedAt  DateTime @default(now())
   createdAt     DateTime @default(now())
   order         Order    @relation(fields: [orderId], references: [id])

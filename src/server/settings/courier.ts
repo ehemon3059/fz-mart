@@ -17,19 +17,37 @@ export interface CourierConfig {
   secretKey: string;
   /** Shared secret used to verify webhook callback signatures. */
   webhookSecret: string;
+  /**
+   * Test mode. Steadfast has no sandbox server, so "test" does not point
+   * elsewhere — it selects a local SIMULATOR adapter that fabricates
+   * consignments without any HTTP call. Everything downstream (shipment rows,
+   * order state machine, OrderStatusLog) runs for real.
+   */
+  testMode: boolean;
 }
 
 export async function getCourierConfig(): Promise<CourierConfig | null> {
   const settings = await getSettingGroup(GROUP);
-  if (!settings.apiKey) return null;
+  const testMode = settings.testMode === "true";
+  // In test mode the simulator needs no credentials, so an empty apiKey is a
+  // valid configuration. In live mode it still means "not configured".
+  if (!settings.apiKey && !testMode) return null;
 
   return {
     provider: settings.provider ?? "",
     apiUrl: settings.apiUrl ?? "",
-    apiKey: settings.apiKey,
+    apiKey: settings.apiKey ?? "",
     secretKey: settings.secretKey ?? "",
     webhookSecret: settings.webhookSecret ?? "",
+    testMode,
   };
+}
+
+/** Whether Steadfast is currently in simulator mode. Cheap standalone read for
+ *  the dispatch layer, which needs the flag but not the credentials. */
+export async function isCourierTestMode(): Promise<boolean> {
+  const settings = await getSettingGroup(GROUP);
+  return settings.testMode === "true";
 }
 
 export async function saveCourierConfig(config: CourierConfig): Promise<void> {
@@ -49,5 +67,6 @@ export async function saveCourierConfig(config: CourierConfig): Promise<void> {
       value: config.webhookSecret,
       encrypted: true,
     }),
+    setSetting({ group: GROUP, key: "testMode", value: String(config.testMode) }),
   ]);
 }

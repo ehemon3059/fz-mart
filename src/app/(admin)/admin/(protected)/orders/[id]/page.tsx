@@ -110,6 +110,7 @@ export default async function AdminOrderDetailPage({
         shipment={order.courierShipment}
         available={availableCouriers}
         activeProvider={activeProvider}
+        courierTestMode={steadfastCfg?.testMode ?? false}
       />
 
       <div className="border rounded-lg bg-white p-6 space-y-2">

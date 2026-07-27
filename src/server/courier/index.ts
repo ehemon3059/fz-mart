@@ -6,7 +6,11 @@ import {
   type CourierStatus,
 } from "@/integrations/courier";
 import type { CreateConsignmentInput } from "@/integrations/courier/types";
-import { resolveAdapter } from "@/integrations/courier/dispatch";
+import {
+  resolveAdapterForCreate,
+  resolveAdapterForShipment,
+} from "@/integrations/courier/dispatch";
+import { isTestConsignmentId } from "@/integrations/courier/steadfast-sim";
 import { getActiveProvider } from "@/server/settings/courier-active";
 import { updateOrderStatus } from "@/server/orders/admin";
 import { nextStatuses } from "@/config/order-status";
@@ -82,7 +86,9 @@ export async function shipOrder(orderId: number, options: ShipOrderOptions = {})
       "No courier provider selected — configure one under Admin > Settings > Courier.",
     );
   }
-  const adapter = resolveAdapter(provider);
+  // Test mode is consulted exactly here. From this point on the mode is frozen
+  // on the shipment row (isTest), so refresh/webhooks never follow the setting.
+  const adapter = await resolveAdapterForCreate(provider);
 
   const input: CreateConsignmentInput = {
     orderNo: order.orderNo,
@@ -114,6 +120,7 @@ export async function shipOrder(orderId: number, options: ShipOrderOptions = {})
         consignmentId: result.consignmentId,
         trackingCode: result.trackingCode,
         courierStatus: result.status,
+        isTest: isTestConsignmentId(result.consignmentId),
       },
     }),
     prisma.order.update({
@@ -151,7 +158,8 @@ export async function syncShipmentStatus(orderId: number) {
     shipment.order.courierProvider,
     shipment.courierName,
   );
-  const adapter = resolveAdapter(provider);
+  // Follows the mode frozen on the shipment, not the current setting.
+  const adapter = resolveAdapterForShipment(provider, shipment);
 
   let status: CourierStatus;
   try {
@@ -249,4 +257,44 @@ function chooseNextHop(
 
 export async function getShipmentByOrderId(orderId: number) {
   return prisma.courierShipment.findUnique({ where: { orderId } });
+}
+
+/**
+ * Force a SIMULATED shipment into a given courier status (test mode only).
+ *
+ * This is the point of the simulator: it drives the transitions a real parcel
+ * would take days to reach — above all DELIVERED, which runs the order state
+ * machine and writes OrderStatusLog, the log finance P&L reads for revenue
+ * recognition. Nothing else in the app can exercise that path without an actual
+ * delivery.
+ *
+ * Refuses on real shipments: this must never be a way to fake a live delivery.
+ */
+export async function forceSimulatedStatus(
+  orderId: number,
+  status: CourierStatus,
+) {
+  const shipment = await prisma.courierShipment.findUnique({
+    where: { orderId },
+    include: { order: { select: { courierProvider: true } } },
+  });
+  if (!shipment) {
+    throw new CourierServiceError("This order has no courier shipment yet.");
+  }
+
+  const isSimulated =
+    shipment.isTest || isTestConsignmentId(shipment.consignmentId);
+  if (!isSimulated) {
+    throw new CourierServiceError(
+      "This is a real consignment — its status can only change via the courier.",
+    );
+  }
+
+  const updated = await prisma.courierShipment.update({
+    where: { orderId },
+    data: { courierStatus: status, lastSyncedAt: new Date() },
+  });
+
+  await reconcileOrderStatus(orderId, status);
+  return updated;
 }

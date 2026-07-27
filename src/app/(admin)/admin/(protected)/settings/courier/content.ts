@@ -28,6 +28,9 @@ export interface CourierCopy {
     webhookKeepPlaceholder: string;
     webhookPlaceholder: string;
     webhookHelpPrefix: string;
+    testModeLabel: string;
+    testModeOnHelp: string;
+    testModeOffHelp: string;
     testConnection: string;
     testing: string;
     testOk: string;
@@ -54,7 +57,7 @@ export const COURIER_COPY: Record<CourierLang, CourierCopy> = {
       },
       {
         title: "How to setup?",
-        body: "Fill in the credentials in each provider's card below and click Save — Save also runs a live Test Connection, so a wrong key can't be stored. Set the webhook secret they give you and point their webhook setting to the URL shown on each card (e.g. /api/webhooks/courier for Steadfast). You can configure all three providers.",
+        body: "Fill in the credentials in each provider's card below and click Save — Save also runs a live Test Connection, so a wrong key can't be stored. Webhook secret is optional: set it only if your provider signs its status callbacks, then point their webhook setting to the URL shown on that card. Steadfast does not sign callbacks — leave its webhook secret blank and use Refresh Status on the order page. You can configure all three providers.",
       },
       {
         title: "Which provider is active?",
@@ -75,10 +78,15 @@ export const COURIER_COPY: Record<CourierLang, CourierCopy> = {
       secretKeyLabel: "Secret Key",
       secretKeyKeepPlaceholder: "Leave blank to keep current secret",
       secretKeyPlaceholder: "Your provider secret key",
-      webhookLabel: "Webhook Secret",
+      webhookLabel: "Webhook Secret (optional)",
       webhookKeepPlaceholder: "Leave blank to keep current secret",
-      webhookPlaceholder: "Your provider webhook secret",
-      webhookHelpPrefix: "Used to verify status-callback signatures from the provider. Webhook URL:",
+      webhookPlaceholder: "Leave blank — Steadfast sends no signed callbacks",
+      webhookHelpPrefix: "Only needed if your provider signs status callbacks. Steadfast does not, so leave this blank and use Refresh on the order page. Webhook URL:",
+      testModeLabel: "Test mode (simulator)",
+      testModeOnHelp:
+        "ON — consignments are faked locally and NOTHING is sent to Steadfast. No parcel is created, no COD is collected. Shipments are marked TEST and you can force their status from the order page. Credentials below are ignored while this is on.",
+      testModeOffHelp:
+        "OFF — live mode. Creating a consignment sends a real request to Steadfast and a real parcel will be picked up and delivered. Turn this on to try the flow end-to-end without shipping anything.",
       testConnection: "Test Connection",
       testing: "Testing...",
       testOk: "Connection successful — credentials are valid.",
@@ -103,7 +111,7 @@ export const COURIER_COPY: Record<CourierLang, CourierCopy> = {
       },
       {
         title: "কীভাবে সেটআপ করবেন?",
-        body: "নিচে প্রতিটি প্রোভাইডারের কার্ডে ক্রেডেনশিয়াল দিয়ে Save চাপুন — Save করার সময় লাইভ টেস্ট কানেকশন চলে, তাই ভুল কী সংরক্ষণ হবে না। তাদের দেওয়া ওয়েবহুক সিক্রেট সেট করুন এবং তাদের ওয়েবহুক সেটিং প্রতিটি কার্ডে দেখানো ইউআরএলে নির্দেশ করুন (যেমন Steadfast-এর জন্য /api/webhooks/courier)। আপনি তিনটি প্রোভাইডারই কনফিগার করতে পারেন।",
+        body: "নিচে প্রতিটি প্রোভাইডারের কার্ডে ক্রেডেনশিয়াল দিয়ে Save চাপুন — Save করার সময় লাইভ টেস্ট কানেকশন চলে, তাই ভুল কী সংরক্ষণ হবে না। ওয়েবহুক সিক্রেট ঐচ্ছিক: শুধু তখনই দিন যদি আপনার প্রোভাইডার স্ট্যাটাস-কলব্যাক সাইন করে, তারপর তাদের ওয়েবহুক সেটিং সেই কার্ডে দেখানো ইউআরএলে নির্দেশ করুন। Steadfast কলব্যাক সাইন করে না — এর ওয়েবহুক সিক্রেট খালি রাখুন এবং অর্ডার পেজের Refresh Status ব্যবহার করুন। আপনি তিনটি প্রোভাইডারই কনফিগার করতে পারেন।",
       },
       {
         title: "কোন প্রোভাইডার সক্রিয়?",
@@ -124,10 +132,15 @@ export const COURIER_COPY: Record<CourierLang, CourierCopy> = {
       secretKeyLabel: "সিক্রেট কী",
       secretKeyKeepPlaceholder: "বর্তমান সিক্রেট রাখতে খালি রাখুন",
       secretKeyPlaceholder: "আপনার প্রোভাইডার সিক্রেট কী",
-      webhookLabel: "ওয়েবহুক সিক্রেট",
+      webhookLabel: "ওয়েবহুক সিক্রেট (ঐচ্ছিক)",
       webhookKeepPlaceholder: "বর্তমান সিক্রেট রাখতে খালি রাখুন",
-      webhookPlaceholder: "আপনার প্রোভাইডার ওয়েবহুক সিক্রেট",
-      webhookHelpPrefix: "প্রোভাইডার থেকে আসা স্ট্যাটাস-কলব্যাক সিগনেচার যাচাই করতে ব্যবহৃত হয়। ওয়েবহুক ইউআরএল:",
+      webhookPlaceholder: "খালি রাখুন — Steadfast সাইনড কলব্যাক পাঠায় না",
+      webhookHelpPrefix: "শুধু তখনই প্রয়োজন যদি আপনার প্রোভাইডার স্ট্যাটাস-কলব্যাক সাইন করে। Steadfast করে না, তাই এটি খালি রাখুন এবং অর্ডার পেজের রিফ্রেশ ব্যবহার করুন। ওয়েবহুক ইউআরএল:",
+      testModeLabel: "টেস্ট মোড (সিমুলেটর)",
+      testModeOnHelp:
+        "চালু — কনসাইনমেন্ট স্থানীয়ভাবে নকল করা হয়, Steadfast-এ কিছুই পাঠানো হয় না। কোনো পার্সেল তৈরি হয় না, কোনো ক্যাশ অন ডেলিভারি নেওয়া হয় না। শিপমেন্টগুলো TEST চিহ্নিত থাকে এবং অর্ডার পেজ থেকে স্ট্যাটাস পরিবর্তন করা যায়। এটি চালু থাকলে নিচের ক্রেডেনশিয়াল উপেক্ষা করা হয়।",
+      testModeOffHelp:
+        "বন্ধ — লাইভ মোড। কনসাইনমেন্ট তৈরি করলে Steadfast-এ আসল রিকোয়েস্ট যায় এবং সত্যিকারের পার্সেল পিকআপ ও ডেলিভারি হবে। কিছু না পাঠিয়ে পুরো প্রসেস পরীক্ষা করতে চাইলে এটি চালু করুন।",
       testConnection: "কানেকশন টেস্ট করুন",
       testing: "টেস্ট হচ্ছে...",
       testOk: "কানেকশন সফল — ক্রেডেনশিয়াল সঠিক।",

@@ -13,6 +13,8 @@ import { requirePermission } from "@/server/admin/guard";
 export interface ActionResult {
   error?: string;
   success?: boolean;
+  /** Non-error message shown alongside a success (e.g. test-mode explanation). */
+  notice?: string;
 }
 
 /** Resolve the credentials to use, merging blank inputs with stored values. */
@@ -30,6 +32,7 @@ async function resolveConfig(formData: FormData) {
     apiKey: apiKeyInput || existing?.apiKey || "",
     secretKey: secretKeyInput || existing?.secretKey || "",
     webhookSecret: webhookSecretInput || existing?.webhookSecret || "",
+    testMode: formData.get("testMode") === "on",
   };
 }
 
@@ -37,15 +40,21 @@ export async function saveCourierSettings(formData: FormData): Promise<ActionRes
   await requirePermission("settings");
   const config = await resolveConfig(formData);
 
-  if (!config.apiKey) return { error: "API key is required." };
-  if (!config.secretKey) return { error: "Secret key is required." };
-  if (!config.webhookSecret) return { error: "Webhook secret is required." };
+  // Test mode uses the local simulator, which needs no credentials at all —
+  // skip both the required-field checks and the live verification.
+  if (!config.testMode) {
+    if (!config.apiKey) return { error: "API key is required." };
+    if (!config.secretKey) return { error: "Secret key is required." };
+    // webhookSecret is optional: Steadfast has no callback registration and
+    // sends no signature header, so there is no secret to configure. Same as
+    // Pathao/RedX.
 
-  // Validate credentials against the live provider before persisting, so a
-  // typo'd key can't be saved and silently break every shipment.
-  const test = await testCourierConnection(config);
-  if (!test.ok) {
-    return { error: `Could not verify credentials: ${test.message}` };
+    // Validate credentials against the live provider before persisting, so a
+    // typo'd key can't be saved and silently break every shipment.
+    const test = await testCourierConnection(config);
+    if (!test.ok) {
+      return { error: `Could not verify credentials: ${test.message}` };
+    }
   }
 
   await saveCourierConfig(config);
@@ -57,6 +66,14 @@ export async function saveCourierSettings(formData: FormData): Promise<ActionRes
 export async function testCourierSettings(formData: FormData): Promise<ActionResult> {
   await requirePermission("settings");
   const config = await resolveConfig(formData);
+
+  if (config.testMode) {
+    return {
+      success: true,
+      notice:
+        "Test mode is on — the local simulator will be used. No credentials are checked and nothing is sent to Steadfast.",
+    };
+  }
 
   if (!config.apiKey || !config.secretKey) {
     return { error: "Enter both the API key and secret key to test." };
