@@ -28,12 +28,6 @@ interface ImageRow {
   variantLabel: string;
 }
 
-interface ColorRow {
-  name: string;
-  hexCode: string;
-  imageUrl: string;
-}
-
 interface VariantRow {
   /** Colour name for this option, or "" for none. */
   color: string;
@@ -81,7 +75,6 @@ interface FormState {
   metaDescription: string;
   isFeatured: boolean;
   images: ImageRow[]; // photo URLs + optional variant link; first is the cover
-  colors: ColorRow[];
   variants: VariantRow[];
 }
 
@@ -120,7 +113,6 @@ function initialFromProduct(p?: Product): FormState {
       metaDescription: "",
       isFeatured: false,
       images: [],
-      colors: [],
       variants: [],
     };
   }
@@ -146,7 +138,6 @@ function initialFromProduct(p?: Product): FormState {
     metaDescription: p.metaDescription ?? "",
     isFeatured: p.isFeatured,
     images: imageRows,
-    colors: p.colors?.map((c) => ({ name: c.name, hexCode: c.hexCode, imageUrl: c.imageUrl ?? "" })) ?? [],
     // A variant's colour swatch/image used to live in the shared ProductColor
     // list, matched by name. Colours are now entered per row, so backfill hex &
     // image from that list for existing products.
@@ -489,10 +480,6 @@ export default function ProductForm({ categories, product }: Props) {
     }
   }
 
-  const setColor = (idx: number, val: Partial<ColorRow>) =>
-    set("colors", form.colors.map((c, i) => (i === idx ? { ...c, ...val } : c)));
-  const addColor = () => set("colors", [...form.colors, { name: "", hexCode: "#000000", imageUrl: "" }]);
-  const removeColor = (idx: number) => set("colors", form.colors.filter((_, i) => i !== idx));
 
   const setVariant = (idx: number, val: Partial<VariantRow>) =>
     set("variants", form.variants.map((v, i) => (i === idx ? { ...v, ...val } : v)));
@@ -570,15 +557,12 @@ export default function ProductForm({ categories, product }: Props) {
   const submitStock = (): number | "" => (isVariantMode ? derivedBase().stock : form.stock);
 
   // The ProductColor swatch list (name → hex/image). It's the source of the
-  // storefront swatches, matched to variants by name. In simple mode it's the
-  // colour rows on the Pricing & stock card; in variant mode it's derived by
-  // deduping the colours entered on the variant rows (first occurrence wins).
+  // storefront swatches, matched to variants by name. Colours are a
+  // variant-mode concept only: a simple (single-price) product has no colour
+  // choice, so it always submits an empty list. In variant mode it's derived
+  // by deduping the colours entered on the variant rows (first occurrence wins).
   const cleanColors = () => {
-    if (!isVariantMode) {
-      return form.colors
-        .filter((c) => c.name.trim() && c.hexCode.trim())
-        .map((c) => ({ name: c.name.trim(), hexCode: c.hexCode.trim(), imageUrl: c.imageUrl.trim() || "" }));
-    }
+    if (!isVariantMode) return [];
     const seen = new Map<string, { name: string; hexCode: string; imageUrl: string }>();
     for (const v of form.variants) {
       const name = v.color.trim();
@@ -918,52 +902,6 @@ export default function ProductForm({ categories, product }: Props) {
               </div>
             </div>
 
-            {/* Colours for a single-price product (optional). Shown as swatches on
-                the product page; each may carry an optional swap image. */}
-            <div className="mt-5 border-t border-stone-100 pt-5">
-              <Label hint="optional">Colours</Label>
-              <p className="-mt-1 mb-2 text-[12px] text-stone-400">
-                Add one or more colour swatches shoppers can pick. Leave empty for a single-colour product.
-              </p>
-              <div className="space-y-2">
-                {form.colors.map((c, idx) => (
-                  <div key={idx} className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50/60 p-2">
-                    <input
-                      type="color"
-                      value={c.hexCode || "#000000"}
-                      onChange={(e) => setColor(idx, { hexCode: e.target.value })}
-                      className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-stone-200"
-                    />
-                    <input
-                      value={c.name}
-                      onChange={(e) => setColor(idx, { name: e.target.value })}
-                      placeholder="Colour name (e.g. Navy Blue)"
-                      className="flex-1 min-w-0 bg-transparent px-1 py-2 text-[13.5px] text-stone-800 outline-none placeholder:text-stone-400"
-                    />
-                    <input
-                      value={c.imageUrl}
-                      onChange={(e) => setColor(idx, { imageUrl: e.target.value })}
-                      placeholder="Swap image URL (optional)"
-                      className="flex-1 min-w-0 bg-transparent px-1 py-2 text-[13px] text-stone-600 outline-none placeholder:text-stone-400 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeColor(idx)}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-red-50 hover:text-red-500"
-                    >
-                      <Icon name="trash" size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addColor}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 py-2 text-[13px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600"
-              >
-                <Icon name="plus" size={15} /> Add colour
-              </button>
-            </div>
             </fieldset>
           </Card>
 
