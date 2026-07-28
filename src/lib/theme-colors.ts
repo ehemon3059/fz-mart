@@ -105,52 +105,6 @@ function mix(a: string, b: string, weightA: number): string {
   return rgbToHex(ar * w + br * (1 - w), ag * w + bg * (1 - w), ab * w + bb * (1 - w));
 }
 
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  const [rn, gn, bn] = [r / 255, g / 255, b / 255];
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const l = (max + min) / 2;
-  const d = max - min;
-  if (d === 0) return [0, 0, l];
-  const s = d / (1 - Math.abs(2 * l - 1));
-  let h: number;
-  if (max === rn) h = ((gn - bn) / d) % 6;
-  else if (max === gn) h = (bn - rn) / d + 2;
-  else h = (rn - gn) / d + 4;
-  h *= 60;
-  if (h < 0) h += 360;
-  return [h, s, l];
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - c / 2;
-  const seg = Math.floor(((h % 360) + 360) % 360 / 60);
-  const [r1, g1, b1] =
-    seg === 0 ? [c, x, 0] :
-    seg === 1 ? [x, c, 0] :
-    seg === 2 ? [0, c, x] :
-    seg === 3 ? [0, x, c] :
-    seg === 4 ? [x, 0, c] : [c, 0, x];
-  return rgbToHex((r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255);
-}
-
-/** Lightness the masthead always lands on — deep enough for white text. */
-const NAV_LIGHTNESS = 0.085;
-
-/**
- * The storefront masthead colour (utility bar + main header): a near-black
- * shade that carries the brand's HUE, so switching palettes visibly re-colours
- * the navbar while it stays dark enough for white text and the white hairline.
- * Greys (s ≈ 0) stay neutral rather than being forced into a tint.
- */
-export function deriveNavBg(brand: string): string {
-  const [h, s] = rgbToHsl(...hexToRgb(brand));
-  if (s < 0.08) return hslToHex(0, 0, NAV_LIGHTNESS);
-  return hslToHex(h, Math.min(0.75, Math.max(0.5, s)), NAV_LIGHTNESS);
-}
-
 /**
  * Build a full palette from a single base colour — used when an admin picks a
  * custom colour. Companions are derived so contrast and tint feel consistent

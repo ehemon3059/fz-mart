@@ -11,7 +11,7 @@ import { headers } from "next/headers";
 import { organizationJsonLd } from "@/lib/jsonld";
 import { getGtmId, getPixelId } from "@/server/settings/tracking";
 import { getBrandPalette, getThemeLayout } from "@/server/settings/theme";
-import { SURFACE_PRESET_VARS, isGlossyPalette, deriveNavBg } from "@/lib/theme-colors";
+import { SURFACE_PRESET_VARS, isGlossyPalette } from "@/lib/theme-colors";
 import { getLocalePrefs } from "@/i18n/server";
 import { I18nProvider } from "@/i18n/provider";
 import "@/styles/storefront.css";
@@ -46,9 +46,6 @@ export default async function StorefrontLayout({
     "--brand-dark": palette.brandDark,
     "--brand-tint": palette.brandTint,
     "--brand-tint-2": palette.brandTint2,
-    // Masthead (utility bar + header) — a near-black shade carrying the brand
-    // hue, so changing the palette visibly re-colours the navbar.
-    "--nav-bg": deriveNavBg(palette.brand),
     "--bg": layout.customBgColor ?? surface.bg,
     "--card": surface.card,
     "--ink": surface.ink,

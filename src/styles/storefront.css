@@ -12,9 +12,9 @@
   /* sale uses a deep ROSE (not the fuchsia brand) so the two pinks never clash */
   --sale:#e11d48; --sale-tint:#fdecef; --amber:#f5a524;
   --bg:#fafaf9; --card:#ffffff;
-  /* masthead — utility bar + main header. --nav-bg is overridden per request
-     from the admin palette (deriveNavBg in lib/theme-colors.ts): a near-black
-     shade carrying the brand hue. This literal is only the pre-theme fallback. */
+  /* masthead — utility bar + main header share one fixed background, held
+     deliberately outside the brand palette so it never re-colours with the
+     theme preset. Both `.util` and `.hdr` read it. */
   --nav-bg:#0d0625; --nav-line:#ffffff;
   --ink:#23211e; --ink-soft:#5c5852; --ink-mute:#8a857d; --line:#ecebe8;
   --radius:14px; --radius-sm:10px;
