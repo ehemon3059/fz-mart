@@ -45,3 +45,9 @@ export const LogoutIcon = (p: P) => (
 export const ArrowLeftIcon = (p: P) => (
   <I {...p}><path d="M19 12H5" /><path d="m11 6-6 6 6 6" /></I>
 );
+export const UserIcon = (p: P) => (
+  <I {...p}><circle cx="12" cy="8" r="3.6" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" /></I>
+);
+export const PinIcon = (p: P) => (
+  <I {...p}><path d="M12 21s6.5-6 6.5-10.5a6.5 6.5 0 0 0-13 0C5.5 15 12 21 12 21Z" /><circle cx="12" cy="10.5" r="2.4" /></I>
+);

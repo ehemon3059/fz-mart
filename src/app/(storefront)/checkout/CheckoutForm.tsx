@@ -7,9 +7,11 @@ import { formatTaka } from "@/lib/money";
 import { CashIcon, CheckIcon, TrashIcon } from "@/components/storefront/icons";
 import type { CheckoutPaymentOptions } from "@/server/settings/payments";
 import { placeOrder, applyCoupon, requestCheckoutOtp, confirmCheckoutOtp, syncCart } from "./actions";
+import { addAddress } from "../account/actions";
 import { recordCheckoutStart } from "../funnel-actions";
 import { getFbAttribution } from "@/lib/fb-attribution";
 import { readUtmAttribution, type UtmAttribution } from "@/lib/utm-attribution";
+import { summarizeAddress, type SavedAddress } from "@/lib/customer-address";
 
 interface Props {
   zones: ShippingZone[];
@@ -21,7 +23,16 @@ interface Props {
   buyNowVariantId: number | null;
   /** Whether a customer is signed in — enables abandoned-cart persistence. */
   loggedIn: boolean;
+  /** The signed-in customer's saved addresses; empty for guests. */
+  savedAddresses: SavedAddress[];
+  /** How many addresses a customer may keep — gates the "save this one" offer. */
+  maxAddresses: number;
+  /** Pre-fills the email field for a signed-in customer. */
+  contactEmail: string;
 }
+
+/** Sentinel for the "type a fresh address" option in the picker. */
+const NEW_ADDRESS = "new";
 
 const NOTE_MAX = 90;
 
@@ -31,6 +42,9 @@ export default function CheckoutForm({
   buyNowProductId,
   buyNowVariantId,
   loggedIn,
+  savedAddresses,
+  maxAddresses,
+  contactEmail,
 }: Props) {
   const cartItems = useCartStore((s) => s.items);
   const setQuantity = useCartStore((s) => s.setQuantity);
@@ -47,7 +61,25 @@ export default function CheckoutForm({
     return single ? [single] : [];
   }, [cartItems, buyNowProductId, buyNowVariantId]);
 
-  const [zoneId, setZoneId] = useState<number | "">(zones[0]?.id ?? "");
+  // Address book: pre-select the default saved address, else start on a blank
+  // form. Guests always get the blank form.
+  const defaultAddress = savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0] ?? null;
+  const [addressChoice, setAddressChoice] = useState<number | typeof NEW_ADDRESS>(
+    defaultAddress?.id ?? NEW_ADDRESS,
+  );
+  const [shipping, setShipping] = useState({
+    customerName: defaultAddress?.fullName ?? "",
+    customerPhone: defaultAddress?.phone ?? "",
+    address: defaultAddress?.address ?? "",
+    customerEmail: contactEmail,
+  });
+  // Only offered when the customer is signed in and still under the cap.
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
+  const canSaveMore = loggedIn && savedAddresses.length < maxAddresses;
+
+  const [zoneId, setZoneId] = useState<number | "">(
+    defaultAddress?.shippingZoneId ?? zones[0]?.id ?? "",
+  );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
   const [provider, setProvider] = useState(paymentOptions.providers[0]?.key ?? "");
   const [note, setNote] = useState("");
@@ -111,6 +143,41 @@ export default function CheckoutForm({
     });
   }
 
+  function setShippingField(key: keyof typeof shipping, value: string) {
+    setShipping((prev) => ({ ...prev, [key]: value }));
+  }
+
+  /**
+   * Switching the picker replaces the whole shipping block. Choosing "new"
+   * blanks the recipient fields (but keeps the email, which is account-level)
+   * so nothing from the previous address is silently carried over.
+   */
+  function chooseAddress(choice: number | typeof NEW_ADDRESS) {
+    setAddressChoice(choice);
+    if (choice === NEW_ADDRESS) {
+      setShipping((prev) => ({
+        customerName: "",
+        customerPhone: "",
+        address: "",
+        customerEmail: prev.customerEmail,
+      }));
+      return;
+    }
+    const picked = savedAddresses.find((a) => a.id === choice);
+    if (!picked) return;
+    setSaveNewAddress(false);
+    setShipping((prev) => ({
+      customerName: picked.fullName,
+      customerPhone: picked.phone,
+      address: picked.address,
+      customerEmail: prev.customerEmail,
+    }));
+    // A saved zone wins; otherwise keep whatever the customer already picked.
+    if (picked.shippingZoneId != null && zones.some((z) => z.id === picked.shippingZoneId)) {
+      setZoneId(picked.shippingZoneId);
+    }
+  }
+
   const subtotal = cartSubtotal(checkoutItems);
   const selectedZone = zones.find((z) => z.id === zoneId);
   const deliveryCharge = selectedZone?.charge ?? 0;
@@ -163,9 +230,31 @@ export default function CheckoutForm({
     if (buyNowProductId == null) clearCart();
   }
 
+  /**
+   * Persist a freshly typed address to the account when the customer ticked
+   * the box. Deliberately non-blocking: a full address book or a validation
+   * quibble must never stop an order from being placed.
+   */
+  async function saveAddressIfRequested(formData: FormData) {
+    if (!saveNewAddress || addressChoice !== NEW_ADDRESS || !canSaveMore) return;
+    const payload = new FormData();
+    payload.set("label", String(formData.get("addressLabel") ?? "").trim() || "Home");
+    payload.set("fullName", String(formData.get("customerName") ?? ""));
+    payload.set("phone", String(formData.get("customerPhone") ?? ""));
+    payload.set("address", String(formData.get("address") ?? ""));
+    payload.set("shippingZoneId", String(formData.get("shippingZoneId") ?? ""));
+    payload.set("isDefault", savedAddresses.length === 0 ? "true" : "false");
+    try {
+      await addAddress(payload);
+    } catch {
+      // Ignored on purpose — see the note above.
+    }
+  }
+
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
+      await saveAddressIfRequested(formData);
       await submitOrder(formData);
     });
   }
@@ -297,12 +386,47 @@ export default function CheckoutForm({
 
         <div className="co-card">
           <h2 className="co-hd">Shipping address</h2>
+
+          {/* Saved-address picker — signed-in customers only. Guests fall
+              straight through to the blank fields below. */}
+          {savedAddresses.length > 0 && (
+            <div className="co-field">
+              <label htmlFor="savedAddress" className="co-zones-lg" style={{ display: "block", marginBottom: 6 }}>
+                Deliver to
+              </label>
+              <select
+                id="savedAddress"
+                className="co-select"
+                style={{ width: "100%" }}
+                value={addressChoice}
+                onChange={(e) =>
+                  chooseAddress(e.target.value === NEW_ADDRESS ? NEW_ADDRESS : Number(e.target.value))
+                }
+              >
+                {savedAddresses.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {summarizeAddress(a)}
+                    {a.isDefault ? " (default)" : ""}
+                  </option>
+                ))}
+                <option value={NEW_ADDRESS}>+ Use a new address</option>
+              </select>
+              <p style={{ fontSize: 12, color: "var(--ink-mute)", marginTop: 6 }}>
+                {addressChoice === NEW_ADDRESS
+                  ? "Enter the new address below."
+                  : "You can edit the details below for this order only — your saved address stays as it is."}
+              </p>
+            </div>
+          )}
+
           <div className="co-row2 co-field">
             <input
               name="customerName"
               required
               className="co-input"
               placeholder="Your full name *"
+              value={shipping.customerName}
+              onChange={(e) => setShippingField("customerName", e.target.value)}
             />
             <div className="co-phone">
               <span className="cc">88</span>
@@ -312,6 +436,10 @@ export default function CheckoutForm({
                 inputMode="numeric"
                 maxLength={11}
                 placeholder="017XXXXXXXX"
+                value={shipping.customerPhone}
+                onChange={(e) =>
+                  setShippingField("customerPhone", e.target.value.replace(/\D/g, "").slice(0, 11))
+                }
               />
             </div>
           </div>
@@ -322,6 +450,8 @@ export default function CheckoutForm({
               rows={2}
               className="co-area"
               placeholder="ex: House no. / building / street / area"
+              value={shipping.address}
+              onChange={(e) => setShippingField("address", e.target.value)}
             />
           </div>
           <div className="co-field">
@@ -330,8 +460,45 @@ export default function CheckoutForm({
               type="email"
               className="co-input"
               placeholder="Email (optional)"
+              value={shipping.customerEmail}
+              onChange={(e) => setShippingField("customerEmail", e.target.value)}
             />
           </div>
+
+          {/* Offer to remember a newly typed address, while there's room. */}
+          {addressChoice === NEW_ADDRESS && canSaveMore && (
+            <div className="co-field">
+              <label className="co-terms" style={{ marginBottom: saveNewAddress ? 8 : 0 }}>
+                <input
+                  type="checkbox"
+                  checked={saveNewAddress}
+                  onChange={(e) => setSaveNewAddress(e.target.checked)}
+                />
+                <span>
+                  Save this address to my account{" "}
+                  <span style={{ color: "var(--ink-mute)" }}>
+                    ({savedAddresses.length} of {maxAddresses} used)
+                  </span>
+                </span>
+              </label>
+              {saveNewAddress && (
+                <input
+                  name="addressLabel"
+                  className="co-input"
+                  maxLength={30}
+                  defaultValue="Home"
+                  placeholder="Label — Home, Office…"
+                  aria-label="Address label"
+                />
+              )}
+            </div>
+          )}
+          {addressChoice === NEW_ADDRESS && loggedIn && !canSaveMore && (
+            <p style={{ fontSize: 12, color: "var(--ink-mute)", marginTop: -4, marginBottom: 12 }}>
+              You&apos;ve saved the maximum of {maxAddresses} addresses. This one will be used for
+              this order only.
+            </p>
+          )}
           <div className="co-field">
             <fieldset className="co-zones">
               <legend className="co-zones-lg">Delivery location</legend>

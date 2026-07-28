@@ -11,10 +11,14 @@ import {
   HeartIcon,
   StarIcon,
   LogoutIcon,
+  UserIcon,
+  PinIcon,
 } from "./account-icons";
 
 const LINKS = [
   { href: "/account", label: "Overview", Icon: OverviewIcon },
+  { href: "/account/profile", label: "My Profile", Icon: UserIcon },
+  { href: "/account/addresses", label: "Addresses", Icon: PinIcon },
   { href: "/account/orders", label: "Order History", Icon: BagIcon },
   { href: "/account/purchases", label: "Purchase History", Icon: TruckIcon },
   { href: "/account/cart-history", label: "Cart History", Icon: CartIcon },

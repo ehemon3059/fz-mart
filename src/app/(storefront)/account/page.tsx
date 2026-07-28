@@ -2,19 +2,29 @@ import Link from "next/link";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { BagIcon, TruckIcon, HeartIcon, CartIcon, StarIcon, ArrowLeftIcon } from "@/components/storefront/account-icons";
+import { BagIcon, TruckIcon, HeartIcon, CartIcon, StarIcon, ArrowLeftIcon, UserIcon, PinIcon } from "@/components/storefront/account-icons";
+import { MAX_ADDRESSES } from "@/server/customers/addresses";
 
 export default async function AccountOverviewPage() {
   const session = await getCurrentCustomer();
   if (!session) redirect("/login?next=/account");
 
-  const [orderCount, purchaseCount, wishlistCount, cartEventCount, reviewCount] = await Promise.all([
-    prisma.order.count({ where: { customerId: session.customerId } }),
-    prisma.order.count({ where: { customerId: session.customerId, status: "DELIVERED" } }),
-    prisma.wishlistItem.count({ where: { customerId: session.customerId } }),
-    prisma.cartEvent.count({ where: { customerId: session.customerId } }),
-    prisma.productReview.count({ where: { customerId: session.customerId } }),
-  ]);
+  const [orderCount, purchaseCount, wishlistCount, cartEventCount, reviewCount, addressCount, customer] =
+    await Promise.all([
+      prisma.order.count({ where: { customerId: session.customerId } }),
+      prisma.order.count({ where: { customerId: session.customerId, status: "DELIVERED" } }),
+      prisma.wishlistItem.count({ where: { customerId: session.customerId } }),
+      prisma.cartEvent.count({ where: { customerId: session.customerId } }),
+      prisma.productReview.count({ where: { customerId: session.customerId } }),
+      prisma.customerAddress.count({ where: { customerId: session.customerId } }),
+      prisma.customer.findUnique({
+        where: { id: session.customerId },
+        select: { name: true, phone: true },
+      }),
+    ]);
+
+  // Nudge the two things that make checkout one-click later on.
+  const profileIncomplete = !customer?.name || !customer?.phone;
 
   // Full class strings (not interpolated) so Tailwind's JIT keeps each colour.
   const tiles = [
@@ -26,7 +36,45 @@ export default async function AccountOverviewPage() {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
+    <>
+      {/* Profile + address book — the details that pre-fill checkout. */}
+      <div className="mb-4 grid gap-3.5 sm:grid-cols-2 sm:gap-4">
+        <Link
+          href="/account/profile"
+          className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
+        >
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <UserIcon className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-gray-900">My Profile</span>
+            <span className="block text-sm text-gray-500">
+              {profileIncomplete ? "Add your name and mobile number" : "Name, mobile and contact email"}
+            </span>
+          </span>
+          <ArrowLeftIcon className="ml-auto h-4 w-4 shrink-0 rotate-180 text-gray-300 transition group-hover:text-gray-500" />
+        </Link>
+
+        <Link
+          href="/account/addresses"
+          className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
+        >
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <PinIcon className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-gray-900">Delivery Addresses</span>
+            <span className="block text-sm text-gray-500">
+              {addressCount === 0
+                ? "Save an address to check out faster"
+                : `${addressCount} of ${MAX_ADDRESSES} saved`}
+            </span>
+          </span>
+          <ArrowLeftIcon className="ml-auto h-4 w-4 shrink-0 rotate-180 text-gray-300 transition group-hover:text-gray-500" />
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
       {tiles.map((t) => (
         <Link
           key={t.href}
@@ -45,6 +93,7 @@ export default async function AccountOverviewPage() {
           </span>
         </Link>
       ))}
-    </div>
+      </div>
+    </>
   );
 }
