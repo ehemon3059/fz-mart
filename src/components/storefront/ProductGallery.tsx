@@ -52,11 +52,81 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
   // native drag-to-save. (Not absolute — screenshots / DevTools still work.)
   const blockContextMenu = (e: React.MouseEvent) => e.preventDefault();
 
-  const go = (i: number) => setActive((i + safeImages.length) % safeImages.length);
   const hasMany = safeImages.length > 1;
 
+  // Auto-advance the main image every 2s, but hold still while the cursor is
+  // anywhere over the gallery (main image or thumbnails) so hovering to inspect
+  // a photo — or lining up a thumbnail click — never pulls it out from under
+  // the user. The lightbox drives `active` too, so pause while it's open.
+
+  // Bumped on every manual change (arrow, thumbnail, key) to restart the
+  // countdown, so a deliberate pick gets a full 2s instead of being cut short
+  // by a timer that was already mid-tick.
+  const [tick, setTick] = useState(0);
+
+  const [hovering, setHovering] = useState(false);
+  // Touch is tracked apart from hover: a tap fires no mouseleave, so if it
+  // shared the hover flag one tap would freeze the gallery for good. Instead a
+  // tap buys a quiet window that expires on its own (see the timer below).
+  const [touched, setTouched] = useState(false);
+  // Keyboard users steer with the arrow keys, so rotating under a focused
+  // gallery would fight them. Scoped to :focus-visible — a plain mouse click
+  // also focuses the image, and pausing on that is what previously wedged the
+  // gallery for good once the pointer left. Read from the live focus owner
+  // rather than a flag toggled by focus/blur, since tabbing between thumbnails
+  // blurs the old one after focusing the new one and would flicker a naive
+  // flag off. `blur` also fires before focus lands, so activeElement is still
+  // <body> mid-move: settle on a microtask to read where focus ended up.
+  const [focused, setFocused] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const syncFocus = () =>
+    queueMicrotask(() => {
+      const el = document.activeElement;
+      setFocused(
+        !!el && !!rootRef.current?.contains(el) && el.matches(":focus-visible"),
+      );
+    });
+
+  const autoplay = hasMany && !hovering && !touched && !focused && !lightbox;
+
+  // Release the touch pause a few seconds after the last tap so a phone user
+  // who glances at one photo still gets the rotation back.
+  useEffect(() => {
+    if (!touched) return;
+    const id = setTimeout(() => setTouched(false), 6000);
+    return () => clearTimeout(id);
+  }, [touched, tick]);
+
+  const select = (i: number) => {
+    setActive(i);
+    setTick((t) => t + 1);
+  };
+  const go = (i: number) => select((i + safeImages.length) % safeImages.length);
+
+  useEffect(() => {
+    if (!autoplay) return;
+    const id = setInterval(() => {
+      setActive((i) => (i + 1) % safeImages.length);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [autoplay, safeImages.length, tick]);
+
   return (
-    <div className="space-y-3 select-none [-webkit-user-drag:none]" onContextMenu={blockContextMenu}>
+    <div
+      ref={rootRef}
+      className="space-y-3 select-none [-webkit-user-drag:none]"
+      onContextMenu={blockContextMenu}
+      onFocusCapture={syncFocus}
+      onBlurCapture={syncFocus}
+      // Pointer events rather than mouse ones: a touch tap also emits
+      // pointerenter with no matching pointerleave, which would strand the flag
+      // on. Ignoring non-mouse pointers here leaves taps to `touched` alone.
+      onPointerEnter={(e) => e.pointerType === "mouse" && setHovering(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && setHovering(false)}
+      // Touch devices never fire a hover; a tap means the user is engaging with
+      // the gallery, so stop rotating rather than shifting under them.
+      onTouchStart={() => setTouched(true)}
+    >
       {/* Main image — click to open full screen, arrows to flip photos */}
       <div
         ref={mainRef}
@@ -161,7 +231,7 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
             <button
               key={img.id}
               type="button"
-              onClick={() => setActive(idx)}
+              onClick={() => select(idx)}
               className={[
                 "relative aspect-square overflow-hidden rounded-md bg-gray-100 transition",
                 idx === active
