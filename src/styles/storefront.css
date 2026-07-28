@@ -12,6 +12,10 @@
   /* sale uses a deep ROSE (not the fuchsia brand) so the two pinks never clash */
   --sale:#e11d48; --sale-tint:#fdecef; --amber:#f5a524;
   --bg:#fafaf9; --card:#ffffff;
+  /* masthead — utility bar + main header. --nav-bg is overridden per request
+     from the admin palette (deriveNavBg in lib/theme-colors.ts): a near-black
+     shade carrying the brand hue. This literal is only the pre-theme fallback. */
+  --nav-bg:#0d0625; --nav-line:#ffffff;
   --ink:#23211e; --ink-soft:#5c5852; --ink-mute:#8a857d; --line:#ecebe8;
   --radius:14px; --radius-sm:10px;
   --card-pad:12px; --row-gap:18px;
@@ -38,18 +42,19 @@
   padding:3px 8px;border-radius:999px;}
 
 /* ---------- top utility bar ---------- */
-/* Top utility bar tracks the theme's second preset swatch (--brand-dark),
-   so it re-colours whenever the admin changes the palette. */
-.fz .util{background:var(--brand-dark);color:#e9e7e2;font-size:12.5px;}
+/* Top utility bar sits on the masthead colour with a white hairline separating
+   it from the main header below. Text is white + semibold on the dark ground. */
+.fz .util{background:var(--nav-bg);color:#fff;font-size:12.5px;font-weight:600;
+  border-bottom:1px solid var(--nav-line);}
 .fz .util .wrap{display:flex;align-items:center;justify-content:space-between;height:36px;}
-.fz .util-left{display:flex;align-items:center;gap:8px;color:#cfccc5;}
+.fz .util-left{display:flex;align-items:center;gap:8px;color:#fff;}
 .fz .util-dot{width:5px;height:5px;border-radius:50%;background:var(--brand);}
-.fz .util-right{display:flex;align-items:center;gap:20px;color:#cfccc5;}
+.fz .util-right{display:flex;align-items:center;gap:20px;color:#fff;}
 .fz .util-right a{display:flex;align-items:center;gap:6px;}
-.fz .util-right a:hover{color:#fff;}
+.fz .util-right a:hover{color:rgba(255,255,255,.72);}
 
 /* ---------- header ---------- */
-.fz .hdr{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50;}
+.fz .hdr{background:var(--nav-bg);color:#fff;border-bottom:1px solid var(--nav-line);position:sticky;top:0;z-index:50;}
 .fz .hdr .wrap{display:flex;align-items:center;gap:24px;height:72px;}
 .fz .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;letter-spacing:-.02em;white-space:nowrap;}
 .fz .logo .mark{width:34px;height:34px;border-radius:9px;background:var(--brand);color:#fff;
@@ -57,6 +62,8 @@
   box-shadow:0 4px 10px -2px color-mix(in srgb, var(--brand) 55%, transparent);}
 .fz .logo .mark span{transform:translateY(-.5px);}
 .fz .logo b{color:var(--ink);} .fz .logo i{color:var(--brand);font-style:normal;}
+/* Wordmark sits on the dark masthead, so the "FZ" half flips to white. */
+.fz .hdr .logo b{color:#fff;}
 
 .fz .hdr-search{flex:1;position:relative;}
 .fz .search{flex:1;display:flex;align-items:center;height:46px;border:1.5px solid var(--line);
@@ -141,6 +148,12 @@
 .fz .icon-btn .ib-txt{display:flex;flex-direction:column;line-height:1.15;}
 .fz .icon-btn .ib-txt small{font-size:11px;color:var(--ink-mute);}
 .fz .icon-btn .ib-txt b{font-size:13.5px;font-weight:600;}
+/* Account/Cart pills on the dark masthead: invert the text + hover wash. */
+.fz .hdr .icon-btn:hover{background:rgba(255,255,255,.10);}
+.fz .hdr .icon-btn .ib-txt small{color:rgba(255,255,255,.66);}
+.fz .hdr .icon-btn .ib-txt b{color:#fff;}
+/* Search field reads as a clean white pill against the dark masthead. */
+.fz .hdr .search{background:#fff;border-color:transparent;}
 .fz .cart-btn{position:relative;}
 .fz .cart-badge{position:absolute;top:2px;left:24px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;
   background:var(--sale);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
@@ -714,8 +727,8 @@
      Row 2 (wrapped): full-width search bar beneath the logo. */
   .fz .hdr .wrap{gap:8px;flex-wrap:wrap;height:auto;padding-top:10px;padding-bottom:10px;}
   .fz .hdr-menu-btn{display:inline-flex;align-items:center;justify-content:center;order:1;
-    width:42px;height:42px;border:0;background:transparent;color:var(--ink);cursor:pointer;border-radius:10px;flex-shrink:0;}
-  .fz .hdr-menu-btn:active{background:var(--bg);}
+    width:42px;height:42px;border:0;background:transparent;color:#fff;cursor:pointer;border-radius:10px;flex-shrink:0;}
+  .fz .hdr-menu-btn:active{background:rgba(255,255,255,.14);}
   .fz .hdr .logo{flex:1;justify-content:center;order:2;}
   .fz .hdr-actions{order:3;}
   /* Search bar: own row, full width. The row sits on a brand-coloured band

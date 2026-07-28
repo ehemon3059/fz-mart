@@ -5,6 +5,7 @@ import { Icon } from "@/components/icons";
 import {
   THEME_PRESETS,
   derivePalette,
+  deriveNavBg,
   isGlossyPalette,
   normalizeHex,
   type BrandPalette,
@@ -38,6 +39,8 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
   // the storefront's `.fz[data-brand-gloss="on"]` rules so the preview stays
   // truthful. Badges use the softer two-stop gold.
   const glossy = useMemo(() => isGlossyPalette(palette), [palette]);
+  // Masthead colour the storefront will render for this palette.
+  const navBg = useMemo(() => deriveNavBg(palette.brand), [palette.brand]);
   const brandFill = glossy
     ? "linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%)"
     : palette.brand;
@@ -168,6 +171,29 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
       <aside className="lg:self-start">
         <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-soft">
           <p className="text-[13px] font-semibold text-stone-800">Live preview</p>
+          {/* masthead — near-black shade derived from the brand hue, exactly
+              what the storefront header + utility bar render */}
+          <div className="mt-4 overflow-hidden rounded-xl border border-stone-200">
+            <div
+              className="flex items-center justify-between border-b border-white px-3 py-1.5 text-[10px] font-semibold text-white"
+              style={{ backgroundColor: navBg }}
+            >
+              <span>Track Order</span>
+              <span>Help Center</span>
+            </div>
+            <div
+              className="flex items-center justify-between px-3 py-3"
+              style={{ backgroundColor: navBg }}
+            >
+              <span className="text-[13px] font-extrabold text-white">
+                FZ<span style={{ color: palette.brand }}>Mart</span>
+              </span>
+              <span className="h-6 flex-1 max-w-[110px] rounded-full bg-white" />
+              <span className="text-[10px] font-semibold text-white">Cart</span>
+            </div>
+          </div>
+          <p className="mt-2 font-mono text-[10px] text-stone-500">navbar {navBg}</p>
+
           <div className="mt-4 rounded-xl border border-stone-100 bg-[#fafaf9] p-4">
             {/* button */}
             <button
