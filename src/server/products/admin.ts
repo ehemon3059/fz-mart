@@ -62,6 +62,8 @@ export interface ProductVariantInput {
   stock: number;
   /** Show the stock count on the storefront for this variant. Default true. */
   showStock?: boolean;
+  /** Storefront price colour (#rrggbb) for this variant; null inherits the product's. */
+  priceColor?: string | null;
 }
 
 export interface ProductImageInput {
@@ -86,6 +88,8 @@ export interface ProductInput {
   lowStockThreshold?: number;
   /** Show the "In stock (N available)" count on the storefront. Default true. */
   showStock?: boolean;
+  /** Storefront price colour (#rrggbb); null/undefined = theme default. */
+  priceColor?: string | null;
   isFeatured?: boolean;
   status?: "ACTIVE" | "INACTIVE";
   promoBadge?: string | null;
@@ -128,6 +132,7 @@ export async function createProduct(input: ProductInput) {
       stock: input.stock,
       lowStockThreshold: input.lowStockThreshold ?? 0,
       showStock: input.showStock ?? true,
+      priceColor: input.priceColor ?? null,
       isFeatured: input.isFeatured ?? false,
       status: input.status ?? "ACTIVE",
       promoBadge: input.promoBadge ?? null,
@@ -185,6 +190,7 @@ export async function createProduct(input: ProductInput) {
                 discountPrice: v.discountPrice ?? null,
                 stock: v.stock,
                 showStock: v.showStock ?? true,
+                priceColor: v.priceColor ?? null,
                 sortOrder: i,
               })),
             },
@@ -225,6 +231,7 @@ export async function updateProduct(id: number, input: ProductInput) {
         stock: input.stock,
       lowStockThreshold: input.lowStockThreshold ?? 0,
         showStock: input.showStock ?? true,
+        priceColor: input.priceColor ?? null,
         isFeatured: input.isFeatured ?? false,
         status: input.status ?? "ACTIVE",
         promoBadge: input.promoBadge ?? null,
@@ -302,6 +309,7 @@ export async function updateProduct(id: number, input: ProductInput) {
             discountPrice: v.discountPrice ?? null,
             stock: v.stock,
             showStock: v.showStock ?? true,
+            priceColor: v.priceColor ?? null,
             sortOrder: i,
           })),
         });

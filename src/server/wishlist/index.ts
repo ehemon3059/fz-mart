@@ -36,6 +36,7 @@ export async function listWishlist(customerId: string) {
           discountPrice: true,
           stock: true,
           promoBadge: true,
+          priceColor: true,
           status: true,
           images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
         },

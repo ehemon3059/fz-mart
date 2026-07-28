@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Star, Check } from "lucide-react";
-import { formatTaka } from "@/lib/money";
+import { formatTaka, priceColorStyle } from "@/lib/money";
 
 interface Props {
   name: string;
@@ -14,6 +14,8 @@ interface Props {
   inStock: boolean;
   /** Shown as "from ৳x" when variants price independently. */
   isFromPrice?: boolean;
+  /** Admin-chosen price colour (#rrggbb); null/undefined = theme default. */
+  priceColor?: string | null;
 }
 
 /** Half-star aware row of five. */
@@ -39,8 +41,12 @@ export default function BuyBoxHeader({
   originalPrice,
   inStock,
   isFromPrice = false,
+  priceColor,
 }: Props) {
   const saving = originalPrice != null && originalPrice > price ? originalPrice - price : 0;
+  // Only the live price takes the colour; the struck-through original stays
+  // grey so the "old price" cue survives.
+  const priceStyle = priceColorStyle(priceColor);
 
   return (
     <div className="space-y-3">
@@ -71,7 +77,7 @@ export default function BuyBoxHeader({
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 pt-1">
         {isFromPrice && <span className="text-sm font-medium text-slate-500">From</span>}
         {/* tracking-tight collides the ৳ glyph with the first digit in Manrope */}
-        <span className="text-[30px] font-extrabold leading-none text-slate-900">
+        <span className="text-[30px] font-extrabold leading-none text-slate-900" style={priceStyle}>
           {formatTaka(price)}
         </span>
         {saving > 0 && (

@@ -3,6 +3,7 @@ import Link from "next/link";
 import Price from "./Price";
 import CardAddButton from "./CardAddButton";
 import { HeartIcon, ArrowRight } from "./icons";
+import { priceColorStyle } from "@/lib/money";
 
 type Badge = "sale" | "new";
 
@@ -17,6 +18,11 @@ export interface ProductCardData {
   stock: number;
   promoBadge: string | null;
   images: { url: string; isPrimary: boolean }[];
+  /**
+   * Admin-chosen colour for the price text (#rrggbb). Optional so leaner data
+   * sources that don't select it simply fall back to the default styling.
+   */
+  priceColor?: string | null;
   /**
    * When the shopper must pick a size/color/variant first, the card links to
    * the detail page instead of quick-adding. Omitted for leaner data sources
@@ -88,7 +94,7 @@ export default function ProductCard({
             <div className="c-oos">Out of stock</div>
           ) : (
             <div className="c-price">
-              <Price paisa={price} className="now" />
+              <Price paisa={price} className="now" style={priceColorStyle(product.priceColor)} />
               {hasDiscount && <Price paisa={product.price} className="was" />}
             </div>
           )}

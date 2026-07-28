@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ShoppingBag } from "lucide-react";
-import { formatTaka } from "@/lib/money";
+import { formatTaka, priceColorStyle } from "@/lib/money";
 
 interface Props {
   /** Paisa — the price shown in the bar. */
@@ -10,6 +10,8 @@ interface Props {
   originalPrice: number | null;
   inStock: boolean;
   isFromPrice?: boolean;
+  /** Admin-chosen price colour (#rrggbb); null/undefined = theme default. */
+  priceColor?: string | null;
   /** Id of the element that, once scrolled past, reveals the bar. */
   revealAfterId: string;
 }
@@ -26,6 +28,7 @@ export default function MobileBuyBar({
   originalPrice,
   inStock,
   isFromPrice = false,
+  priceColor,
   revealAfterId,
 }: Props) {
   const [show, setShow] = useState(false);
@@ -73,7 +76,10 @@ export default function MobileBuyBar({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             {isFromPrice && <span className="text-[11px] font-medium text-slate-500">From</span>}
-            <span className="text-[19px] font-extrabold leading-none text-slate-900">
+            <span
+              className="text-[19px] font-extrabold leading-none text-slate-900"
+              style={priceColorStyle(priceColor)}
+            >
               {formatTaka(price)}
             </span>
             {saving > 0 && (

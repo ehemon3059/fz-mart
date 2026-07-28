@@ -174,6 +174,7 @@ export default async function ProductPage({
             originalPrice={hasDiscount ? product.price : null}
             inStock={inStock}
             isFromPrice={hasVariants}
+            priceColor={product.priceColor}
           />
 
           <div className="border-t border-slate-100 pt-5">
@@ -199,7 +200,9 @@ export default async function ProductPage({
                 discountPrice: v.discountPrice,
                 stock: v.stock,
                 showStock: v.showStock,
+                priceColor: v.priceColor,
               }))}
+              priceColor={product.priceColor}
             />
           </div>
 
@@ -253,6 +256,7 @@ export default async function ProductPage({
           discountPrice: product.discountPrice,
           stock: hasVariants ? (inStock ? 1 : 0) : product.stock,
           promoBadge: product.promoBadge,
+          priceColor: product.priceColor,
           images: product.images.map((img) => ({ url: img.url, isPrimary: img.isPrimary })),
         }}
       />
@@ -265,6 +269,7 @@ export default async function ProductPage({
         originalPrice={hasDiscount ? product.price : null}
         inStock={inStock}
         isFromPrice={hasVariants}
+        priceColor={product.priceColor}
         revealAfterId="buy-box"
       />
     </div>

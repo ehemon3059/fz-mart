@@ -59,6 +59,7 @@ export interface ProductSearchCard {
   discountPrice: number | null;
   stock: number;
   promoBadge: string | null;
+  priceColor: string | null;
   images: { url: string; isPrimary: boolean }[];
 }
 
@@ -187,6 +188,7 @@ export async function searchProducts(q: SearchQuery): Promise<SearchResult> {
           discountPrice: true,
           stock: true,
           promoBadge: true,
+          priceColor: true,
           images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
         },
       })

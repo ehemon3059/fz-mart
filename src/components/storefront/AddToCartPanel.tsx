@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useCartStore } from "@/lib/cart-store";
 import { trackAddToCart } from "@/lib/pixel";
 import { recordAddToCart } from "@/app/(storefront)/funnel-actions";
-import { formatTaka } from "@/lib/money";
+import { formatTaka, priceColorStyle } from "@/lib/money";
 import { Icon } from "@/components/icons";
 import { Banknote, ShoppingCart, Minus, Plus } from "lucide-react";
 
@@ -27,6 +27,8 @@ interface VariantOption {
   stock: number;
   /** Whether to show the "X in stock" count for this variant. */
   showStock: boolean;
+  /** Price colour (#rrggbb) for this variant; null = inherit the product's. */
+  priceColor?: string | null;
 }
 
 interface Props {
@@ -38,6 +40,8 @@ interface Props {
   stock: number;
   colors?: ColorOption[];
   variants?: VariantOption[];
+  /** Product-level price colour (#rrggbb); null = theme default. */
+  priceColor?: string | null;
 }
 
 export default function AddToCartPanel({
@@ -49,6 +53,7 @@ export default function AddToCartPanel({
   stock,
   colors = [],
   variants = [],
+  priceColor,
 }: Props) {
   const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
@@ -65,6 +70,7 @@ export default function AddToCartPanel({
         imageUrl={imageUrl}
         colors={colors}
         variants={variants}
+        priceColor={priceColor}
         quantity={quantity}
         setQuantity={setQuantity}
         addItem={addItem}
@@ -183,6 +189,7 @@ function VariantPurchase({
   imageUrl,
   colors,
   variants,
+  priceColor,
   quantity,
   setQuantity,
   addItem,
@@ -194,6 +201,7 @@ function VariantPurchase({
   imageUrl: string | null;
   colors: ColorOption[];
   variants: VariantOption[];
+  priceColor?: string | null;
   quantity: number;
   setQuantity: (n: number | ((q: number) => number)) => void;
   addItem: AddItem;
@@ -379,7 +387,12 @@ function VariantPurchase({
       <p className="text-sm">
         {selectedVariant ? (
           <>
-            <span className="text-lg font-bold text-gray-900">{formatTaka(effectivePrice)}</span>
+            <span
+              className="text-lg font-bold text-gray-900"
+              style={priceColorStyle(selectedVariant.priceColor, priceColor)}
+            >
+              {formatTaka(effectivePrice)}
+            </span>
             {selectedHasDiscount && (
               <span className="ml-2 text-gray-400 line-through">{formatTaka(selectedVariant.price)}</span>
             )}
@@ -389,7 +402,11 @@ function VariantPurchase({
           </>
         ) : (
           <span className="text-gray-500">
-            From <span className="font-bold text-gray-900">{formatTaka(effectivePrice)}</span> · choose options above
+            From{" "}
+            <span className="font-bold text-gray-900" style={priceColorStyle(priceColor)}>
+              {formatTaka(effectivePrice)}
+            </span>{" "}
+            · choose options above
           </span>
         )}
       </p>

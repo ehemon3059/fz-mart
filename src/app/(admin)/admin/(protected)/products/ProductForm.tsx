@@ -50,6 +50,8 @@ interface VariantRow {
   stock: string;
   /** Show the stock count on the storefront for this variant. */
   showStock: boolean;
+  /** Storefront price colour (#rrggbb); "" = inherit the product's colour. */
+  priceColor: string;
 }
 
 /**
@@ -71,6 +73,8 @@ interface FormState {
   stock: number | "";
   lowStockThreshold: number | ""; // 0/"" = disabled
   showStock: boolean; // show the "In stock (N available)" count on the storefront
+  /** Storefront price colour (#rrggbb); "" = theme default (near-black). */
+  priceColor: string;
   status: "ACTIVE" | "INACTIVE";
   promoBadge: string;
   metaTitle: string;
@@ -109,6 +113,7 @@ function initialFromProduct(p?: Product): FormState {
       stock: "",
       lowStockThreshold: "",
       showStock: true,
+      priceColor: "",
       status: "ACTIVE",
       promoBadge: "",
       metaTitle: "",
@@ -134,6 +139,7 @@ function initialFromProduct(p?: Product): FormState {
     stock: p.stock,
     lowStockThreshold: p.lowStockThreshold || "",
     showStock: p.showStock ?? true,
+    priceColor: p.priceColor ?? "",
     status: p.status,
     promoBadge: p.promoBadge ?? "",
     metaTitle: p.metaTitle ?? "",
@@ -156,6 +162,7 @@ function initialFromProduct(p?: Product): FormState {
           discountPrice: v.discountPrice != null ? String(v.discountPrice / 100) : "",
           stock: String(v.stock),
           showStock: v.showStock ?? true,
+          priceColor: v.priceColor ?? "",
         };
       }) ?? [],
   };
@@ -492,7 +499,7 @@ export default function ProductForm({ categories, product }: Props) {
   const addVariant = () =>
     set("variants", [
       ...form.variants,
-      { color: "", colorHex: "#000000", colorImage: "", size: "", price: "", discountPrice: "", stock: "0", showStock: true },
+      { color: "", colorHex: "#000000", colorImage: "", size: "", price: "", discountPrice: "", stock: "0", showStock: true, priceColor: "" },
     ]);
   const removeVariant = (idx: number) => set("variants", form.variants.filter((_, i) => i !== idx));
 
@@ -514,6 +521,8 @@ export default function ProductForm({ categories, product }: Props) {
               discountPrice: v.discountPrice.trim() && disc > 0 && disc < price ? disc : null,
               stock: Math.max(0, Number(v.stock) || 0),
               showStock: v.showStock,
+              // "" = inherit the product's colour; the server re-validates the hex.
+              priceColor: v.priceColor || null,
             };
           })
       : [];
@@ -628,6 +637,7 @@ export default function ProductForm({ categories, product }: Props) {
       <input type="hidden" name="stock" value={(() => { const s = submitStock(); return s === "" ? "" : String(s); })()} />
       <input type="hidden" name="lowStockThreshold" value={form.lowStockThreshold === "" ? "" : String(form.lowStockThreshold)} />
       <input type="hidden" name="showStock" value={form.showStock ? "true" : "false"} />
+      <input type="hidden" name="priceColor" value={form.priceColor} />
       <input type="hidden" name="status" value={form.status} />
       <input type="hidden" name="promoBadge" value={form.promoBadge} />
       <input type="hidden" name="metaTitle" value={form.metaTitle} />
@@ -870,6 +880,42 @@ export default function ProductForm({ categories, product }: Props) {
                   </span>
                 </label>
               </div>
+
+              {/* Storefront price colour. Empty = the theme default (near-black),
+                  so leaving it alone keeps every existing product unchanged.
+                  Presentational only — it never affects the amount charged. */}
+              <div className="mt-4 border-t border-stone-100 pt-4">
+                <Label hint="optional">Price text colour</Label>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="color"
+                    value={form.priceColor || "#111827"}
+                    onChange={(e) => set("priceColor", e.target.value)}
+                    aria-label="Price text colour"
+                    className="h-9 w-12 cursor-pointer rounded-md border border-stone-200 bg-white p-1"
+                  />
+                  <span
+                    className="text-[18px] font-extrabold"
+                    style={form.priceColor ? { color: form.priceColor } : undefined}
+                  >
+                    {fmtTaka(form.price === "" ? 0 : Number(form.price))}
+                  </span>
+                  {form.priceColor && (
+                    <button
+                      type="button"
+                      onClick={() => set("priceColor", "")}
+                      className="ml-auto rounded-md px-2 py-1 text-[12px] font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-700"
+                    >
+                      Reset to default
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[12px] text-stone-400">
+                  {form.priceColor
+                    ? "Used for this product’s price on the storefront."
+                    : "Not set — the price shows in the default colour (black)."}
+                </p>
+              </div>
             </div>
 
             {/* Colours for a single-price product (optional). Shown as swatches on
@@ -1064,6 +1110,27 @@ export default function ProductForm({ categories, product }: Props) {
                         className="h-3.5 w-3.5 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
                       />
                       Show stock count on site
+                    </label>
+                    {/* Per-variant price colour. Unset = inherit the product's
+                        colour (which itself falls back to the default black). */}
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[12px] font-medium text-stone-600">
+                      <input
+                        type="color"
+                        value={v.priceColor || form.priceColor || "#111827"}
+                        onChange={(e) => setVariant(idx, { priceColor: e.target.value })}
+                        aria-label={`Price colour for ${variantRowLabel(v) || "this variant"}`}
+                        className="h-6 w-8 cursor-pointer rounded border border-stone-200 bg-white p-0.5"
+                      />
+                      Price colour
+                      {v.priceColor && (
+                        <button
+                          type="button"
+                          onClick={() => setVariant(idx, { priceColor: "" })}
+                          className="text-[11px] font-medium text-stone-400 underline decoration-dotted hover:text-stone-600"
+                        >
+                          reset
+                        </button>
+                      )}
                     </label>
                   </div>
                 </div>

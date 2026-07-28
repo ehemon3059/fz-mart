@@ -64,6 +64,19 @@ function parseFeatures(formData: FormData): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Accept only a literal #rrggbb colour. This value is rendered into an inline
+ * `style` attribute on the storefront, so anything else — a CSS function, a
+ * url(), a stray `;` closing the declaration — must never reach the DB.
+ * Returns null for blank/invalid input, which the storefront reads as
+ * "use the theme default".
+ */
+function parseHexColor(value: FormDataEntryValue | null): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : null;
+}
+
 /** Colors/specs are submitted as JSON arrays — simple rows, no reason for a line-delimited format. */
 function parseColors(formData: FormData): ProductColorInput[] {
   const raw = String(formData.get("colors") ?? "[]");
@@ -105,6 +118,7 @@ function parseVariants(formData: FormData): ProductVariantInput[] {
           discountPrice: discountPaisa != null && discountPaisa < price ? discountPaisa : null,
           stock: Math.max(0, Math.floor(Number(v?.stock) || 0)),
           showStock: v?.showStock !== false,
+          priceColor: parseHexColor(v?.priceColor ?? null),
         };
       })
       .filter((v) => (v.size || v.colorName) && v.price > 0);
@@ -145,6 +159,7 @@ export async function saveProduct(
   const stock = Number(formData.get("stock"));
   const lowStockThreshold = Number(formData.get("lowStockThreshold") ?? 0);
   const showStock = formData.get("showStock") !== "false";
+  const priceColor = parseHexColor(formData.get("priceColor"));
   const isFeatured = formData.get("isFeatured") === "on";
   const status = formData.get("status") === "INACTIVE" ? "INACTIVE" : "ACTIVE";
   const promoBadge = String(formData.get("promoBadge") ?? "").trim();
@@ -191,6 +206,7 @@ export async function saveProduct(
     stock,
     lowStockThreshold: Number.isFinite(lowStockThreshold) && lowStockThreshold > 0 ? Math.floor(lowStockThreshold) : 0,
     showStock,
+    priceColor,
     isFeatured,
     status: status as "ACTIVE" | "INACTIVE",
     promoBadge: promoBadge || null,
