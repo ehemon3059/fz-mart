@@ -63,6 +63,12 @@ export default function AppearanceForm({
     [elements],
   );
   const chipInk = overrideVars["--chip-ink"] ?? palette.brandDark;
+  // Footer companions, derived server-side style so the preview matches exactly.
+  // The `??` values mirror the CSS fallbacks for an unset footer.
+  const footerInk = overrideVars["--footer-ink"] ?? "#23211e";
+  const footerSoft = overrideVars["--footer-soft"] ?? "#8a857d";
+  const footerLine = overrideVars["--footer-line"] ?? "#ecebe8";
+  const footerChip = overrideVars["--footer-chip"] ?? "#fafaf9";
   const brandFill = glossy
     ? "linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%)"
     : effective("btnPrimary");
@@ -329,6 +335,51 @@ export default function AppearanceForm({
               ))}
             </div>
           </div>
+
+          {/* footer — text, links and borders are derived from the chosen
+              background, exactly as the storefront derives them */}
+          <div
+            className="mt-3 overflow-hidden rounded-xl border"
+            style={{ backgroundColor: effective("footerBg"), borderColor: footerLine }}
+          >
+            <div className="grid grid-cols-2 gap-3 p-3">
+              <div>
+                <p className="text-[10px] font-bold" style={{ color: footerInk }}>
+                  Shop
+                </p>
+                <p className="mt-1 text-[10px] leading-relaxed" style={{ color: footerSoft }}>
+                  Electronics
+                  <br />
+                  Fashion
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold" style={{ color: footerInk }}>
+                  Company
+                </p>
+                <p className="mt-1 text-[10px] leading-relaxed" style={{ color: footerSoft }}>
+                  About Us
+                  <br />
+                  Contact Us
+                </p>
+              </div>
+            </div>
+            <div
+              className="flex items-center justify-between px-3 py-2"
+              style={{ borderTop: `1px solid ${footerLine}` }}
+            >
+              <span className="text-[9px]" style={{ color: footerSoft }}>
+                © 2026 FZ Mart BD.
+              </span>
+              <span
+                className="rounded px-1.5 py-0.5 text-[9px] font-bold"
+                style={{ backgroundColor: footerChip, color: footerSoft, border: `1px solid ${footerLine}` }}
+              >
+                bKash
+              </span>
+            </div>
+          </div>
+
           <p className="mt-3 text-[12px] leading-relaxed text-stone-500">
             The brand colour applies to storefront buttons, badges, links, focus rings and tints. Anything set
             under “Element colours” overrides it for that element only. The sale/discount red stays the same so

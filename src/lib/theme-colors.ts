@@ -167,6 +167,9 @@ export function derivePalette(base: string): BrandPalette {
 /** Masthead colour when the admin hasn't overridden it — matches storefront.css. */
 export const NAV_BG_DEFAULT = "#0d0625";
 
+/** Footer colour when unset — the card surface, as storefront.css has it. */
+export const FOOTER_BG_DEFAULT = "#ffffff";
+
 export interface ElementColorSlot {
   key: string;
   /** Name shown in Settings → Appearance. */
@@ -214,6 +217,12 @@ export const ELEMENT_COLOR_SLOTS = [
     help: "Text links like “Shop now →” and View all.",
     fallback: (p) => p.brandDark,
   },
+  {
+    key: "footerBg",
+    label: "Footer background",
+    help: "The whole footer block. Headings, links, borders and payment chips re-colour automatically to stay readable — including on a dark footer.",
+    fallback: () => FOOTER_BG_DEFAULT,
+  },
 ] as const satisfies readonly ElementColorSlot[];
 
 export type ElementColorKey = (typeof ELEMENT_COLOR_SLOTS)[number]["key"];
@@ -228,7 +237,45 @@ export const DEFAULT_ELEMENT_COLORS: ElementColors = {
   badgeNew: null,
   chipBg: null,
   linkAccent: null,
+  footerBg: null,
 };
+
+/**
+ * The footer is a whole surface, not a single accent, so one picked colour has
+ * to yield a readable set: heading, body/link, hairline border and the payment
+ * chip fill. Everything is mixed FROM the chosen background, so the result
+ * stays in its colour family, and the direction flips on dark backgrounds —
+ * otherwise a navy footer would keep near-black text.
+ */
+/**
+ * A tinted tone of `bg` at `weight`, but only if it clears `minRatio`. Mid-tone
+ * backgrounds can't produce a readable tint in either direction (measured: a
+ * #0770b0 footer gave 2.8:1 body text), so those fall back to plain white or
+ * near-black — whichever contrasts better.
+ */
+function readableOn(bg: string, weight: number, minRatio: number): string {
+  const toward = luminance(bg) < 0.35 ? "#ffffff" : "#000000";
+  const tinted = mix(bg, toward, weight);
+  if (contrast(bg, tinted) >= minRatio) return tinted;
+  return contrast(bg, "#ffffff") >= contrast(bg, "#111111") ? "#ffffff" : "#111111";
+}
+
+function footerVars(bg: string): Record<string, string> {
+  const dark = luminance(bg) < 0.35;
+  const toward = dark ? "#ffffff" : "#000000";
+  return {
+    "--footer-bg": bg,
+    // Headings: near the contrasting end, with a trace of the bg hue. Held to
+    // 7:1 (WCAG AAA) since they anchor the whole block.
+    "--footer-ink": readableOn(bg, 0.1, 7),
+    // Body copy and links — AA at 4.5:1.
+    "--footer-soft": readableOn(bg, 0.42, 4.5),
+    // Hairlines and chip fills are decorative, so they stay pure mixes: they
+    // only need to be *distinguishable* from the surface, not readable.
+    "--footer-line": mix(bg, toward, 0.86),
+    "--footer-chip": mix(bg, toward, 0.94),
+  };
+}
 
 /** Validate raw setting rows into a typed override map; junk becomes null. */
 export function coerceElementColors(raw: Record<string, string | undefined>): ElementColors {
@@ -262,6 +309,7 @@ export function elementColorVars(c: ElementColors): Record<string, string> {
     vars["--chip-ink"] = readableInk(c.chipBg);
   }
   if (c.linkAccent) vars["--link-accent"] = c.linkAccent;
+  if (c.footerBg) Object.assign(vars, footerVars(c.footerBg));
   return vars;
 }
 

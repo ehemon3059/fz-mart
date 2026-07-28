@@ -29,7 +29,7 @@ const ITEMS = [
 
 export default function TrustGrid() {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {ITEMS.map(({ Icon, title, sub }) => (
         <div
           key={title}

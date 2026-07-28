@@ -16,7 +16,9 @@ export default function TrustStrip() {
             <span className="trust-ic"><Icon size={22} /></span>
             <div>
               <b>{title}</b>
-              <span>{sub}</span>
+              {/* Explicit class: a bare `span` selector would also match the
+                  icon wrapper above and override its colour. */}
+              <span className="trust-sub">{sub}</span>
             </div>
           </div>
         ))}

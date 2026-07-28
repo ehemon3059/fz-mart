@@ -208,9 +208,6 @@ export default async function ProductPage({
           </div>
 
           {!inStock && <NotifyBackInStock productId={product.id} />}
-
-          <PaymentBadges />
-          <TrustGrid />
         </div>
       </div>
 
@@ -234,6 +231,12 @@ export default async function ProductPage({
           </div>
         }
       />
+
+      {/* ── payment + reassurance band, below the tabs ── */}
+      <section className="mt-10 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <TrustGrid />
+        <PaymentBadges />
+      </section>
 
       <div className="mt-12">
         <ProductSection title="Recommended for you" products={relatedProducts} />
