@@ -24,6 +24,13 @@ export interface ProductCardData {
    */
   priceColor?: string | null;
   /**
+   * Variant pricing, when the source loads it. A variant product's card shows
+   * the lowest variant price as a "from" price, in that variant's colour.
+   * Omitted by leaner sources (search, wishlist), which fall back to the
+   * product's own price and colour.
+   */
+  variants?: { price: number; discountPrice: number | null; priceColor?: string | null }[];
+  /**
    * When the shopper must pick a size/color/variant first, the card links to
    * the detail page instead of quick-adding. Omitted for leaner data sources
    * (e.g. search) — treated as no required choice.
@@ -46,10 +53,29 @@ export default function ProductCard({
 
   const hasDiscount =
     product.discountPrice != null && product.discountPrice < product.price;
-  const price = hasDiscount ? product.discountPrice! : product.price;
+
+  // Variant products are priced by their rows, so the card shows the cheapest
+  // one as a "from" price — matching the product page. A product-level discount
+  // (e.g. a flash-sale override) still wins, since that's the campaign price
+  // the shopper is being promised.
+  const cheapestVariant =
+    !hasDiscount && product.variants?.length
+      ? product.variants.reduce((lo, v) =>
+          (v.discountPrice ?? v.price) < (lo.discountPrice ?? lo.price) ? v : lo,
+        )
+      : null;
+  const isFromPrice = cheapestVariant != null;
+
+  const price = hasDiscount
+    ? product.discountPrice!
+    : cheapestVariant
+      ? (cheapestVariant.discountPrice ?? cheapestVariant.price)
+      : product.price;
   const discountPct = hasDiscount
     ? Math.round((1 - product.discountPrice! / product.price) * 100)
     : 0;
+  // The cheapest variant's colour wins for a "from" price; else the product's.
+  const priceStyle = priceColorStyle(cheapestVariant?.priceColor, product.priceColor);
   const outOfStock = product.stock <= 0;
   // A required size/color/variant choice can't be made from a card, so those
   // products link to the detail page instead of quick-adding.
@@ -94,7 +120,8 @@ export default function ProductCard({
             <div className="c-oos">Out of stock</div>
           ) : (
             <div className="c-price">
-              <Price paisa={price} className="now" style={priceColorStyle(product.priceColor)} />
+              {isFromPrice && <span className="from">From</span>}
+              <Price paisa={price} className="now" style={priceStyle} />
               {hasDiscount && <Price paisa={product.price} className="was" />}
             </div>
           )}

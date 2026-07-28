@@ -113,10 +113,20 @@ export default async function ProductPage({
   // "from" price and the AddToCartPanel handles per-size price & stock.
   const hasVariants = product.variants.length > 0;
   // "From" price is the lowest amount a shopper actually pays — the discounted
-  // price where a variant has one.
-  const minVariantPrice = hasVariants
-    ? Math.min(...product.variants.map((v) => v.discountPrice ?? v.price))
+  // price where a variant has one. Keep the winning variant, not just its
+  // amount: the "from" price is shown in that variant's own colour, so a
+  // bare Math.min() would lose the attribution.
+  const cheapestVariant = hasVariants
+    ? product.variants.reduce((lo, v) =>
+        (v.discountPrice ?? v.price) < (lo.discountPrice ?? lo.price) ? v : lo,
+      )
+    : null;
+  const minVariantPrice = cheapestVariant
+    ? (cheapestVariant.discountPrice ?? cheapestVariant.price)
     : effectivePrice;
+  // Colour for the headline/"from" price: the cheapest variant's own colour
+  // when it sets one, else the product's.
+  const headlinePriceColor = cheapestVariant?.priceColor ?? product.priceColor;
 
   const category = product.category;
   // Full ancestor chain (root → … → parent) for the breadcrumb trail.
@@ -174,7 +184,7 @@ export default async function ProductPage({
             originalPrice={hasDiscount ? product.price : null}
             inStock={inStock}
             isFromPrice={hasVariants}
-            priceColor={product.priceColor}
+            priceColor={headlinePriceColor}
           />
 
           <div className="border-t border-slate-100 pt-5">
@@ -257,6 +267,11 @@ export default async function ProductPage({
           stock: hasVariants ? (inStock ? 1 : 0) : product.stock,
           promoBadge: product.promoBadge,
           priceColor: product.priceColor,
+          variants: product.variants.map((v) => ({
+            price: v.price,
+            discountPrice: v.discountPrice,
+            priceColor: v.priceColor,
+          })),
           images: product.images.map((img) => ({ url: img.url, isPrimary: img.isPrimary })),
         }}
       />
@@ -269,7 +284,7 @@ export default async function ProductPage({
         originalPrice={hasDiscount ? product.price : null}
         inStock={inStock}
         isFromPrice={hasVariants}
-        priceColor={product.priceColor}
+        priceColor={headlinePriceColor}
         revealAfterId="buy-box"
       />
     </div>

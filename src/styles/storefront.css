@@ -418,6 +418,9 @@
 .fz .c-name{font-size:13.5px;font-weight:600;line-height:1.32;color:var(--ink);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.64em;}
 .fz .c-price{display:flex;align-items:baseline;gap:7px;margin-top:auto;}
+/* "From" prefix on variant-priced cards, where the amount is the lowest of the
+   variant rows rather than a single fixed price. Muted so the price leads. */
+.fz .c-price .from{font-size:11.5px;font-weight:600;color:var(--ink-mute);margin-right:-2px;}
 .fz .c-price .now{font-size:16px;font-weight:800;letter-spacing:-.01em;}
 .fz .c-price .was{font-size:12.5px;color:var(--ink-mute);text-decoration:line-through;}
 .fz .c-oos{font-size:11.5px;color:var(--sale);font-weight:700;}

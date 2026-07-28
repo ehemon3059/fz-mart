@@ -247,7 +247,17 @@ function VariantPurchase({
   const priceOf = (v: VariantOption) => v.discountPrice ?? v.price;
 
   const selectedVariant = variantFor(needColor ? colorName : null, needSize ? size : null);
-  const effectivePrice = selectedVariant ? priceOf(selectedVariant) : Math.min(...variants.map(priceOf));
+  // Cheapest row backs the "from" price shown before a choice is made — kept as
+  // the variant (not just its amount) so the price can take that row's colour.
+  const cheapestVariant = variants.reduce(
+    (lo: VariantOption | null, v) => (lo === null || priceOf(v) < priceOf(lo) ? v : lo),
+    null,
+  );
+  const effectivePrice = selectedVariant
+    ? priceOf(selectedVariant)
+    : cheapestVariant
+      ? priceOf(cheapestVariant)
+      : 0;
   const selectedHasDiscount = !!selectedVariant && selectedVariant.discountPrice != null;
   const effectiveStock = selectedVariant?.stock ?? 0;
   const maxQty = Math.max(effectiveStock, 1);
@@ -403,7 +413,10 @@ function VariantPurchase({
         ) : (
           <span className="text-gray-500">
             From{" "}
-            <span className="font-bold text-gray-900" style={priceColorStyle(priceColor)}>
+            <span
+              className="font-bold text-gray-900"
+              style={priceColorStyle(cheapestVariant?.priceColor, priceColor)}
+            >
               {formatTaka(effectivePrice)}
             </span>{" "}
             · choose options above

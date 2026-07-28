@@ -4,8 +4,16 @@ import { FLASH_SALE_ACTIVE_CACHE_KEY } from "./cache";
 
 const CATALOG_TTL_SECONDS = 60;
 
+// Mirrors the catalog card shape in server/products/index.ts — keep the two in
+// step so a campaign card renders identically to the same product elsewhere.
 const productWithImages = {
   images: { orderBy: { sortOrder: "asc" as const } },
+  // Backs the card's "from" price and its colour for variant products. A
+  // campaign salePrice still overrides this (see the homepage mapping).
+  variants: {
+    orderBy: { sortOrder: "asc" as const },
+    select: { price: true, discountPrice: true, priceColor: true },
+  },
   // Lets storefront cards decide quick-add vs. "View Details" (see ProductCard).
   _count: { select: { variants: true, colors: true } },
 };

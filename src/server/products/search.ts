@@ -60,6 +60,7 @@ export interface ProductSearchCard {
   stock: number;
   promoBadge: string | null;
   priceColor: string | null;
+  variants: { price: number; discountPrice: number | null; priceColor: string | null }[];
   images: { url: string; isPrimary: boolean }[];
 }
 
@@ -189,6 +190,11 @@ export async function searchProducts(q: SearchQuery): Promise<SearchResult> {
           stock: true,
           promoBadge: true,
           priceColor: true,
+          // Cheapest row backs the card's "from" price and its colour.
+          variants: {
+            orderBy: { sortOrder: "asc" },
+            select: { price: true, discountPrice: true, priceColor: true },
+          },
           images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
         },
       })

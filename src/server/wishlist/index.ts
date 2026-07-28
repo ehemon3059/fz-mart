@@ -38,6 +38,11 @@ export async function listWishlist(customerId: string) {
           promoBadge: true,
           priceColor: true,
           status: true,
+          // Cheapest row backs the card's "from" price and its colour.
+          variants: {
+            orderBy: { sortOrder: "asc" },
+            select: { price: true, discountPrice: true, priceColor: true },
+          },
           images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
         },
       },

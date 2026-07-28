@@ -18,6 +18,13 @@ const CATALOG_TTL_SECONDS = 60;
 
 const productWithImages = {
   images: { orderBy: { sortOrder: "asc" } },
+  // Just enough of each variant to price the card: a variant product's card
+  // shows the lowest variant price ("from"), in that variant's own colour.
+  // Deliberately narrow — cards render in long lists, so this stays cheap.
+  variants: {
+    orderBy: { sortOrder: "asc" },
+    select: { price: true, discountPrice: true, priceColor: true },
+  },
   // Lets storefront cards know whether the shopper must pick a variant/color
   // before adding to cart (quick-add) or should be sent to the detail page.
   _count: { select: { variants: true, colors: true } },
