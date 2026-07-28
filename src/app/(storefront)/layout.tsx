@@ -11,10 +11,29 @@ import { headers } from "next/headers";
 import { organizationJsonLd } from "@/lib/jsonld";
 import { getGtmId, getPixelId } from "@/server/settings/tracking";
 import { getBrandPalette, getElementColors, getThemeLayout } from "@/server/settings/theme";
-import { SURFACE_PRESET_VARS, elementColorVars, isGlossyPalette } from "@/lib/theme-colors";
+import { SURFACE_PRESET_VARS, elementColorVars, isGlossyPalette, resolveTopBarColor } from "@/lib/theme-colors";
+import type { Viewport } from "next";
 import { getLocalePrefs } from "@/i18n/server";
 import { I18nProvider } from "@/i18n/provider";
 import "@/styles/storefront.css";
+
+/**
+ * Paints the mobile browser chrome (Chrome/Android URL bar, Safari/iOS status
+ * area) the same colour as the utility bar at the top of the page.
+ *
+ * Server-side is the right place for this: the colour already comes from the
+ * DB during SSR, so the tag ships in the initial HTML and the URL bar is
+ * correct on first paint — no flash of the default colour, and it works with
+ * JS disabled. `getElementColors()` reads a Redis-cached settings group that
+ * this layout requests anyway, so this adds no extra database round trip.
+ *
+ * Scoped to the storefront route group deliberately: the admin area keeps the
+ * browser default rather than inheriting a shopper-facing brand colour.
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const elementColors = await getElementColors();
+  return { themeColor: resolveTopBarColor(elementColors) };
+}
 
 export default async function StorefrontLayout({
   children,

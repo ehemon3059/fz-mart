@@ -298,6 +298,28 @@ function footerVars(bg: string): Record<string, string> {
   };
 }
 
+/**
+ * The stylesheet's own `--nav-bg` default (see `:root` in storefront.css).
+ * Kept here so the theme-color meta tag can resolve the same value the CSS
+ * would land on when an admin has set no override at all — if you change it in
+ * one place, change it in the other.
+ */
+export const DEFAULT_NAV_BG = "#0d0625";
+
+/**
+ * The colour actually painted behind the utility bar at the top of the page,
+ * resolved the same way the browser resolves `var(--util-bg, var(--nav-bg))`
+ * in `.fz .util`: the utility-bar override wins, then the header override,
+ * then the stylesheet default.
+ *
+ * This is what the mobile URL bar should match, so it backs the `theme-color`
+ * meta tag. Returning a plain hex (never a `var()`) matters — `theme-color`
+ * is parsed by the browser chrome, which does not resolve custom properties.
+ */
+export function resolveTopBarColor(c: ElementColors): string {
+  return c.utilBg || c.headerBg || DEFAULT_NAV_BG;
+}
+
 /** Validate raw setting rows into a typed override map; junk becomes null. */
 export function coerceElementColors(raw: Record<string, string | undefined>): ElementColors {
   const out = { ...DEFAULT_ELEMENT_COLORS };

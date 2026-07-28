@@ -398,7 +398,7 @@ function VariantPurchase({
         {selectedVariant ? (
           <>
             <span
-              className="text-lg font-bold text-gray-900"
+              className="text-[30px] font-extrabold leading-none text-slate-900"
               style={priceColorStyle(selectedVariant.priceColor, priceColor)}
             >
               {formatTaka(effectivePrice)}
