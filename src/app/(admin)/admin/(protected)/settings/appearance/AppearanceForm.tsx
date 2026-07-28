@@ -3,13 +3,18 @@
 import { useMemo, useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import {
+  ELEMENT_COLOR_SLOTS,
   THEME_PRESETS,
+  coerceElementColors,
   derivePalette,
+  elementColorVars,
   isGlossyPalette,
   normalizeHex,
   type BrandPalette,
+  type ElementColorKey,
+  type ElementColors,
 } from "@/lib/theme-colors";
-import { saveTheme } from "./actions";
+import { saveElementColors, saveTheme } from "./actions";
 
 function paletteMatches(a: BrandPalette, b: BrandPalette): boolean {
   return (
@@ -20,9 +25,22 @@ function paletteMatches(a: BrandPalette, b: BrandPalette): boolean {
   );
 }
 
-export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
+export default function AppearanceForm({
+  initial,
+  initialElementColors,
+}: {
+  initial: BrandPalette;
+  initialElementColors: ElementColors;
+}) {
   const [palette, setPalette] = useState<BrandPalette>(initial);
   const [custom, setCustom] = useState(initial.brand);
+  // Per-element overrides. "" means "inherit the brand palette" — the same
+  // thing null means server-side, but text inputs need a string.
+  const [elements, setElements] = useState<Record<ElementColorKey, string>>(() =>
+    Object.fromEntries(
+      ELEMENT_COLOR_SLOTS.map((s) => [s.key, initialElementColors[s.key] ?? ""]),
+    ) as Record<ElementColorKey, string>,
+  );
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -38,10 +56,17 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
   // the storefront's `.fz[data-brand-gloss="on"]` rules so the preview stays
   // truthful. Badges use the softer two-stop gold.
   const glossy = useMemo(() => isGlossyPalette(palette), [palette]);
+  // Same derivation the storefront runs, so the preview can't drift from it
+  // (this is where the chip's text colour comes from).
+  const overrideVars = useMemo(
+    () => elementColorVars(coerceElementColors(elements)),
+    [elements],
+  );
+  const chipInk = overrideVars["--chip-ink"] ?? palette.brandDark;
   const brandFill = glossy
     ? "linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%)"
-    : palette.brand;
-  const badgeFill = glossy ? "linear-gradient(180deg,#d7b45f,#a97f2a)" : palette.brand;
+    : effective("btnPrimary");
+  const badgeFill = glossy ? "linear-gradient(180deg,#d7b45f,#a97f2a)" : effective("badgeNew");
   const glossShadow = glossy
     ? "0 2px 2px rgba(255,255,255,.55) inset, 0 -4px 8px rgba(110,78,16,.35) inset, 0 0 0 2px #ecd07d, 0 0 0 3px rgba(120,86,20,.5), 0 8px 16px rgba(120,86,20,.4)"
     : undefined;
@@ -59,12 +84,30 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
     if (normalized) setPalette(derivePalette(normalized));
   }
 
+  function setElement(key: ElementColorKey, value: string) {
+    setElements((prev) => ({ ...prev, [key]: value }));
+    setSuccess(false);
+  }
+
+  /** The colour an element actually renders with: its override, else the palette. */
+  function effective(key: ElementColorKey): string {
+    const slot = ELEMENT_COLOR_SLOTS.find((s) => s.key === key)!;
+    return normalizeHex(elements[key]) ?? slot.fallback(palette);
+  }
+
   function handleSubmit(formData: FormData) {
     setError(null);
     setSuccess(false);
     startTransition(async () => {
+      // Palette first, then the per-element overrides layered on top. Both read
+      // from the same FormData — the field names don't collide.
       const result = await saveTheme(formData);
-      if (result?.error) setError(result.error);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      const elementResult = await saveElementColors(formData);
+      if (elementResult?.error) setError(elementResult.error);
       else setSuccess(true);
     });
   }
@@ -138,6 +181,61 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
           </div>
         </div>
 
+        {/* Per-element colours */}
+        <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-soft sm:p-6">
+          <h2 className="text-[15px] font-bold text-stone-900">Element colours</h2>
+          <p className="mt-0.5 text-[13px] text-stone-500">
+            Override individual pieces of the storefront. Leave a field empty to follow the brand colour above.
+          </p>
+
+          <div className="mt-5 space-y-3">
+            {ELEMENT_COLOR_SLOTS.map((slot) => {
+              const value = elements[slot.key];
+              const overridden = value !== "";
+              const invalid = overridden && !normalizeHex(value);
+              return (
+                <div
+                  key={slot.key}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3"
+                >
+                  <input
+                    type="color"
+                    value={effective(slot.key)}
+                    onChange={(e) => setElement(slot.key, e.target.value)}
+                    className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-stone-200 bg-white p-1"
+                    aria-label={slot.label}
+                  />
+                  <div className="min-w-[190px] flex-1">
+                    <p className="text-[13.5px] font-semibold text-stone-800">{slot.label}</p>
+                    <p className="text-[12px] leading-snug text-stone-500">{slot.help}</p>
+                  </div>
+                  <input
+                    type="text"
+                    name={slot.key}
+                    value={value}
+                    onChange={(e) => setElement(slot.key, e.target.value)}
+                    placeholder={`${slot.fallback(palette)} (inherited)`}
+                    className="w-40 rounded-xl border border-stone-200 bg-white px-3 py-2 text-[13.5px] font-mono text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setElement(slot.key, "")}
+                    disabled={!overridden}
+                    className="text-[12.5px] font-semibold text-stone-500 underline-offset-2 hover:underline disabled:opacity-35 disabled:no-underline"
+                  >
+                    Reset
+                  </button>
+                  {invalid && (
+                    <span className="w-full text-[12.5px] font-medium text-amber-600">
+                      Enter a hex like #0d0625, or clear the field to inherit.
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Hidden inputs carry the resolved palette to the server */}
         <input type="hidden" name="brand" value={palette.brand} />
         <input type="hidden" name="brandDark" value={palette.brandDark} />
@@ -168,7 +266,31 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
       <aside className="lg:self-start">
         <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-soft">
           <p className="text-[13px] font-semibold text-stone-800">Live preview</p>
-          <div className="mt-4 rounded-xl border border-stone-100 bg-[#fafaf9] p-4">
+          {/* masthead: top bar + header, each independently overridable */}
+          <div className="mt-4 overflow-hidden rounded-xl border border-stone-200">
+            <div
+              className="flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold text-white"
+              style={{
+                backgroundColor: effective("utilBg"),
+                borderBottom: "1px solid rgba(255,255,255,.25)",
+              }}
+            >
+              <span>Track Order</span>
+              <span>Help Center</span>
+            </div>
+            <div
+              className="flex items-center gap-2 px-3 py-3"
+              style={{ backgroundColor: effective("headerBg") }}
+            >
+              <span className="text-[13px] font-extrabold text-white">
+                FZ<span style={{ color: palette.brand }}>Mart</span>
+              </span>
+              <span className="h-6 flex-1 rounded-full bg-white" />
+              <span className="text-[10px] font-semibold text-white">Cart</span>
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-stone-100 bg-[#fafaf9] p-4">
             {/* button */}
             <button
               type="button"
@@ -184,11 +306,11 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
               </span>
               <span
                 className="rounded-md px-2.5 py-1 text-[12px] font-bold"
-                style={{ backgroundColor: palette.brandTint, color: palette.brandDark, border: `1px solid ${palette.brandTint2}` }}
+                style={{ backgroundColor: effective("chipBg"), color: chipInk, border: `1px solid ${palette.brandTint2}` }}
               >
                 Free shipping
               </span>
-              <span className="text-[13px] font-bold" style={{ color: palette.brandDark }}>
+              <span className="text-[13px] font-bold" style={{ color: effective("linkAccent") }}>
                 Shop now →
               </span>
             </div>
@@ -208,8 +330,9 @@ export default function AppearanceForm({ initial }: { initial: BrandPalette }) {
             </div>
           </div>
           <p className="mt-3 text-[12px] leading-relaxed text-stone-500">
-            Applies to storefront buttons, badges, links, focus rings and tints. The sale/discount red stays
-            the same so offers always stand out.
+            The brand colour applies to storefront buttons, badges, links, focus rings and tints. Anything set
+            under “Element colours” overrides it for that element only. The sale/discount red stays the same so
+            offers always stand out.
           </p>
         </div>
       </aside>

@@ -1,8 +1,11 @@
 import { getSettingGroup, setSetting } from "@/lib/settings";
 import {
   DEFAULT_PALETTE,
+  ELEMENT_COLOR_SLOTS,
+  coerceElementColors,
   coerceLayout,
   type BrandPalette,
+  type ElementColors,
   type ThemeLayout,
 } from "@/lib/theme-colors";
 
@@ -30,6 +33,30 @@ export async function setBrandPalette(palette: BrandPalette): Promise<void> {
     setSetting({ group: GROUP, key: "brandTint", value: palette.brandTint }),
     setSetting({ group: GROUP, key: "brandTint2", value: palette.brandTint2 }),
   ]);
+}
+
+// ── Per-element colour overrides ──────────────────────────────
+// Optional per-element colours layered on top of the palette. Rows live in the
+// same "theme" group; an empty string means "no override" (inherit the brand
+// palette), so clearing a field simply blanks the row.
+
+export async function getElementColors(): Promise<ElementColors> {
+  const g = await getSettingGroup(GROUP);
+  return coerceElementColors(g);
+}
+
+export async function setElementColors(input: ElementColors): Promise<ElementColors> {
+  const next = coerceElementColors(
+    Object.fromEntries(
+      ELEMENT_COLOR_SLOTS.map((s) => [s.key, input[s.key] ?? ""]),
+    ) as Record<string, string>,
+  );
+  await Promise.all(
+    ELEMENT_COLOR_SLOTS.map((s) =>
+      setSetting({ group: GROUP, key: s.key, value: next[s.key] ?? "" }),
+    ),
+  );
+  return next;
 }
 
 // ── Surface theme + layout ────────────────────────────────────

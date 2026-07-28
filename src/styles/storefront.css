@@ -44,8 +44,8 @@
 /* ---------- top utility bar ---------- */
 /* Top utility bar sits on the masthead colour with a white hairline separating
    it from the main header below. Text is white + semibold on the dark ground. */
-.fz .util{background:var(--nav-bg);color:#fff;font-size:12.5px;font-weight:600;
-  border-bottom:1px solid var(--nav-line);}
+.fz .util{background:var(--util-bg,var(--nav-bg));color:#fff;font-size:12.5px;font-weight:600;
+  border-bottom:1px solid rgba(255,255,255,.25098039215686);}
 .fz .util .wrap{display:flex;align-items:center;justify-content:space-between;height:36px;}
 .fz .util-left{display:flex;align-items:center;gap:8px;color:#fff;}
 .fz .util-dot{width:5px;height:5px;border-radius:50%;background:var(--brand);}
@@ -237,7 +237,7 @@
 .fz .promo-col{display:flex;flex-direction:column;gap:16px;}
 .fz .promo{position:relative;flex:1;border-radius:var(--radius);overflow:hidden;padding:24px;display:flex;flex-direction:column;justify-content:space-between;min-height:0;}
 .fz .promo.p1{background:#fff5e9;color:#7a4910;border:1px solid #f6e4cd;}
-.fz .promo.p2{background:var(--brand-tint);color:var(--brand-dark);border:1px solid var(--brand-tint-2);}
+.fz .promo.p2{background:var(--chip-bg,var(--brand-tint));color:var(--chip-ink,var(--brand-dark));border:1px solid var(--brand-tint-2);}
 .fz .promo small{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;opacity:.75;}
 .fz .promo h3{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:8px 0 0;line-height:1.12;}
 .fz .promo .p-link{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px;margin-top:14px;}
@@ -260,9 +260,9 @@
 .fz .sec-hd .sh-l{display:flex;align-items:center;gap:12px;min-width:0;}
 .fz .sec-hd h2{font-size:23px;font-weight:800;letter-spacing:-.025em;margin:0;white-space:nowrap;}
 .fz .sec-hd .sh-sub{font-size:13.5px;color:var(--ink-mute);}
-.fz .viewall{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:var(--brand-dark);
+.fz .viewall{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:var(--link-accent,var(--brand-dark));
   padding:7px 12px;border-radius:9px;transition:background .15s;white-space:nowrap;}
-.fz .viewall:hover{background:var(--brand-tint);}
+.fz .viewall:hover{background:var(--chip-bg,var(--brand-tint));}
 
 /* ---------- category tiles ---------- */
 .fz .cat-tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;}
@@ -278,7 +278,7 @@
 .fz .cat-dir{padding-top:40px;}
 .fz .cat-dir-hd{text-align:center;max-width:560px;margin:0 auto 34px;}
 .fz .cat-dir-hd .eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--brand-dark);background:var(--brand-tint);
+  text-transform:uppercase;color:var(--chip-ink,var(--brand-dark));background:var(--chip-bg,var(--brand-tint));
   padding:5px 12px;border-radius:999px;margin-bottom:14px;}
 .fz .cat-dir-hd h1{font-size:30px;font-weight:800;letter-spacing:-.03em;margin:0 0 8px;}
 .fz .cat-dir-hd p{font-size:14.5px;color:var(--ink-mute);margin:0;}
@@ -336,7 +336,7 @@
 .fz .prod-page{padding-top:40px;}
 .fz .prod-hd{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;}
 .fz .prod-hd .eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--brand-dark);background:var(--brand-tint);
+  text-transform:uppercase;color:var(--chip-ink,var(--brand-dark));background:var(--chip-bg,var(--brand-tint));
   padding:5px 12px;border-radius:999px;margin-bottom:12px;}
 .fz .prod-hd h1{font-size:28px;font-weight:800;letter-spacing:-.03em;margin:0;}
 .fz .prod-hd .prod-count{display:block;font-size:13.5px;color:var(--ink-mute);margin-top:6px;}
@@ -380,7 +380,7 @@
 .fz .card .c-img .ph,.fz .card .c-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
 .fz .badge{position:absolute;top:10px;left:10px;z-index:2;font-size:11px;font-weight:700;padding:4px 8px;border-radius:7px;letter-spacing:.01em;}
 .fz .badge.sale{background:var(--sale);color:#fff;}
-.fz .badge.new{background:var(--brand);color:#fff;}
+.fz .badge.new{background:var(--badge-new,var(--brand));color:#fff;}
 .fz .badge.promo{background:var(--ink);color:#fff;}
 .fz .disc-pill{position:absolute;top:10px;right:10px;z-index:2;background:var(--sale-tint);color:var(--sale);
   font-size:11.5px;font-weight:800;padding:4px 7px;border-radius:7px;}
@@ -403,25 +403,26 @@
 .fz .card .c-link{display:flex;flex-direction:column;flex:1;color:inherit;text-decoration:none;}
 .fz .card .c-foot{padding:0 var(--card-pad) var(--card-pad);}
 .fz .c-add{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;
-  padding:9px 12px;border:1px solid var(--brand);border-radius:10px;background:transparent;
-  color:var(--brand);font-size:13px;font-weight:700;cursor:pointer;
+  padding:9px 12px;border:1px solid var(--btn-primary,var(--brand));border-radius:10px;background:transparent;
+  color:var(--btn-primary,var(--brand));font-size:13px;font-weight:700;cursor:pointer;
   transition:background .15s,color .15s,border-color .15s,opacity .15s;}
-.fz .c-add:hover{background:var(--brand);color:#fff;}
-.fz .c-add.is-added{background:var(--brand);color:#fff;border-color:var(--brand);}
+.fz .c-add:hover{background:var(--btn-primary,var(--brand));color:#fff;}
+.fz .c-add.is-added{background:var(--btn-primary,var(--brand));color:#fff;border-color:var(--btn-primary,var(--brand));}
 .fz .c-add:disabled{border-color:var(--line);color:var(--ink-mute);background:transparent;cursor:not-allowed;}
 .fz .c-add.c-view{text-decoration:none;}
 
-/* ---------- product detail: purchase buttons (themed via --brand) ---------- */
-/* Base look is set here so all three follow the admin brand palette; layout
+/* ---------- product detail: purchase buttons (themed via --btn-primary) ---------- */
+/* Base look is set here so all three follow the admin's primary-button colour —
+   which itself falls back to the brand palette when not overridden. Layout
    (flex/size) still comes from the Tailwind classes on the buttons. */
-.fz .btn-brand-outline{border:1px solid var(--brand);color:var(--brand);background:transparent;
+.fz .btn-brand-outline{border:1px solid var(--btn-primary,var(--brand));color:var(--btn-primary,var(--brand));background:transparent;
   transition:background .15s,color .15s,border-color .15s,opacity .15s;}
-.fz .btn-brand-outline:hover:not(:disabled){background:var(--brand);color:#fff;}
-.fz .btn-brand-solid{background:var(--brand);color:#fff;border:1px solid var(--brand);
+.fz .btn-brand-outline:hover:not(:disabled){background:var(--btn-primary,var(--brand));color:#fff;}
+.fz .btn-brand-solid{background:var(--btn-primary,var(--brand));color:#fff;border:1px solid var(--btn-primary,var(--brand));
   transition:background .15s,border-color .15s,opacity .15s;}
-.fz .btn-brand-solid:hover:not(:disabled){background:var(--brand-dark);border-color:var(--brand-dark);}
+.fz .btn-brand-solid:hover:not(:disabled){background:var(--btn-primary-dark,var(--brand-dark));border-color:var(--btn-primary-dark,var(--brand-dark));}
 /* wishlist "saved" state: filled brand even at rest */
-.fz .btn-brand-outline.is-active{background:var(--brand);color:#fff;}
+.fz .btn-brand-outline.is-active{background:var(--btn-primary,var(--brand));color:#fff;}
 
 /* ---------- glossy golden fills (Golden Elegance preset only) ----------
    Opt-in via data-brand-gloss="on" on the .fz wrapper (set in the storefront
@@ -501,7 +502,7 @@
 .fz .news input{flex:1;height:48px;border:1.5px solid transparent;border-radius:11px;padding:0 16px;font:inherit;font-size:14.5px;background:#fff;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s;}
 .fz .news input::placeholder{color:#9aa0a6;}
 .fz .news input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-tint);}
-.fz .news .n-btn{height:48px;border:0;border-radius:11px;padding:0 24px;background:var(--brand);color:#fff;font:inherit;font-weight:700;cursor:pointer;transition:background .15s;}
+.fz .news .n-btn{height:48px;border:0;border-radius:11px;padding:0 24px;background:var(--btn-primary,var(--brand));color:#fff;font:inherit;font-weight:700;cursor:pointer;transition:background .15s;}
 .fz .news .n-btn:hover{background:var(--brand-dark);}
 .fz .news .n-btn:disabled{opacity:.6;cursor:default;}
 .fz .news .n-err{flex-basis:100%;margin-top:2px;color:#ffd7de;font-size:13px;font-weight:600;}
@@ -618,8 +619,8 @@
 .fz .co-terms{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--ink-soft);margin:4px 0 14px;line-height:1.5;}
 .fz .co-terms input{margin-top:2px;width:16px;height:16px;accent-color:var(--brand);flex-shrink:0;}
 .fz .co-terms a{color:var(--brand-dark);font-weight:600;}
-.fz .co-place{width:100%;border:0;border-radius:12px;padding:15px;background:var(--brand);color:#fff;font:inherit;font-weight:800;font-size:15px;cursor:pointer;transition:background .15s;}
-.fz .co-place:hover{background:var(--brand-dark);}
+.fz .co-place{width:100%;border:0;border-radius:12px;padding:15px;background:var(--btn-primary,var(--brand));color:#fff;font:inherit;font-weight:800;font-size:15px;cursor:pointer;transition:background .15s;}
+.fz .co-place:hover{background:var(--btn-primary-dark,var(--brand-dark));}
 .fz .co-place:disabled{opacity:.55;cursor:not-allowed;}
 .fz .co-err{background:var(--sale-tint);color:var(--sale);border:1px solid var(--sale);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:14px;}
 .fz .co-empty{text-align:center;color:var(--ink-mute);padding:60px 0;}
@@ -634,12 +635,12 @@
 
 /* animated "Proceed to Checkout" */
 .fz .checkout-btn{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:10px;
-  width:100%;margin-top:18px;border:0;border-radius:12px;padding:15px 20px;background:var(--brand);color:#fff;
+  width:100%;margin-top:18px;border:0;border-radius:12px;padding:15px 20px;background:var(--btn-primary,var(--brand));color:#fff;
   font:inherit;font-weight:800;font-size:15px;cursor:pointer;
-  box-shadow:0 10px 24px -10px color-mix(in srgb, var(--brand) 70%, transparent);
+  box-shadow:0 10px 24px -10px color-mix(in srgb, var(--btn-primary,var(--brand)) 70%, transparent);
   transition:transform .18s ease, background .18s ease, box-shadow .18s ease;}
-.fz .checkout-btn:hover{background:var(--brand-dark);transform:translateY(-2px);
-  box-shadow:0 16px 32px -10px color-mix(in srgb, var(--brand) 78%, transparent);}
+.fz .checkout-btn:hover{background:var(--btn-primary-dark,var(--brand-dark));transform:translateY(-2px);
+  box-shadow:0 16px 32px -10px color-mix(in srgb, var(--btn-primary,var(--brand)) 78%, transparent);}
 .fz .checkout-btn:active{transform:translateY(0);}
 .fz .checkout-btn .cb-arrow{display:inline-flex;transition:transform .2s ease;}
 .fz .checkout-btn:hover .cb-arrow{transform:translateX(5px);}

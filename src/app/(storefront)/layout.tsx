@@ -10,8 +10,8 @@ import UtmCapture from "@/components/storefront/UtmCapture";
 import { headers } from "next/headers";
 import { organizationJsonLd } from "@/lib/jsonld";
 import { getGtmId, getPixelId } from "@/server/settings/tracking";
-import { getBrandPalette, getThemeLayout } from "@/server/settings/theme";
-import { SURFACE_PRESET_VARS, isGlossyPalette } from "@/lib/theme-colors";
+import { getBrandPalette, getElementColors, getThemeLayout } from "@/server/settings/theme";
+import { SURFACE_PRESET_VARS, elementColorVars, isGlossyPalette } from "@/lib/theme-colors";
 import { getLocalePrefs } from "@/i18n/server";
 import { I18nProvider } from "@/i18n/provider";
 import "@/styles/storefront.css";
@@ -21,11 +21,12 @@ export default async function StorefrontLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [gtmId, pixelId, palette, layout, prefs, headerList] = await Promise.all([
+  const [gtmId, pixelId, palette, layout, elementColors, prefs, headerList] = await Promise.all([
     getGtmId(),
     getPixelId(),
     getBrandPalette(),
     getThemeLayout(),
+    getElementColors(),
     getLocalePrefs(),
     headers(),
   ]);
@@ -52,6 +53,10 @@ export default async function StorefrontLayout({
     "--ink-soft": surface.inkSoft,
     "--ink-mute": surface.inkMute,
     "--line": surface.line,
+    // Per-element overrides come LAST so they win over the palette. Slots the
+    // admin hasn't set emit nothing, leaving the stylesheet's var() fallbacks
+    // to keep tracking the brand colours.
+    ...elementColorVars(elementColors),
   } as React.CSSProperties;
 
   return (

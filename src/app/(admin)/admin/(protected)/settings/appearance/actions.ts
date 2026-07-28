@@ -1,13 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { setBrandPalette, setThemeLayout } from "@/server/settings/theme";
+import { setBrandPalette, setElementColors, setThemeLayout } from "@/server/settings/theme";
 import {
   normalizeHex,
   CARD_STYLES,
+  ELEMENT_COLOR_SLOTS,
   SURFACE_PRESETS,
+  DEFAULT_ELEMENT_COLORS,
   type BrandPalette,
   type CardStyle,
+  type ElementColors,
   type SurfacePreset,
 } from "@/lib/theme-colors";
 import { requirePermission } from "@/server/admin/guard";
@@ -70,6 +73,29 @@ export async function saveTheme(formData: FormData): Promise<ActionResult> {
 
   await setBrandPalette(palette);
   // Repaint the whole storefront (every page reads the palette from the layout).
+  revalidatePath("/", "layout");
+  revalidatePath("/admin/settings/appearance");
+  return { success: true };
+}
+
+// Per-element colours. Every field is optional — an empty value clears that
+// override so the element goes back to following the brand palette.
+export async function saveElementColors(formData: FormData): Promise<ActionResult> {
+  await requirePermission("settings");
+  const colors: ElementColors = { ...DEFAULT_ELEMENT_COLORS };
+
+  for (const slot of ELEMENT_COLOR_SLOTS) {
+    const raw = String(formData.get(slot.key) ?? "").trim();
+    if (raw === "") continue; // cleared → inherit the palette
+    const normalized = normalizeHex(raw);
+    if (!normalized) {
+      return { error: `“${slot.label}” is not a valid hex code (e.g. #0d0625).` };
+    }
+    colors[slot.key] = normalized;
+  }
+
+  await setElementColors(colors);
+  // Every page reads these vars from the storefront layout.
   revalidatePath("/", "layout");
   revalidatePath("/admin/settings/appearance");
   return { success: true };

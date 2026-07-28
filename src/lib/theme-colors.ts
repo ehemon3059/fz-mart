@@ -97,6 +97,40 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${c(r)}${c(g)}${c(b)}`;
 }
 
+/** WCAG relative luminance (0 = black, 1 = white). */
+function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG contrast ratio between two colours (1 = identical, 21 = black/white). */
+function contrast(a: string, b: string): number {
+  const [la, lb] = [luminance(a), luminance(b)];
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * A readable text colour for `bg`. Prefers a tinted tone — a much darker or
+ * lighter shade of the background itself, so the text stays in the same colour
+ * family — but only if it clears WCAG AA (4.5:1). Mid-tone backgrounds can't
+ * produce a tinted ink with enough contrast, so those fall back to plain
+ * near-black or white, whichever reads better.
+ */
+function readableInk(bg: string): string {
+  const candidates = [
+    luminance(bg) > 0.35 ? mix(bg, "#000000", 0.42) : mix(bg, "#ffffff", 0.34),
+    "#111111",
+    "#ffffff",
+  ];
+  return (
+    candidates.find((c) => contrast(bg, c) >= 4.5) ??
+    candidates.reduce((best, c) => (contrast(bg, c) > contrast(bg, best) ? c : best))
+  );
+}
+
 /** Mix two colours in sRGB: `weightA` of `a`, the rest of `b`. */
 function mix(a: string, b: string, weightA: number): string {
   const [ar, ag, ab] = hexToRgb(a);
@@ -118,6 +152,117 @@ export function derivePalette(base: string): BrandPalette {
     brandTint: mix(brand, "#ffffff", 0.1),
     brandTint2: mix(brand, "#ffffff", 0.28),
   };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Per-element colour overrides
+//
+// The brand palette drives every accent at once. These six named slots let an
+// admin re-colour individual pieces of the storefront on top of it. Each is
+// OPTIONAL: null means "follow the brand palette", which is what the CSS
+// fallbacks in styles/storefront.css express (e.g. `var(--btn-primary,
+// var(--brand))`). Stored as hex strings in the same `theme` Setting group.
+// ─────────────────────────────────────────────────────────────
+
+/** Masthead colour when the admin hasn't overridden it — matches storefront.css. */
+export const NAV_BG_DEFAULT = "#0d0625";
+
+export interface ElementColorSlot {
+  key: string;
+  /** Name shown in Settings → Appearance. */
+  label: string;
+  /** What it repaints on the storefront. */
+  help: string;
+  /** Which palette value it falls back to when unset — for the admin preview. */
+  fallback: (p: BrandPalette) => string;
+}
+
+export const ELEMENT_COLOR_SLOTS = [
+  {
+    key: "headerBg",
+    label: "Header background",
+    help: "Main masthead bar — logo, search and cart row.",
+    fallback: () => NAV_BG_DEFAULT,
+  },
+  {
+    key: "utilBg",
+    label: "Top bar background",
+    help: "Thin strip above the header (Track Order / Help Center).",
+    fallback: () => NAV_BG_DEFAULT,
+  },
+  {
+    key: "btnPrimary",
+    label: "Primary button",
+    help: "Add to cart, Place order, newsletter and other solid CTAs. The hover shade is derived automatically.",
+    fallback: (p) => p.brand,
+  },
+  {
+    key: "badgeNew",
+    label: "NEW badge",
+    help: "The NEW flag on product cards.",
+    fallback: (p) => p.brand,
+  },
+  {
+    key: "chipBg",
+    label: "Info chip",
+    help: "Soft tinted chips such as Free shipping and section eyebrows. Text colour is derived automatically.",
+    fallback: (p) => p.brandTint,
+  },
+  {
+    key: "linkAccent",
+    label: "Accent link",
+    help: "Text links like “Shop now →” and View all.",
+    fallback: (p) => p.brandDark,
+  },
+] as const satisfies readonly ElementColorSlot[];
+
+export type ElementColorKey = (typeof ELEMENT_COLOR_SLOTS)[number]["key"];
+
+/** null = inherit from the brand palette. */
+export type ElementColors = Record<ElementColorKey, string | null>;
+
+export const DEFAULT_ELEMENT_COLORS: ElementColors = {
+  headerBg: null,
+  utilBg: null,
+  btnPrimary: null,
+  badgeNew: null,
+  chipBg: null,
+  linkAccent: null,
+};
+
+/** Validate raw setting rows into a typed override map; junk becomes null. */
+export function coerceElementColors(raw: Record<string, string | undefined>): ElementColors {
+  const out = { ...DEFAULT_ELEMENT_COLORS };
+  for (const slot of ELEMENT_COLOR_SLOTS) {
+    out[slot.key] = normalizeHex(raw[slot.key] ?? "");
+  }
+  return out;
+}
+
+/**
+ * The CSS custom properties to set on the `.fz` wrapper for the overrides that
+ * are actually present. Unset slots emit nothing, so the `var(--x, …)`
+ * fallbacks in the stylesheet keep tracking the brand palette.
+ *
+ * Two slots expand into a second variable, because one admin-picked colour has
+ * to carry a companion shade: the primary button needs a darker hover, and the
+ * tinted chip needs readable text on top of it.
+ */
+export function elementColorVars(c: ElementColors): Record<string, string> {
+  const vars: Record<string, string> = {};
+  if (c.headerBg) vars["--nav-bg"] = c.headerBg;
+  if (c.utilBg) vars["--util-bg"] = c.utilBg;
+  if (c.btnPrimary) {
+    vars["--btn-primary"] = c.btnPrimary;
+    vars["--btn-primary-dark"] = mix(c.btnPrimary, "#000000", 0.82);
+  }
+  if (c.badgeNew) vars["--badge-new"] = c.badgeNew;
+  if (c.chipBg) {
+    vars["--chip-bg"] = c.chipBg;
+    vars["--chip-ink"] = readableInk(c.chipBg);
+  }
+  if (c.linkAccent) vars["--link-accent"] = c.linkAccent;
+  return vars;
 }
 
 // ─────────────────────────────────────────────────────────────

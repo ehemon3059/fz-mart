@@ -1,4 +1,4 @@
-import { getBrandPalette, getThemeLayout } from "@/server/settings/theme";
+import { getBrandPalette, getElementColors, getThemeLayout } from "@/server/settings/theme";
 import { getConversionConfig } from "@/server/settings/conversion";
 import { getLogoUrl } from "@/server/settings/branding";
 import { getCompanyInfo } from "@/server/settings/company";
@@ -15,9 +15,10 @@ export const metadata = { title: "Appearance — FZ-Mart Admin" };
 
 export default async function AppearanceSettingsPage() {
   await primeSiteUrl();
-  const [palette, layout, conversion, logoUrl, configuredUrl, companyInfo] = await Promise.all([
+  const [palette, layout, elementColors, conversion, logoUrl, configuredUrl, companyInfo] = await Promise.all([
     getBrandPalette(),
     getThemeLayout(),
+    getElementColors(),
     getConversionConfig(),
     getLogoUrl(),
     getSiteUrlSetting(),
@@ -42,7 +43,7 @@ export default async function AppearanceSettingsPage() {
       </div>
 
       <div className="mt-6">
-        <AppearanceForm initial={palette} />
+        <AppearanceForm initial={palette} initialElementColors={elementColors} />
       </div>
 
       <div className="mt-6">
