@@ -11,7 +11,7 @@ import { headers } from "next/headers";
 import { organizationJsonLd } from "@/lib/jsonld";
 import { getGtmId, getPixelId } from "@/server/settings/tracking";
 import { getBrandPalette, getElementColors, getThemeLayout } from "@/server/settings/theme";
-import { SURFACE_PRESET_VARS, elementColorVars, isGlossyPalette, resolveTopBarColor } from "@/lib/theme-colors";
+import { SURFACE_PRESET_VARS, elementColorVars, isGlossyPalette, resolveTopBarColor, surfaceColorVars } from "@/lib/theme-colors";
 import type { Viewport } from "next";
 import { getLocalePrefs } from "@/i18n/server";
 import { I18nProvider } from "@/i18n/provider";
@@ -72,6 +72,9 @@ export default async function StorefrontLayout({
     "--ink-soft": surface.inkSoft,
     "--ink-mute": surface.inkMute,
     "--line": surface.line,
+    // Per-surface background overrides (category bar / product card /
+    // newsletter) sit above the preset but below the accent overrides.
+    ...surfaceColorVars(layout.surfaceColors),
     // Per-element overrides come LAST so they win over the palette. Slots the
     // admin hasn't set emit nothing, leaving the stylesheet's var() fallbacks
     // to keep tracking the brand colours.

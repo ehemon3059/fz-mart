@@ -160,7 +160,9 @@
   border:2px solid var(--card);}
 
 /* ---------- category nav ---------- */
-.fz .catnav{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:72px;z-index:40;}
+/* `--catnav-bg` is an optional admin override (Settings → Appearance). Unset it
+   falls through to --card, which is what this bar has always used. */
+.fz .catnav{background:var(--catnav-bg,var(--card));border-bottom:1px solid var(--line);position:sticky;top:72px;z-index:40;}
 .fz .catnav .wrap{display:flex;align-items:center;gap:6px;height:50px;overflow-x:auto;scrollbar-width:none;}
 .fz .catnav .wrap::-webkit-scrollbar{display:none;}
 .fz .allcat{display:flex;align-items:center;gap:9px;padding:8px 16px;background:var(--brand-tint);color:var(--brand-dark);
@@ -249,7 +251,8 @@
    at weight 600. --link-accent keeps it re-colourable from Settings →
    Appearance, falling back to the palette's dark shade. */
 .fz .trust{margin-top:14px;}
-.fz .trust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:var(--card);
+/* `--trust-bg` is an optional admin override; unset it follows --card. */
+.fz .trust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:var(--trust-bg,var(--card));
   border:1px solid var(--line);border-radius:var(--radius);padding:6px;}
 .fz .trust-item{position:relative;display:flex;align-items:center;gap:13px;padding:16px 18px;
   border-radius:var(--radius-sm);transition:background .18s,transform .18s;}
@@ -521,10 +524,10 @@
 .fz .flash .card{background:#fff;}
 
 /* ---------- newsletter ---------- */
-.fz .news{margin-top:64px;background:var(--ink);border-radius:var(--radius);padding:38px 44px;color:#fff;
+.fz .news{margin-top:64px;background:var(--news-bg,var(--ink));border-radius:var(--radius);padding:38px 44px;color:var(--news-ink,#fff);
   display:flex;align-items:center;justify-content:space-between;gap:30px;flex-wrap:wrap;}
 .fz .news h3{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;}
-.fz .news p{margin:0;color:rgba(255,255,255,.62);font-size:14px;}
+.fz .news p{margin:0;color:var(--news-soft,rgba(255,255,255,.62));font-size:14px;}
 .fz .news form{display:flex;flex-wrap:wrap;gap:10px;flex:1;min-width:280px;max-width:460px;}
 .fz .news input{flex:1;height:48px;border:1.5px solid transparent;border-radius:11px;padding:0 16px;font:inherit;font-size:14.5px;background:#fff;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s;}
 .fz .news input::placeholder{color:#9aa0a6;}
@@ -545,7 +548,7 @@
   border:2px solid var(--brand);animation:news-ring .7s ease .1s both;}
 .fz .news-thanks .tt{line-height:1.35;}
 .fz .news-thanks .tt b{display:block;font-size:16px;font-weight:800;}
-.fz .news-thanks .tt span{color:rgba(255,255,255,.62);font-size:13.5px;}
+.fz .news-thanks .tt span{color:var(--news-soft,rgba(255,255,255,.62));font-size:13.5px;}
 @keyframes news-rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 @keyframes news-pop{0%{transform:scale(0);}70%{transform:scale(1.15);}100%{transform:scale(1);}}
 @keyframes news-draw{to{stroke-dashoffset:0;}}

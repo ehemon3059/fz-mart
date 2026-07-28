@@ -427,10 +427,58 @@ export const CARD_STYLE_LABELS: Record<CardStyle, string> = {
   minimal: "Minimal",
 };
 
+/**
+ * Optional per-surface background overrides, layered on top of the preset.
+ * Each is null = "follow the preset", matching the `var(--x, …)` fallbacks in
+ * storefront.css. Keyed by the CSS class the admin sees in the picker.
+ */
+export const SURFACE_COLOR_SLOTS = [
+  {
+    key: "catnavBg",
+    label: "Category bar",
+    help: "The sticky category strip under the header (.catnav).",
+    cssVar: "--catnav-bg",
+    fallback: (s: SurfaceVars) => s.card,
+  },
+  {
+    key: "cardBg",
+    label: "Product card",
+    help: "Every product card surface across the storefront (.card).",
+    cssVar: "--card",
+    fallback: (s: SurfaceVars) => s.card,
+  },
+  {
+    key: "trustBg",
+    label: "Trust bar",
+    help: "The badge row under the hero — free delivery, returns, support (.trust-grid).",
+    cssVar: "--trust-bg",
+    fallback: (s: SurfaceVars) => s.card,
+  },
+  {
+    key: "newsBg",
+    label: "Newsletter block",
+    help: "The subscribe band near the footer (.news). Its text re-colours automatically to stay readable.",
+    cssVar: "--news-bg",
+    fallback: (s: SurfaceVars) => s.ink,
+  },
+] as const;
+
+export type SurfaceColorKey = (typeof SURFACE_COLOR_SLOTS)[number]["key"];
+export type SurfaceColors = Record<SurfaceColorKey, string | null>;
+
+export const DEFAULT_SURFACE_COLORS: SurfaceColors = {
+  catnavBg: null,
+  cardBg: null,
+  trustBg: null,
+  newsBg: null,
+};
+
 export interface ThemeLayout {
   preset: SurfacePreset;
   /** Optional page-background override (#rrggbb) that wins over the preset. */
   customBgColor: string | null;
+  /** Optional per-surface background overrides that win over the preset. */
+  surfaceColors: SurfaceColors;
   productCardStyle: CardStyle;
   homeProductCount: number;
 }
@@ -438,9 +486,38 @@ export interface ThemeLayout {
 export const DEFAULT_LAYOUT: ThemeLayout = {
   preset: "theme-light",
   customBgColor: null,
+  surfaceColors: DEFAULT_SURFACE_COLORS,
   productCardStyle: "modern",
   homeProductCount: 10,
 };
+
+/**
+ * The CSS custom properties for the surface overrides that are actually set.
+ * The newsletter block is a whole surface rather than an accent, so its picked
+ * background also yields readable heading and body ink — otherwise choosing a
+ * pale colour would leave white-on-white text.
+ */
+export function surfaceColorVars(c: SurfaceColors): Record<string, string> {
+  const vars: Record<string, string> = {};
+  if (c.catnavBg) vars["--catnav-bg"] = c.catnavBg;
+  if (c.cardBg) vars["--card"] = c.cardBg;
+  if (c.trustBg) vars["--trust-bg"] = c.trustBg;
+  if (c.newsBg) {
+    vars["--news-bg"] = c.newsBg;
+    vars["--news-ink"] = readableOn(c.newsBg, 0.06, 7);
+    vars["--news-soft"] = readableOn(c.newsBg, 0.38, 4.5);
+  }
+  return vars;
+}
+
+/** Validate raw setting rows into a typed surface-override map; junk becomes null. */
+export function coerceSurfaceColors(raw: Record<string, string | undefined>): SurfaceColors {
+  const out = { ...DEFAULT_SURFACE_COLORS };
+  for (const slot of SURFACE_COLOR_SLOTS) {
+    out[slot.key] = normalizeHex(raw[slot.key] ?? "");
+  }
+  return out;
+}
 
 /**
  * Validate + clamp the raw string values read from the `theme` Setting group
@@ -458,6 +535,7 @@ export function coerceLayout(raw: Record<string, string | undefined>): ThemeLayo
       ? (rawPreset as SurfacePreset)
       : DEFAULT_LAYOUT.preset,
     customBgColor: bg,
+    surfaceColors: coerceSurfaceColors(raw),
     productCardStyle: (CARD_STYLES as readonly string[]).includes(raw.productCardStyle ?? "")
       ? (raw.productCardStyle as CardStyle)
       : DEFAULT_LAYOUT.productCardStyle,

@@ -2,6 +2,7 @@ import { getSettingGroup, setSetting } from "@/lib/settings";
 import {
   DEFAULT_PALETTE,
   ELEMENT_COLOR_SLOTS,
+  SURFACE_COLOR_SLOTS,
   coerceElementColors,
   coerceLayout,
   type BrandPalette,
@@ -71,6 +72,7 @@ export async function getThemeLayout(): Promise<ThemeLayout> {
     customBgColor: g.customBgColor,
     productCardStyle: g.productCardStyle,
     homeProductCount: g.homeProductCount,
+    ...Object.fromEntries(SURFACE_COLOR_SLOTS.map((s) => [s.key, g[s.key]])),
   });
 }
 
@@ -79,12 +81,15 @@ export async function setThemeLayout(input: Partial<ThemeLayout>): Promise<Theme
   // Distinguish "field omitted" (undefined → keep current) from an explicit
   // clear (null → drop the override); `?? ""` would wrongly keep the old value.
   const bg = input.customBgColor !== undefined ? input.customBgColor : current.customBgColor;
+  // Same omitted-vs-cleared distinction, per surface slot.
+  const surfaces = input.surfaceColors ?? current.surfaceColors;
   // Re-validate the merged result so a partial update can't persist a bad value.
   const next = coerceLayout({
     preset: input.preset ?? current.preset,
     customBgColor: bg ?? "",
     productCardStyle: input.productCardStyle ?? current.productCardStyle,
     homeProductCount: String(input.homeProductCount ?? current.homeProductCount),
+    ...Object.fromEntries(SURFACE_COLOR_SLOTS.map((s) => [s.key, surfaces[s.key] ?? ""])),
   });
 
   await Promise.all([
@@ -92,6 +97,9 @@ export async function setThemeLayout(input: Partial<ThemeLayout>): Promise<Theme
     setSetting({ group: GROUP, key: "customBgColor", value: next.customBgColor ?? "" }),
     setSetting({ group: GROUP, key: "productCardStyle", value: next.productCardStyle }),
     setSetting({ group: GROUP, key: "homeProductCount", value: String(next.homeProductCount) }),
+    ...SURFACE_COLOR_SLOTS.map((s) =>
+      setSetting({ group: GROUP, key: s.key, value: next.surfaceColors[s.key] ?? "" }),
+    ),
   ]);
   return next;
 }

@@ -4,13 +4,14 @@ import { revalidatePath } from "next/cache";
 import { setBrandPalette, setElementColors, setThemeLayout } from "@/server/settings/theme";
 import {
   normalizeHex,
-  CARD_STYLES,
   ELEMENT_COLOR_SLOTS,
+  SURFACE_COLOR_SLOTS,
   SURFACE_PRESETS,
   DEFAULT_ELEMENT_COLORS,
+  DEFAULT_SURFACE_COLORS,
   type BrandPalette,
-  type CardStyle,
   type ElementColors,
+  type SurfaceColors,
   type SurfacePreset,
 } from "@/lib/theme-colors";
 import { requirePermission } from "@/server/admin/guard";
@@ -101,19 +102,17 @@ export async function saveElementColors(formData: FormData): Promise<ActionResul
   return { success: true };
 }
 
-// Surface theme + layout: preset, optional custom background, product card
-// style, and the home-page product count. setThemeLayout re-validates and
-// clamps every field, so invalid input can never be persisted.
+// Surface theme: preset, optional page background, and the per-surface
+// background overrides (category bar / product card / newsletter).
+// setThemeLayout re-validates every field, so invalid input can never be
+// persisted. Product card style and home-page product count are no longer
+// editable here; setThemeLayout preserves their stored values.
 export async function saveLayout(formData: FormData): Promise<ActionResult> {
   await requirePermission("settings");
 
   const preset = String(formData.get("preset") ?? "");
-  const cardStyle = String(formData.get("productCardStyle") ?? "");
   if (!(SURFACE_PRESETS as readonly string[]).includes(preset)) {
     return { error: "Please choose a valid theme preset." };
-  }
-  if (!(CARD_STYLES as readonly string[]).includes(cardStyle)) {
-    return { error: "Please choose a valid product card style." };
   }
 
   // An empty background field clears the override (falls back to the preset).
@@ -123,16 +122,21 @@ export async function saveLayout(formData: FormData): Promise<ActionResult> {
     return { error: "The custom background is not a valid hex code (e.g. #0b1220)." };
   }
 
-  const count = Number(formData.get("homeProductCount"));
-  if (!Number.isFinite(count)) {
-    return { error: "Home product count must be a number." };
+  const surfaceColors: SurfaceColors = { ...DEFAULT_SURFACE_COLORS };
+  for (const slot of SURFACE_COLOR_SLOTS) {
+    const raw = String(formData.get(slot.key) ?? "").trim();
+    if (raw === "") continue; // cleared → follow the preset
+    const normalized = normalizeHex(raw);
+    if (!normalized) {
+      return { error: `“${slot.label}” is not a valid hex code (e.g. #0b1220).` };
+    }
+    surfaceColors[slot.key] = normalized;
   }
 
   await setThemeLayout({
     preset: preset as SurfacePreset,
     customBgColor,
-    productCardStyle: cardStyle as CardStyle,
-    homeProductCount: count,
+    surfaceColors,
   });
 
   // Repaint the whole storefront: the layout reads the theme and the home page
