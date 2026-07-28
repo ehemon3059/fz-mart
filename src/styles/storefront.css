@@ -747,7 +747,8 @@
      the safe-area free space below it; icons/labels flip to white for contrast. */
   .fz .mtab{
     display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;
-    background:var(--brand);border-top:1px solid var(--brand-dark);
+    background:var(--mtab-bg, var(--brand));
+    border-top:1px solid var(--mtab-line, var(--brand-dark));
     padding:6px 4px calc(6px + env(safe-area-inset-bottom));
     box-shadow:0 -2px 12px -6px rgba(20,18,14,.18);
   }
@@ -758,7 +759,8 @@
   .fz .mtab-ic{position:relative;display:flex;}
   .fz .mtab-badge{position:absolute;top:-6px;left:13px;min-width:16px;height:16px;padding:0 4px;
     border-radius:999px;background:var(--sale);color:#fff;font-size:10px;font-weight:700;
-    display:flex;align-items:center;justify-content:center;border:2px solid var(--brand);}
+    display:flex;align-items:center;justify-content:center;
+    border:2px solid var(--mtab-bg, var(--brand));}
 }
 
 /* ---------- mobile slide-in menu ---------- */
@@ -777,15 +779,15 @@
      (req 5); inside it a white rounded pill holds the input and a circular
      brand-coloured icon button on the right (reqs 1–4). */
   .fz .hdr-search{display:block;order:4;flex:1 0 100%;width:100%;
-    margin:6px -20px -10px;padding:12px 16px;background:var(--brand);}
+    margin:6px -20px -10px;padding:12px 16px;background:var(--msearch-bg, var(--brand));}
   .fz .hdr-search .search{height:52px;padding:0 5px 0 0;border:0;border-radius:999px;
     background:#fff;box-shadow:0 1px 3px rgba(20,18,14,.12);overflow:visible;}
   .fz .hdr-search .search .cat-sel{display:none;}
   .fz .hdr-search .search input{padding-left:20px;}
   /* Round circle button with only the search icon (label hidden). */
   .fz .hdr-search .search > button{width:42px;height:42px;padding:0;flex-shrink:0;
-    border-radius:50%;justify-content:center;background:var(--brand);}
-  .fz .hdr-search .search > button:hover{background:var(--brand-dark);}
+    border-radius:50%;justify-content:center;background:var(--msearch-btn, var(--brand));}
+  .fz .hdr-search .search > button:hover{background:var(--msearch-btn-dark, var(--brand-dark));}
   .fz .hdr-search .search-btn-label{display:none;}
 
   .fz .mdraw-root{display:block;position:fixed;inset:0;z-index:200;}

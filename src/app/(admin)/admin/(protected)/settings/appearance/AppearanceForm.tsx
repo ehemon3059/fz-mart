@@ -336,6 +336,38 @@ export default function AppearanceForm({
             </div>
           </div>
 
+          {/* mobile-only chrome: the search band under the logo and the fixed
+              bottom tab bar. Both are hidden above 760px on the storefront, so
+              they get their own preview strip here. */}
+          <div className="mt-3 overflow-hidden rounded-xl border border-stone-200">
+            <p className="bg-stone-50 px-3 py-1.5 text-[10px] font-semibold text-stone-500">
+              Mobile only
+            </p>
+            <div className="px-3 py-3" style={{ backgroundColor: effective("mobileSearchBg") }}>
+              <div className="flex items-center gap-2 rounded-full bg-white p-1 pl-3">
+                <span className="flex-1 text-[10px] text-stone-400">Search for products</span>
+                <span
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white"
+                  style={{ backgroundColor: effective("mobileSearchBtn") }}
+                >
+                  <Icon name="search" size={12} strokeWidth={2.4} />
+                </span>
+              </div>
+            </div>
+            <div
+              className="flex items-center justify-around px-3 py-2 text-[9px] font-semibold text-white"
+              style={{
+                backgroundColor: effective("mobileTabBg"),
+                borderTop: `1px solid ${overrideVars["--mtab-line"] ?? palette.brandDark}`,
+              }}
+            >
+              <span>Home</span>
+              <span>Menu</span>
+              <span>Cart</span>
+              <span>Account</span>
+            </div>
+          </div>
+
           {/* footer — text, links and borders are derived from the chosen
               background, exactly as the storefront derives them */}
           <div

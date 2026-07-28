@@ -218,6 +218,24 @@ export const ELEMENT_COLOR_SLOTS = [
     fallback: (p) => p.brandDark,
   },
   {
+    key: "mobileSearchBg",
+    label: "Mobile search band",
+    help: "Mobile only — the band behind the full-width search row under the logo.",
+    fallback: (p) => p.brand,
+  },
+  {
+    key: "mobileSearchBtn",
+    label: "Mobile search button",
+    help: "Mobile only — the round search icon button inside the search pill. The hover shade is derived automatically.",
+    fallback: (p) => p.brand,
+  },
+  {
+    key: "mobileTabBg",
+    label: "Mobile bottom bar",
+    help: "Mobile only — the fixed Home / Menu / Cart / Account tab bar. Its top border is derived automatically.",
+    fallback: (p) => p.brand,
+  },
+  {
     key: "footerBg",
     label: "Footer background",
     help: "The whole footer block. Headings, links, borders and payment chips re-colour automatically to stay readable — including on a dark footer.",
@@ -237,6 +255,9 @@ export const DEFAULT_ELEMENT_COLORS: ElementColors = {
   badgeNew: null,
   chipBg: null,
   linkAccent: null,
+  mobileSearchBg: null,
+  mobileSearchBtn: null,
+  mobileTabBg: null,
   footerBg: null,
 };
 
@@ -309,6 +330,17 @@ export function elementColorVars(c: ElementColors): Record<string, string> {
     vars["--chip-ink"] = readableInk(c.chipBg);
   }
   if (c.linkAccent) vars["--link-accent"] = c.linkAccent;
+  if (c.mobileSearchBg) vars["--msearch-bg"] = c.mobileSearchBg;
+  if (c.mobileSearchBtn) {
+    vars["--msearch-btn"] = c.mobileSearchBtn;
+    vars["--msearch-btn-dark"] = mix(c.mobileSearchBtn, "#000000", 0.82);
+  }
+  if (c.mobileTabBg) {
+    vars["--mtab-bg"] = c.mobileTabBg;
+    // The bar's top hairline and the cart-badge ring both sit on this fill, so
+    // they track it instead of the brand palette.
+    vars["--mtab-line"] = mix(c.mobileTabBg, "#000000", 0.82);
+  }
   if (c.footerBg) Object.assign(vars, footerVars(c.footerBg));
   return vars;
 }
