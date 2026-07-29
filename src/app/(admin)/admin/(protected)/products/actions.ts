@@ -77,6 +77,20 @@ function parseHexColor(value: FormDataEntryValue | null): string | null {
   return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : null;
 }
 
+/**
+ * A photo URL produced by /api/admin/upload — either a local "/uploads/..."
+ * path or an absolute https:// URL from configured object storage. Anything
+ * else (javascript:, data:, a protocol-relative host) is rejected: these are
+ * rendered straight into `src` on the storefront.
+ */
+function parseUploadedImage(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return /^https:\/\//i.test(raw) ? raw : null;
+}
+
 /** Colors/specs are submitted as JSON arrays — simple rows, no reason for a line-delimited format. */
 function parseColors(formData: FormData): ProductColorInput[] {
   const raw = String(formData.get("colors") ?? "[]");
@@ -119,6 +133,7 @@ function parseVariants(formData: FormData): ProductVariantInput[] {
           stock: Math.max(0, Math.floor(Number(v?.stock) || 0)),
           showStock: v?.showStock !== false,
           priceColor: parseHexColor(v?.priceColor ?? null),
+          imageUrl: parseUploadedImage(v?.imageUrl ?? null),
         };
       })
       .filter((v) => (v.size || v.colorName) && v.price > 0);

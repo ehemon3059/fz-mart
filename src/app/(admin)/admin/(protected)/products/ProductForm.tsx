@@ -24,8 +24,6 @@ type Product = NonNullable<Awaited<ReturnType<typeof getProductById>>>;
 
 interface ImageRow {
   url: string;
-  /** Label of the variant row this photo shows ("Navy / M"); "" = whole product. */
-  variantLabel: string;
 }
 
 interface VariantRow {
@@ -34,7 +32,8 @@ interface VariantRow {
   /** Swatch hex for the colour (used when there's no swap image). */
   colorHex: string;
   /** Optional swap image URL shown when this colour is picked. */
-  colorImage: string;
+  /** Uploaded photo for this row ("" = none). Saved to ProductVariant.imageUrl. */
+  imageUrl: string;
   /** Size/option label, e.g. "M" or "1 Litre", or "" for none. */
   size: string;
   /** Regular price in Taka, as a string for the input. */
@@ -119,7 +118,7 @@ function initialFromProduct(p?: Product): FormState {
   const imageRows: ImageRow[] = p.images
     .slice()
     .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
-    .map((i) => ({ url: i.url, variantLabel: i.variantLabel ?? "" }));
+    .map((i) => ({ url: i.url }));
   return {
     pricingMode: (p.variants?.length ?? 0) > 0 ? "variant" : "simple",
     name: p.name,
@@ -140,14 +139,15 @@ function initialFromProduct(p?: Product): FormState {
     images: imageRows,
     // A variant's colour swatch/image used to live in the shared ProductColor
     // list, matched by name. Colours are now entered per row, so backfill hex &
-    // image from that list for existing products.
+    // image from that list for existing products — the row's own imageUrl wins
+    // once it has been set.
     variants:
       p.variants?.map((v) => {
         const swatch = v.colorName ? p.colors?.find((c) => c.name === v.colorName) : undefined;
         return {
           color: v.colorName ?? "",
           colorHex: swatch?.hexCode ?? "#000000",
-          colorImage: swatch?.imageUrl ?? "",
+          imageUrl: v.imageUrl ?? swatch?.imageUrl ?? "",
           size: v.size ?? "",
           price: String(v.price / 100),
           discountPrice: v.discountPrice != null ? String(v.discountPrice / 100) : "",
@@ -407,8 +407,11 @@ export default function ProductForm({ categories, product }: Props) {
   const [form, setForm] = useState<FormState>(() => initialFromProduct(product));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, startSave] = useTransition();
-  const [customizing, setCustomizing] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  // What the image customizer is currently uploading for: the product gallery
+  // ("product"), a single variant row (its index), or nothing (closed).
+  const [customizing, setCustomizing] = useState<"product" | number | null>(null);
+  // Which target is mid-upload, so only that tile shows a spinner.
+  const [uploading, setUploading] = useState<"product" | number | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
 
   const set = <K extends keyof FormState>(key: K, val: FormState[K]) => setForm((f) => ({ ...f, [key]: val }));
@@ -453,18 +456,16 @@ export default function ProductForm({ categories, product }: Props) {
       next.unshift(img);
       return { ...f, images: next };
     });
-  const setImageVariant = (idx: number, variantLabel: string) =>
-    setForm((f) => ({
-      ...f,
-      images: f.images.map((img, i) => (i === idx ? { ...img, variantLabel } : img)),
-    }));
-
   // The customizer hands back a JPEG already cropped to 1000×1000 and compressed
-  // under 200 KB, so it just needs uploading and appending to the list.
+  // under 200 KB, so it just needs uploading and storing against its target.
+  // Target is the product gallery (append, capped at MAX_IMAGES) or a variant
+  // row (replace — each row holds exactly one photo).
   async function handleCustomized(file: File) {
-    setCustomizing(false);
+    const target = customizing;
+    if (target === null) return;
+    setCustomizing(null);
     setImageError(null);
-    setUploading(true);
+    setUploading(target);
     try {
       const body = new FormData();
       body.append("file", file);
@@ -472,11 +473,18 @@ export default function ProductForm({ categories, product }: Props) {
       const res = await fetch("/api/admin/upload", { method: "POST", body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      setForm((f) => ({ ...f, images: [...f.images, { url: data.url, variantLabel: "" }].slice(0, MAX_IMAGES) }));
+      if (target === "product") {
+        setForm((f) => ({ ...f, images: [...f.images, { url: data.url }].slice(0, MAX_IMAGES) }));
+      } else {
+        setForm((f) => ({
+          ...f,
+          variants: f.variants.map((v, i) => (i === target ? { ...v, imageUrl: data.url } : v)),
+        }));
+      }
     } catch (err) {
       setImageError(err instanceof Error ? err.message : "Upload failed");
     } finally {
-      setUploading(false);
+      setUploading(null);
     }
   }
 
@@ -486,7 +494,7 @@ export default function ProductForm({ categories, product }: Props) {
   const addVariant = () =>
     set("variants", [
       ...form.variants,
-      { color: "", colorHex: "#000000", colorImage: "", size: "", price: "", discountPrice: "", stock: "0", showStock: true, priceColor: "" },
+      { color: "", colorHex: "#000000", imageUrl: "", size: "", price: "", discountPrice: "", stock: "0", showStock: true, priceColor: "" },
     ]);
   const removeVariant = (idx: number) => set("variants", form.variants.filter((_, i) => i !== idx));
 
@@ -510,34 +518,24 @@ export default function ProductForm({ categories, product }: Props) {
               showStock: v.showStock,
               // "" = inherit the product's colour; the server re-validates the hex.
               priceColor: v.priceColor || null,
+              // Uploaded photo for this row; the server re-validates the URL.
+              imageUrl: v.imageUrl || null,
             };
           })
       : [];
 
-  // Display label for a variant row — must mirror how the server derives it
-  // from colorName/size ("Navy / M") since ProductImage.variantLabel is matched
-  // against these labels on save.
+  // Display label for a variant row — mirrors how the server derives it from
+  // colorName/size ("Navy / M").
   const variantRowLabel = (v: VariantRow) =>
     [v.color.trim(), v.size.trim()].filter(Boolean).join(" / ");
-  // Labels of the rows that will actually be saved — these feed the per-image
-  // "which variant is this photo?" dropdowns in the Images card.
-  const validVariantLabels = isVariantMode
-    ? [...new Set(
-        form.variants
-          .filter((v) => (v.color.trim() || v.size.trim()) && Number(v.price) > 0)
-          .map(variantRowLabel),
-      )]
-    : [];
 
-  // Images serialized for submit: drop blank URLs, and drop a variant link whose
-  // row was deleted/renamed after the photo was tagged.
+  // The product gallery, serialized for submit. These are whole-product photos
+  // (Pricing & stock); a variant's own photo travels on its variant row instead,
+  // so nothing here carries a variant link.
   const cleanImages = () =>
     form.images
       .filter((img) => img.url.trim())
-      .map((img) => ({
-        url: img.url.trim(),
-        variantLabel: validVariantLabels.includes(img.variantLabel) ? img.variantLabel : null,
-      }));
+      .map((img) => ({ url: img.url.trim(), variantLabel: null }));
 
   // The product row always needs a base price & stock. In variant mode they're
   // derived from the variants — lowest price becomes the storefront "from" price,
@@ -569,7 +567,7 @@ export default function ProductForm({ categories, product }: Props) {
       // Only colours on rows that will actually be saved (named + priced).
       if (!name || Number(v.price) <= 0) continue;
       if (!seen.has(name)) {
-        seen.set(name, { name, hexCode: (v.colorHex || "#000000").trim(), imageUrl: v.colorImage.trim() });
+        seen.set(name, { name, hexCode: (v.colorHex || "#000000").trim(), imageUrl: v.imageUrl.trim() });
       }
     }
     return [...seen.values()];
@@ -902,6 +900,79 @@ export default function ProductForm({ categories, product }: Props) {
               </div>
             </div>
 
+            {/* Product photo gallery — the storefront images for a simple
+                product. First photo is the cover. In variant mode each row
+                carries its own single photo instead. */}
+            <div className="mt-5 border-t border-stone-100 pt-5">
+              <Label hint={`up to ${MAX_IMAGES}`}>Images</Label>
+              <p className="-mt-1 mb-2.5 text-[12px] text-stone-400">
+                Square 1000×1000px · ≤200 KB each. The first photo is the cover.
+              </p>
+              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+                {form.images.map((img, idx) => (
+                  <div
+                    key={img.url + idx}
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.url} alt="" className="h-full w-full object-cover" />
+                    {idx === 0 && (
+                      <span className="absolute left-1 top-1 rounded bg-brand-600 px-1.5 py-0.5 text-[9.5px] font-bold text-white shadow">
+                        Cover
+                      </span>
+                    )}
+                    {/* Always-visible controls: hover reveals nothing on touch,
+                        so these stay on-screen at all sizes. */}
+                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-1">
+                      {idx !== 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => makePrimary(idx)}
+                          title="Make cover"
+                          className="rounded bg-white/90 px-1.5 py-1 text-[10px] font-semibold leading-none text-stone-700 active:bg-white"
+                        >
+                          Cover
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeImage(idx)}
+                        title="Remove photo"
+                        aria-label="Remove photo"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-white/90 text-stone-500 active:bg-white active:text-red-500"
+                      >
+                        <Icon name="trash" size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {form.images.length < MAX_IMAGES && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomizing("product")}
+                    disabled={uploading === "product"}
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
+                  >
+                    {uploading === "product" ? (
+                      <span className="text-[11px] font-semibold">Uploading…</span>
+                    ) : (
+                      <>
+                        <Icon name="plus" size={18} />
+                        <span className="text-[11px] font-semibold">Add photo</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-[12px] text-stone-400">
+                {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it square.
+              </p>
+              <ErrorText>{imageError ?? undefined}</ErrorText>
+            </div>
+
             </fieldset>
           </Card>
 
@@ -1015,19 +1086,51 @@ export default function ProductForm({ categories, product }: Props) {
                   </button>
                   </div>
 
-                  {/* Optional swap image for this colour — only meaningful once a
-                      colour is named. */}
-                  {v.color.trim() && (
-                    <div className="mt-1.5 flex items-center gap-2 px-0.5">
-                      <Icon name="image" size={13} className="shrink-0 text-stone-400" />
-                      <input
-                        value={v.colorImage}
-                        onChange={(e) => setVariant(idx, { colorImage: e.target.value })}
-                        placeholder="Swap image URL for this colour (optional)"
-                        className="w-full min-w-0 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-[12.5px] text-stone-600 outline-none placeholder:text-stone-400 focus:border-brand-500 font-mono"
-                      />
-                    </div>
-                  )}
+                  {/* One photo per variant row — shown on the storefront when
+                      this option is picked. Thumbnail doubles as the replace
+                      button so the control stays thumb-sized on mobile. */}
+                  <div className="mt-2 flex items-center gap-2.5 px-0.5">
+                    {v.imageUrl ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCustomizing(idx)}
+                          disabled={uploading === idx}
+                          title="Replace photo"
+                          className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-stone-100 disabled:opacity-50"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={v.imageUrl} alt="" className="h-full w-full object-cover" />
+                        </button>
+                        <span className="min-w-0 flex-1 text-[12px] text-stone-500">
+                          {uploading === idx ? "Uploading…" : "Photo for this option"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setVariant(idx, { imageUrl: "" })}
+                          aria-label="Remove variant photo"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-red-50 hover:text-red-500"
+                        >
+                          <Icon name="trash" size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCustomizing(idx)}
+                        disabled={uploading === idx}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-300 bg-white py-2 text-[12.5px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
+                      >
+                        {uploading === idx ? (
+                          "Uploading…"
+                        ) : (
+                          <>
+                            <Icon name="image" size={14} /> Add photo for this option
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
 
                   {/* Row footer: discount feedback + storefront stock visibility. */}
                   <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-0.5">
@@ -1091,99 +1194,6 @@ export default function ProductForm({ categories, product }: Props) {
               </p>
             )}
             </fieldset>
-          </Card>
-
-          <Card
-            icon="image"
-            title="Images"
-            hint={`Square 1000×1000px · up to ${MAX_IMAGES} · ≤200 KB each. The first photo is the cover.`}
-          >
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-              {form.images.map((img, idx) => (
-                <div key={img.url + idx}>
-                  <div className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url} alt="" className="h-full w-full object-cover" />
-                    {idx === 0 && (
-                      <span className="absolute left-1.5 top-1.5 rounded-md bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
-                        Cover
-                      </span>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/55 to-transparent p-1.5 opacity-0 transition group-hover:opacity-100">
-                      {idx !== 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => makePrimary(idx)}
-                          title="Make cover"
-                          className="rounded-md bg-white/90 px-1.5 py-1 text-[10.5px] font-semibold text-stone-700 hover:bg-white"
-                        >
-                          Make cover
-                        </button>
-                      ) : (
-                        <span />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx)}
-                        title="Remove photo"
-                        className="flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-stone-500 hover:bg-white hover:text-red-500"
-                      >
-                        <Icon name="trash" size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Which variant does this photo show? Only offered once at
-                      least one valid variant row exists; the value is a label
-                      snapshot ("Navy / M") matched against the rows on save. */}
-                  {isVariantMode && validVariantLabels.length > 0 && (
-                    <select
-                      value={validVariantLabels.includes(img.variantLabel) ? img.variantLabel : ""}
-                      onChange={(e) => setImageVariant(idx, e.target.value)}
-                      aria-label="Variant shown in this photo"
-                      className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-1.5 py-1 text-[11.5px] text-stone-700 outline-none focus:border-brand-400"
-                    >
-                      <option value="">Whole product</option>
-                      {validVariantLabels.map((label) => (
-                        <option key={label} value={label}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              ))}
-
-              {form.images.length < MAX_IMAGES && !(isVariantMode && validVariantLabels.length === 0) && (
-                <button
-                  type="button"
-                  onClick={() => setCustomizing(true)}
-                  disabled={uploading}
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <span className="text-[12px] font-semibold">Uploading…</span>
-                  ) : (
-                    <>
-                      <Icon name="plus" size={20} />
-                      <span className="text-[12px] font-semibold">Add photo</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {isVariantMode && validVariantLabels.length === 0 && (
-              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[12.5px] text-amber-700">
-                Add at least one variant row (a colour or size plus a price) in Sizes / Variants
-                before uploading photos — each photo can then be linked to the variant it shows.
-              </p>
-            )}
-
-            <p className="mt-3 text-[12.5px] text-stone-400">
-              {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it to a square and shrink it to fit.
-            </p>
-            <ErrorText>{imageError ?? undefined}</ErrorText>
           </Card>
         </div>
 
@@ -1289,13 +1299,14 @@ export default function ProductForm({ categories, product }: Props) {
       </div>
     </form>
 
-    {customizing && (
+    {/* Explicit null check — variant row 0 is a valid target but falsy. */}
+    {customizing !== null && (
       <ImageCustomizer
-        label="Product photo"
+        label={customizing === "product" ? "Product photo" : "Variant photo"}
         targetWidth={PRODUCT_IMG.width}
         targetHeight={PRODUCT_IMG.height}
         maxBytes={PRODUCT_IMG.maxBytes}
-        onClose={() => setCustomizing(false)}
+        onClose={() => setCustomizing(null)}
         onDone={handleCustomized}
       />
     )}

@@ -150,6 +150,10 @@ model ProductVariant {
   // Per-variant override for the storefront price colour (#rrggbb). Null =
   // inherit Product.priceColor, which itself falls back to the theme default.
   priceColor    String?
+  // Photo for this specific option, uploaded from the admin product form. Held
+  // per-row rather than on ProductColor so two rows sharing a colour (Navy/M,
+  // Navy/L) can differ and a size-only row can have one. Null = no photo.
+  imageUrl      String?
   sortOrder     Int         @default(0)
   product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems    OrderItem[]

@@ -29,6 +29,8 @@ interface VariantOption {
   showStock: boolean;
   /** Price colour (#rrggbb) for this variant; null = inherit the product's. */
   priceColor?: string | null;
+  /** Photo uploaded for this specific option; null = none. */
+  imageUrl?: string | null;
 }
 
 interface Props {
@@ -220,13 +222,20 @@ function VariantPurchase({
   const needSize = sizes.length > 0;
 
   // Color swatches in their defined order, enriched with hex/image where known.
+  // A photo uploaded on the variant row itself wins over the shared ProductColor
+  // image (which older products still rely on).
   const colorOptions = useMemo(
     () =>
       colorNames.map((cn) => {
         const def = colors.find((c) => c.name === cn);
-        return { name: cn, hexCode: def?.hexCode ?? "#e5e7eb", imageUrl: def?.imageUrl ?? null };
+        const rowImage = variants.find((v) => v.colorName === cn && v.imageUrl)?.imageUrl ?? null;
+        return {
+          name: cn,
+          hexCode: def?.hexCode ?? "#e5e7eb",
+          imageUrl: rowImage ?? def?.imageUrl ?? null,
+        };
       }),
-    [colorNames, colors],
+    [colorNames, colors, variants],
   );
 
   const [colorName, setColorName] = useState<string | null>(null);

@@ -64,6 +64,8 @@ export interface ProductVariantInput {
   showStock?: boolean;
   /** Storefront price colour (#rrggbb) for this variant; null inherits the product's. */
   priceColor?: string | null;
+  /** Uploaded photo for this option; null = none. */
+  imageUrl?: string | null;
 }
 
 export interface ProductImageInput {
@@ -191,6 +193,7 @@ export async function createProduct(input: ProductInput) {
                 stock: v.stock,
                 showStock: v.showStock ?? true,
                 priceColor: v.priceColor ?? null,
+                imageUrl: v.imageUrl ?? null,
                 sortOrder: i,
               })),
             },
@@ -310,6 +313,7 @@ export async function updateProduct(id: number, input: ProductInput) {
             stock: v.stock,
             showStock: v.showStock ?? true,
             priceColor: v.priceColor ?? null,
+            imageUrl: v.imageUrl ?? null,
             sortOrder: i,
           })),
         });
