@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Icon } from "@/components/icons";
+import { useVariantImage } from "@/components/storefront/product/VariantImageContext";
 
 interface GalleryImage {
   id: number;
@@ -22,10 +23,33 @@ interface Props {
 const PLACEHOLDER = "/placeholder.svg";
 
 export default function ProductGallery({ images, name, promoBadge, overlay }: Props) {
-  const safeImages: GalleryImage[] = images.length ? images : [{ id: 0, url: PLACEHOLDER }];
+  // Photo of the option the shopper picked in the buy box, if any.
+  const { url: variantUrl } = useVariantImage();
+
+  // The variant's photo joins the gallery so it can be shown in the main view
+  // and reached from the thumbnail strip. If it's already one of the product's
+  // photos we reuse that entry rather than showing it twice.
+  const safeImages: GalleryImage[] = useMemo(() => {
+    const base: GalleryImage[] = images.length ? images : [{ id: 0, url: PLACEHOLDER }];
+    if (!variantUrl || base.some((i) => i.url === variantUrl)) return base;
+    return [{ id: -1, url: variantUrl }, ...base];
+  }, [images, variantUrl]);
+
   const primaryIdx = safeImages.findIndex((i) => i.isPrimary);
   const [active, setActive] = useState(primaryIdx >= 0 ? primaryIdx : 0);
   const [lightbox, setLightbox] = useState(false);
+
+  // Jump to the selected option's photo whenever it changes.
+  const variantIdx = variantUrl ? safeImages.findIndex((i) => i.url === variantUrl) : -1;
+  useEffect(() => {
+    if (variantIdx >= 0) setActive(variantIdx);
+  }, [variantIdx]);
+
+  // Deselecting drops the injected photo and shifts every index down, so keep
+  // `active` inside the list rather than stranding it past the end.
+  useEffect(() => {
+    setActive((i) => Math.min(i, safeImages.length - 1));
+  }, [safeImages.length]);
 
   const activeUrl = safeImages[active]?.url ?? PLACEHOLDER;
 
@@ -87,7 +111,9 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
       );
     });
 
-  const autoplay = hasMany && !hovering && !touched && !focused && !lightbox;
+  // Picking an option is engagement, like hovering or tapping: hold that photo
+  // in view instead of rotating away from the choice the shopper just made.
+  const autoplay = hasMany && !hovering && !touched && !focused && !lightbox && variantIdx < 0;
 
   // Release the touch pause a few seconds after the last tap so a phone user
   // who glances at one photo still gets the rotation back.

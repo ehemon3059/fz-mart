@@ -10,6 +10,7 @@ import { productJsonLd, breadcrumbJsonLd } from "@/lib/jsonld";
 import { renderMarkdown, markdownToPlainText } from "@/lib/markdown";
 import AddToCartPanel from "@/components/storefront/AddToCartPanel";
 import ProductGallery from "@/components/storefront/ProductGallery";
+import { VariantImageProvider } from "@/components/storefront/product/VariantImageContext";
 import ReviewsSection from "@/components/storefront/ReviewsSection";
 import Breadcrumb from "@/components/storefront/product/Breadcrumb";
 import GalleryBadges from "@/components/storefront/product/GalleryBadges";
@@ -164,7 +165,9 @@ export default async function ProductPage({
         ]}
       />
 
-      {/* ── hero: gallery + buy box ── */}
+      {/* ── hero: gallery + buy box ──
+          Wrapped so picking an option in the buy box swaps the gallery photo. */}
+      <VariantImageProvider>
       <div className="grid gap-6 lg:grid-cols-2 lg:gap-10">
         <div className="lg:sticky lg:top-6 lg:self-start">
           <ProductGallery
@@ -224,6 +227,7 @@ export default async function ProductPage({
           {!inStock && <NotifyBackInStock productId={product.id} />}
         </div>
       </div>
+      </VariantImageProvider>
 
       {/* ── lower section: tabs ── */}
       <ProductTabs

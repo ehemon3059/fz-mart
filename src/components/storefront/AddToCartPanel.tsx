@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCartStore } from "@/lib/cart-store";
 import { trackAddToCart } from "@/lib/pixel";
 import { recordAddToCart } from "@/app/(storefront)/funnel-actions";
 import { formatTaka, priceColorStyle } from "@/lib/money";
 import { Icon } from "@/components/icons";
 import { Banknote, ShoppingCart, Minus, Plus } from "lucide-react";
+import { useVariantImage } from "@/components/storefront/product/VariantImageContext";
 
 interface ColorOption {
   id: number;
@@ -256,6 +257,17 @@ function VariantPurchase({
   const priceOf = (v: VariantOption) => v.discountPrice ?? v.price;
 
   const selectedVariant = variantFor(needColor ? colorName : null, needSize ? size : null);
+
+  // Hand the chosen option's photo to the gallery so it shows in the main image
+  // on the left. Falls back to the colour's swatch photo when the specific
+  // row has none of its own.
+  const { setUrl: setGalleryImage } = useVariantImage();
+  const activeOptionImage =
+    selectedVariant?.imageUrl ??
+    (colorName ? (colorOptions.find((c) => c.name === colorName)?.imageUrl ?? null) : null);
+  useEffect(() => {
+    setGalleryImage(activeOptionImage ?? null);
+  }, [activeOptionImage, setGalleryImage]);
   // Cheapest row backs the "from" price shown before a choice is made — kept as
   // the variant (not just its amount) so the price can take that row's colour.
   const cheapestVariant = variants.reduce(
@@ -402,26 +414,6 @@ function VariantPurchase({
         </div>
       )}
 
-      {/* Photo for the chosen option. Shown here rather than in the gallery so
-          it also works for size-only products, which have no colour swatch
-          strip to carry an image. */}
-      {selectedVariant?.imageUrl && (
-        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={selectedVariant.imageUrl}
-            alt={[selectedVariant.colorName, selectedVariant.size].filter(Boolean).join(" / ")}
-            className="h-20 w-20 shrink-0 rounded-md border border-slate-200 bg-white object-cover"
-          />
-          <span className="min-w-0 text-sm text-gray-600">
-            <span className="font-semibold text-gray-900">
-              {[selectedVariant.colorName, selectedVariant.size].filter(Boolean).join(" / ")}
-            </span>
-            <span className="mt-0.5 block text-xs text-gray-400">Photo for this option</span>
-          </span>
-        </div>
-      )}
-
       {/* Price + stock for the chosen combo */}
       <p className="text-sm">
         {selectedVariant ? (
@@ -492,6 +484,12 @@ function LegacyPurchase({
   const outOfStock = stock <= 0;
   const needsColor = colors.length > 0;
   const selectedColor = colors.find((c) => c.id === colorId) ?? null;
+
+  // Show the picked colour's photo in the gallery on the left.
+  const { setUrl: setGalleryImage } = useVariantImage();
+  useEffect(() => {
+    setGalleryImage(selectedColor?.imageUrl ?? null);
+  }, [selectedColor, setGalleryImage]);
 
   function ensureReady(): boolean {
     if (needsColor && !selectedColor) {
