@@ -402,6 +402,26 @@ function VariantPurchase({
         </div>
       )}
 
+      {/* Photo for the chosen option. Shown here rather than in the gallery so
+          it also works for size-only products, which have no colour swatch
+          strip to carry an image. */}
+      {selectedVariant?.imageUrl && (
+        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={selectedVariant.imageUrl}
+            alt={[selectedVariant.colorName, selectedVariant.size].filter(Boolean).join(" / ")}
+            className="h-20 w-20 shrink-0 rounded-md border border-slate-200 bg-white object-cover"
+          />
+          <span className="min-w-0 text-sm text-gray-600">
+            <span className="font-semibold text-gray-900">
+              {[selectedVariant.colorName, selectedVariant.size].filter(Boolean).join(" / ")}
+            </span>
+            <span className="mt-0.5 block text-xs text-gray-400">Photo for this option</span>
+          </span>
+        </div>
+      )}
+
       {/* Price + stock for the chosen combo */}
       <p className="text-sm">
         {selectedVariant ? (

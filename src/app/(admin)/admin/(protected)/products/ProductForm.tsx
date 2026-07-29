@@ -554,11 +554,13 @@ export default function ProductForm({ categories, product }: Props) {
   const submitPriceTaka = (): number | "" => (isVariantMode ? derivedBase().priceTaka : paisaToTakaStr(form.price) === "" ? "" : Number(form.price) / 100);
   const submitStock = (): number | "" => (isVariantMode ? derivedBase().stock : form.stock);
 
-  // The ProductColor swatch list (name → hex/image). It's the source of the
-  // storefront swatches, matched to variants by name. Colours are a
-  // variant-mode concept only: a simple (single-price) product has no colour
-  // choice, so it always submits an empty list. In variant mode it's derived
-  // by deduping the colours entered on the variant rows (first occurrence wins).
+  // The ProductColor swatch list (name → hex). It's the source of the storefront
+  // swatches, matched to variants by name. Colours are a variant-mode concept
+  // only: a simple (single-price) product has no colour choice, so it always
+  // submits an empty list. In variant mode it's derived by deduping the colours
+  // entered on the variant rows (first occurrence wins). The row's uploaded
+  // photo is NOT copied here — it belongs to the variant, so rows sharing a
+  // colour keep their own images.
   const cleanColors = () => {
     if (!isVariantMode) return [];
     const seen = new Map<string, { name: string; hexCode: string; imageUrl: string }>();
@@ -567,7 +569,7 @@ export default function ProductForm({ categories, product }: Props) {
       // Only colours on rows that will actually be saved (named + priced).
       if (!name || Number(v.price) <= 0) continue;
       if (!seen.has(name)) {
-        seen.set(name, { name, hexCode: (v.colorHex || "#000000").trim(), imageUrl: v.imageUrl.trim() });
+        seen.set(name, { name, hexCode: (v.colorHex || "#000000").trim(), imageUrl: "" });
       }
     }
     return [...seen.values()];

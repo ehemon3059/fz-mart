@@ -211,6 +211,7 @@ export default async function ProductPage({
                 stock: v.stock,
                 showStock: v.showStock,
                 priceColor: v.priceColor,
+                imageUrl: v.imageUrl,
               }))}
               priceColor={product.priceColor}
             />
