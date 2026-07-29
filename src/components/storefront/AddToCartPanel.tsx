@@ -539,13 +539,24 @@ function LegacyPurchase({
                     setColorError(false);
                   }}
                   className={[
-                    "relative flex h-8 w-8 items-center justify-center rounded-full transition",
+                    "relative flex items-center justify-center overflow-hidden transition",
+                    // A photo needs room to read; a plain hex chip stays compact.
+                    color.imageUrl ? "h-12 w-12 rounded-lg" : "h-8 w-8 rounded-full",
                     selected ? "ring-2 ring-brand-600 ring-offset-2" : "ring-1 ring-gray-300 hover:ring-gray-400",
                   ].join(" ")}
-                  style={{ backgroundColor: color.hexCode }}
+                  style={color.imageUrl ? undefined : { backgroundColor: color.hexCode }}
                 >
+                  {color.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={color.imageUrl} alt={color.name} className="h-full w-full object-cover" />
+                  )}
                   {selected && (
-                    <Icon name="check" size={15} strokeWidth={3} className="text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]" />
+                    <Icon
+                      name="check"
+                      size={15}
+                      strokeWidth={3}
+                      className="absolute text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                    />
                   )}
                 </button>
               );
