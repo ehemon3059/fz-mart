@@ -111,6 +111,14 @@ const parseTaka = (s: string): number | "" => {
 /** Hidden inputs feed the real saveProduct action, which expects taka (it calls takaToPaisa itself). */
 const paisaToTakaStr = (paisa: number | "") => (paisa === "" ? "" : String(Number(paisa) / 100));
 
+/** Variant display label ("Navy / M"), the shape legacy tags were written in. */
+const variantLabelOf = (colorName?: string | null, size?: string | null) =>
+  [colorName?.trim(), size?.trim()].filter(Boolean).join(" / ");
+
+/** Loose compare for legacy labels — casing/spacing drifted across saves. */
+const sameLabel = (a: string, b: string) =>
+  a.replace(/\s+/g, " ").trim().toLowerCase() === b.replace(/\s+/g, " ").trim().toLowerCase();
+
 function initialFromProduct(p?: Product): FormState {
   if (!p) {
     return {
@@ -165,10 +173,18 @@ function initialFromProduct(p?: Product): FormState {
     variants:
       p.variants?.map((v) => {
         const swatch = v.colorName ? p.colors?.find((c) => c.name === v.colorName) : undefined;
+        // Products saved before ProductVariant.imageUrl existed kept the row's
+        // photo in the gallery, tagged with the variant's display label. Nothing
+        // reads that tag any more, so pull it onto the row here: the photo shows
+        // up in Sizes/Variants, and saving persists it to the new column.
+        const label = variantLabelOf(v.colorName, v.size);
+        const legacyTagged = label
+          ? p.images?.find((i) => i.variantLabel && sameLabel(i.variantLabel, label))?.url
+          : undefined;
         return {
           color: v.colorName ?? "",
           colorHex: swatch?.hexCode ?? "#000000",
-          imageUrl: v.imageUrl ?? swatch?.imageUrl ?? "",
+          imageUrl: v.imageUrl ?? legacyTagged ?? swatch?.imageUrl ?? "",
           size: v.size ?? "",
           price: String(v.price / 100),
           discountPrice: v.discountPrice != null ? String(v.discountPrice / 100) : "",
@@ -559,8 +575,7 @@ export default function ProductForm({ categories, product }: Props) {
 
   // Display label for a variant row — mirrors how the server derives it from
   // colorName/size ("Navy / M").
-  const variantRowLabel = (v: VariantRow) =>
-    [v.color.trim(), v.size.trim()].filter(Boolean).join(" / ");
+  const variantRowLabel = (v: VariantRow) => variantLabelOf(v.color, v.size);
 
   // The product gallery, serialized for submit. These are whole-product photos
   // (Pricing & stock); a variant's own photo travels on its variant row instead,
