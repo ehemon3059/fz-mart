@@ -578,8 +578,9 @@ export default function ProductForm({ categories, product }: Props) {
   const variantRowLabel = (v: VariantRow) => variantLabelOf(v.color, v.size);
 
   // The product gallery, serialized for submit. These are whole-product photos
-  // (Pricing & stock); a variant's own photo travels on its variant row instead,
-  // so nothing here carries a variant link.
+  // (the Product photos card, available in both pricing modes); a variant's own
+  // photo travels on its variant row instead, so nothing here carries a variant
+  // link.
   const cleanImages = () =>
     form.images
       .filter((img) => img.url.trim())
@@ -954,79 +955,6 @@ export default function ProductForm({ categories, product }: Props) {
               </div>
             </div>
 
-            {/* Product photo gallery — the storefront images for a simple
-                product. First photo is the cover. In variant mode each row
-                carries its own single photo instead. */}
-            <div className="mt-5 border-t border-stone-100 pt-5">
-              <Label hint={`up to ${MAX_IMAGES}`}>Images</Label>
-              <p className="-mt-1 mb-2.5 text-[12px] text-stone-400">
-                Square 1000×1000px · ≤200 KB each. The first photo is the cover.
-              </p>
-              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
-                {form.images.map((img, idx) => (
-                  <div
-                    key={img.url + idx}
-                    className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.url} alt="" className="h-full w-full object-cover" />
-                    {idx === 0 && (
-                      <span className="absolute left-1 top-1 rounded bg-brand-600 px-1.5 py-0.5 text-[9.5px] font-bold text-white shadow">
-                        Cover
-                      </span>
-                    )}
-                    {/* Always-visible controls: hover reveals nothing on touch,
-                        so these stay on-screen at all sizes. */}
-                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-1">
-                      {idx !== 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => makePrimary(idx)}
-                          title="Make cover"
-                          className="rounded bg-white/90 px-1.5 py-1 text-[10px] font-semibold leading-none text-stone-700 active:bg-white"
-                        >
-                          Cover
-                        </button>
-                      ) : (
-                        <span />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx)}
-                        title="Remove photo"
-                        aria-label="Remove photo"
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-white/90 text-stone-500 active:bg-white active:text-red-500"
-                      >
-                        <Icon name="trash" size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {form.images.length < MAX_IMAGES && (
-                  <button
-                    type="button"
-                    onClick={() => setCustomizing({ kind: "product" })}
-                    disabled={sameTarget(uploading, { kind: "product" })}
-                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
-                  >
-                    {sameTarget(uploading, { kind: "product" }) ? (
-                      <span className="text-[11px] font-semibold">Uploading…</span>
-                    ) : (
-                      <>
-                        <Icon name="plus" size={18} />
-                        <span className="text-[11px] font-semibold">Add photo</span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-              <p className="mt-2 text-[12px] text-stone-400">
-                {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it square.
-              </p>
-              <ErrorText>{imageError ?? undefined}</ErrorText>
-            </div>
-
             {/* Colour swatches for a single-price product. All colours share the
                 one price above — use Variants instead if they differ. Each may
                 carry an uploaded photo; without one the swatch shows its hex. */}
@@ -1121,6 +1049,87 @@ export default function ProductForm({ categories, product }: Props) {
             </div>
 
             </fieldset>
+          </Card>
+
+          {/* Product photos — the storefront gallery, and deliberately NOT inside
+              the pricing card's mode-gated fieldset. It used to live there, which
+              meant switching to Variants disabled the gallery uploader: a
+              variant product could never be given gallery photos, so its page
+              showed the placeholder until a shopper picked an option. Both
+              pricing modes need photos, so this card is always enabled. Photos on
+              the variant rows below are additional, not a replacement. */}
+          <Card
+            icon="image"
+            title="Product photos"
+            hint="Shown on the product page and in listings. The first photo is the cover."
+          >
+            <Label hint={`up to ${MAX_IMAGES}`}>Images</Label>
+            <p className="-mt-1 mb-2.5 text-[12px] text-stone-400">
+              Square 1000×1000px · ≤200 KB each. The first photo is the cover.
+            </p>
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+              {form.images.map((img, idx) => (
+                <div
+                  key={img.url + idx}
+                  className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.url} alt="" className="h-full w-full object-cover" />
+                  {idx === 0 && (
+                    <span className="absolute left-1 top-1 rounded bg-brand-600 px-1.5 py-0.5 text-[9.5px] font-bold text-white shadow">
+                      Cover
+                    </span>
+                  )}
+                  {/* Always-visible controls: hover reveals nothing on touch,
+                      so these stay on-screen at all sizes. */}
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-1">
+                    {idx !== 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => makePrimary(idx)}
+                        title="Make cover"
+                        className="rounded bg-white/90 px-1.5 py-1 text-[10px] font-semibold leading-none text-stone-700 active:bg-white"
+                      >
+                        Cover
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeImage(idx)}
+                      title="Remove photo"
+                      aria-label="Remove photo"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-white/90 text-stone-500 active:bg-white active:text-red-500"
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {form.images.length < MAX_IMAGES && (
+                <button
+                  type="button"
+                  onClick={() => setCustomizing({ kind: "product" })}
+                  disabled={sameTarget(uploading, { kind: "product" })}
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
+                >
+                  {sameTarget(uploading, { kind: "product" }) ? (
+                    <span className="text-[11px] font-semibold">Uploading…</span>
+                  ) : (
+                    <>
+                      <Icon name="plus" size={18} />
+                      <span className="text-[11px] font-semibold">Add photo</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-[12px] text-stone-400">
+              {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it square.
+            </p>
+            <ErrorText>{imageError ?? undefined}</ErrorText>
           </Card>
 
           <Card
