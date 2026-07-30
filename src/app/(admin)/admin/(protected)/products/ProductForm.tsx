@@ -577,10 +577,11 @@ export default function ProductForm({ categories, product }: Props) {
   // colorName/size ("Navy / M").
   const variantRowLabel = (v: VariantRow) => variantLabelOf(v.color, v.size);
 
-  // The product gallery, serialized for submit. These are whole-product photos
-  // (the Product photos card, available in both pricing modes); a variant's own
-  // photo travels on its variant row instead, so nothing here carries a variant
-  // link.
+  // The product gallery, serialized for submit. These are whole-product photos,
+  // uploaded in the single-price card; a variant's own photo travels on its
+  // variant row instead, so nothing here carries a variant link. Still submitted
+  // in variant mode (where the uploader is hidden) so switching pricing mode
+  // never silently deletes a product's photos.
   const cleanImages = () =>
     form.images
       .filter((img) => img.url.trim())
@@ -791,7 +792,7 @@ export default function ProductForm({ categories, product }: Props) {
             </div>
           </div>
 
-          <Card icon="tag" title="Pricing & stock" hint={isVariantMode ? "Disabled — priced by variants below." : "All amounts in Bangladeshi Taka."} className={isVariantMode ? "opacity-60" : ""}>
+          <Card icon="tag" title="Pricing & stock" hint={isVariantMode ? "Disabled — priced by variants below; photos go on each variant row." : "One price for the whole product, with its photos and colours."} className={isVariantMode ? "opacity-60" : ""}>
             <fieldset disabled={isVariantMode} className="contents">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -955,6 +956,87 @@ export default function ProductForm({ categories, product }: Props) {
               </div>
             </div>
 
+            {/* Product photos — the storefront gallery, and part of single-price
+                pricing only. In variant mode every row carries its own photo, so
+                a second uploader here would be redundant: the section is hidden
+                rather than disabled. Existing photos are NOT discarded when a
+                product is switched to variants — they stay in form.images and are
+                still submitted, so switching back shows them again. A variant
+                product with no gallery is fine on the storefront: the product page
+                falls back to the row photos (see lib/product-images.ts). */}
+            {!isVariantMode && (
+              <div className="mt-5 border-t border-stone-100 pt-5">
+                <Label hint={`up to ${MAX_IMAGES}`}>Product photos</Label>
+                <p className="-mt-1 mb-2.5 text-[12px] text-stone-400">
+                  Shown on the product page and in listings. Square 1000×1000px · ≤200 KB each. The
+                  first photo is the cover.
+                </p>
+                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+                  {form.images.map((img, idx) => (
+                    <div
+                      key={img.url + idx}
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.url} alt="" className="h-full w-full object-cover" />
+                      {idx === 0 && (
+                        <span className="absolute left-1 top-1 rounded bg-brand-600 px-1.5 py-0.5 text-[9.5px] font-bold text-white shadow">
+                          Cover
+                        </span>
+                      )}
+                      {/* Always-visible controls: hover reveals nothing on touch,
+                          so these stay on-screen at all sizes. */}
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-1">
+                        {idx !== 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => makePrimary(idx)}
+                            title="Make cover"
+                            className="rounded bg-white/90 px-1.5 py-1 text-[10px] font-semibold leading-none text-stone-700 active:bg-white"
+                          >
+                            Cover
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeImage(idx)}
+                          title="Remove photo"
+                          aria-label="Remove photo"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-white/90 text-stone-500 active:bg-white active:text-red-500"
+                        >
+                          <Icon name="trash" size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {form.images.length < MAX_IMAGES && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomizing({ kind: "product" })}
+                      disabled={sameTarget(uploading, { kind: "product" })}
+                      className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
+                    >
+                      {sameTarget(uploading, { kind: "product" }) ? (
+                        <span className="text-[11px] font-semibold">Uploading…</span>
+                      ) : (
+                        <>
+                          <Icon name="plus" size={18} />
+                          <span className="text-[11px] font-semibold">Add photo</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 text-[12px] text-stone-400">
+                  {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it square.
+                </p>
+                <ErrorText>{imageError ?? undefined}</ErrorText>
+              </div>
+            )}
+
             {/* Colour swatches for a single-price product. All colours share the
                 one price above — use Variants instead if they differ. Each may
                 carry an uploaded photo; without one the swatch shows its hex. */}
@@ -1051,87 +1133,6 @@ export default function ProductForm({ categories, product }: Props) {
             </fieldset>
           </Card>
 
-          {/* Product photos — the storefront gallery, and deliberately NOT inside
-              the pricing card's mode-gated fieldset. It used to live there, which
-              meant switching to Variants disabled the gallery uploader: a
-              variant product could never be given gallery photos, so its page
-              showed the placeholder until a shopper picked an option. Both
-              pricing modes need photos, so this card is always enabled. Photos on
-              the variant rows below are additional, not a replacement. */}
-          <Card
-            icon="image"
-            title="Product photos"
-            hint="Shown on the product page and in listings. The first photo is the cover."
-          >
-            <Label hint={`up to ${MAX_IMAGES}`}>Images</Label>
-            <p className="-mt-1 mb-2.5 text-[12px] text-stone-400">
-              Square 1000×1000px · ≤200 KB each. The first photo is the cover.
-            </p>
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
-              {form.images.map((img, idx) => (
-                <div
-                  key={img.url + idx}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="" className="h-full w-full object-cover" />
-                  {idx === 0 && (
-                    <span className="absolute left-1 top-1 rounded bg-brand-600 px-1.5 py-0.5 text-[9.5px] font-bold text-white shadow">
-                      Cover
-                    </span>
-                  )}
-                  {/* Always-visible controls: hover reveals nothing on touch,
-                      so these stay on-screen at all sizes. */}
-                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-1">
-                    {idx !== 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => makePrimary(idx)}
-                        title="Make cover"
-                        className="rounded bg-white/90 px-1.5 py-1 text-[10px] font-semibold leading-none text-stone-700 active:bg-white"
-                      >
-                        Cover
-                      </button>
-                    ) : (
-                      <span />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeImage(idx)}
-                      title="Remove photo"
-                      aria-label="Remove photo"
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-white/90 text-stone-500 active:bg-white active:text-red-500"
-                    >
-                      <Icon name="trash" size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {form.images.length < MAX_IMAGES && (
-                <button
-                  type="button"
-                  onClick={() => setCustomizing({ kind: "product" })}
-                  disabled={sameTarget(uploading, { kind: "product" })}
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
-                >
-                  {sameTarget(uploading, { kind: "product" }) ? (
-                    <span className="text-[11px] font-semibold">Uploading…</span>
-                  ) : (
-                    <>
-                      <Icon name="plus" size={18} />
-                      <span className="text-[11px] font-semibold">Add photo</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-            <p className="mt-2 text-[12px] text-stone-400">
-              {form.images.length}/{MAX_IMAGES} photos · upload any picture, then crop it square.
-            </p>
-            <ErrorText>{imageError ?? undefined}</ErrorText>
-          </Card>
-
           <Card
             icon="box"
             title="Sizes / Variants"
@@ -1143,11 +1144,27 @@ export default function ProductForm({ categories, product }: Props) {
             className={isVariantMode ? "" : "opacity-60"}
           >
             <fieldset disabled={!isVariantMode} className="contents">
+            {/* Upload failures for the per-row photos surface here: the gallery
+                block that used to show them is hidden in variant mode, and a
+                silently-failed upload would otherwise look like a no-op. */}
+            {isVariantMode && imageError && (
+              <div className="mb-3">
+                <ErrorText>{imageError}</ErrorText>
+              </div>
+            )}
             {errors.variants && isVariantMode && (
               <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
                 {errors.variants}
               </p>
             )}
+            {/* Six columns don't fit the admin's left column at mid viewports, and
+                the fixed ones win: the flexible Size column used to be squeezed to
+                a sliver, hiding a saved size like "2 YRS". Header and rows share
+                ONE scroll container so they stay aligned while scrolling, and
+                sm:min-w keeps every column at a usable width instead of clipping
+                Stock off the edge. */}
+            <div className="overflow-x-auto">
+            <div className="sm:min-w-[600px]">
             {form.variants.length > 0 && (
               <div className="mb-2 hidden grid-cols-[140px_1fr_110px_110px_90px_36px] gap-2 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400 sm:grid">
                 <span>Colour</span>
@@ -1192,7 +1209,10 @@ export default function ProductForm({ categories, product }: Props) {
                     value={v.size}
                     onChange={(e) => setVariant(idx, { size: e.target.value })}
                     placeholder="e.g. M / 1 Litre"
-                    className="col-span-2 min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500 sm:col-span-1"
+                    /* min-w-[5rem] on the 1fr column: the five fixed columns beside
+                       it can squeeze this one to zero width at mid viewports, which
+                       hid the saved size ("2 YRS") behind a sliver of a box. */
+                    className="col-span-2 min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500 sm:col-span-1 sm:min-w-[5rem]"
                   />
                   <div className="flex items-center overflow-hidden rounded-md border border-stone-200 bg-white">
                     <span className="border-r border-stone-200 bg-stone-50 px-2 py-2 text-[13px] font-semibold text-stone-500">৳</span>
@@ -1335,6 +1355,8 @@ export default function ProductForm({ categories, product }: Props) {
                 </div>
                 );
               })}
+            </div>
+            </div>
             </div>
             <button
               type="button"
