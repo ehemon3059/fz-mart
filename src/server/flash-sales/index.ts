@@ -10,10 +10,13 @@ const productWithImages = {
   images: { orderBy: { sortOrder: "asc" as const } },
   // Backs the card's "from" price and its colour for variant products. A
   // campaign salePrice still overrides this (see the homepage mapping).
+  // imageUrl backs the card thumbnail when the product has no gallery (all its
+  // photos were uploaded per-option); see resolvePrimaryImage.
   variants: {
     orderBy: { sortOrder: "asc" as const },
-    select: { price: true, discountPrice: true, priceColor: true },
+    select: { price: true, discountPrice: true, priceColor: true, imageUrl: true },
   },
+  colors: { orderBy: { sortOrder: "asc" as const }, select: { imageUrl: true } },
   // Lets storefront cards decide quick-add vs. "View Details" (see ProductCard).
   _count: { select: { variants: true, colors: true } },
 };

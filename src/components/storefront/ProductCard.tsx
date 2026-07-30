@@ -4,6 +4,7 @@ import Price from "./Price";
 import CardAddButton from "./CardAddButton";
 import { HeartIcon, ArrowRight } from "./icons";
 import { priceColorStyle } from "@/lib/money";
+import { resolvePrimaryImage } from "@/lib/product-images";
 
 type Badge = "sale" | "new";
 
@@ -29,7 +30,15 @@ export interface ProductCardData {
    * Omitted by leaner sources (search, wishlist), which fall back to the
    * product's own price and colour.
    */
-  variants?: { price: number; discountPrice: number | null; priceColor?: string | null }[];
+  variants?: {
+    price: number;
+    discountPrice: number | null;
+    priceColor?: string | null;
+    /** Per-option photo; used as the thumbnail when there is no gallery. */
+    imageUrl?: string | null;
+  }[];
+  /** Colour swatch photos — another thumbnail fallback for a gallery-less product. */
+  colors?: { imageUrl?: string | null }[];
   /**
    * When the shopper must pick a size/color/variant first, the card links to
    * the detail page instead of quick-adding. Omitted for leaner data sources
@@ -46,10 +55,7 @@ export default function ProductCard({
   /** Optional corner ribbon. Falls back to the product's own promoBadge. */
   badge?: Badge;
 }) {
-  const primaryImage =
-    product.images.find((img) => img.isPrimary)?.url ??
-    product.images[0]?.url ??
-    null;
+  const primaryImage = resolvePrimaryImage(product);
 
   const hasDiscount =
     product.discountPrice != null && product.discountPrice < product.price;

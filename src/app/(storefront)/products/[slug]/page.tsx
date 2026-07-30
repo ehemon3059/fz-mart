@@ -8,6 +8,7 @@ import { listActiveShippingZones } from "@/server/settings/shipping";
 import { SITE_NAME, absoluteUrl, pageTitle, stripHtml, truncate } from "@/lib/seo";
 import { productJsonLd, breadcrumbJsonLd } from "@/lib/jsonld";
 import { renderMarkdown, markdownToPlainText } from "@/lib/markdown";
+import { resolveProductImages, resolvePrimaryImage } from "@/lib/product-images";
 import AddToCartPanel from "@/components/storefront/AddToCartPanel";
 import ProductGallery from "@/components/storefront/ProductGallery";
 import { VariantImageProvider } from "@/components/storefront/product/VariantImageContext";
@@ -30,11 +31,7 @@ import { isWishlisted } from "@/server/wishlist";
 import { trackFunnelEvent } from "@/server/funnel";
 
 function primaryImageOf(product: NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>): string {
-  return (
-    product.images.find((img) => img.isPrimary)?.url ??
-    product.images[0]?.url ??
-    "/placeholder.svg"
-  );
+  return resolvePrimaryImage(product) ?? "/placeholder.svg";
 }
 
 /** Description used for meta + JSON-LD, with a sensible fallback. */
@@ -102,6 +99,9 @@ export default async function ProductPage({
   const wishlisted = customer ? await isWishlisted(customer.customerId, product.id) : false;
 
   const primaryImage = primaryImageOf(product);
+  // Falls back to the variant/colour photos when no gallery was uploaded, so the
+  // first paint shows a real product photo instead of the placeholder.
+  const galleryImages = resolveProductImages(product);
 
   const hasDiscount =
     product.discountPrice != null && product.discountPrice < product.price;
@@ -139,7 +139,7 @@ export default async function ProductPage({
       name: product.name,
       slug: product.slug,
       description: metaDescriptionFor(product),
-      images: product.images.map((img) => img.url),
+      images: galleryImages.map((img) => img.url),
       pricePaisa: hasVariants ? minVariantPrice : effectivePrice,
       inStock,
       rating:
@@ -171,7 +171,7 @@ export default async function ProductPage({
       <div className="grid gap-6 lg:grid-cols-2 lg:gap-10">
         <div className="lg:sticky lg:top-6 lg:self-start">
           <ProductGallery
-            images={product.images}
+            images={galleryImages}
             name={product.name}
             overlay={<GalleryBadges discountPct={discountPct} promoBadge={product.promoBadge} />}
           />
@@ -277,7 +277,7 @@ export default async function ProductPage({
             discountPrice: v.discountPrice,
             priceColor: v.priceColor,
           })),
-          images: product.images.map((img) => ({ url: img.url, isPrimary: img.isPrimary })),
+          images: galleryImages.map((img) => ({ url: img.url, isPrimary: img.isPrimary })),
         }}
       />
 
