@@ -792,49 +792,66 @@ export default function ProductForm({ categories, product }: Props) {
             </div>
           </div>
 
-          <Card icon="tag" title="Pricing & stock" hint={isVariantMode ? "Disabled — priced by variants below; photos go on each variant row." : "One price for the whole product, with its photos and colours."} className={isVariantMode ? "opacity-60" : ""}>
-            <fieldset disabled={isVariantMode} className="contents">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <Label required>Price</Label>
-                <FieldShell prefix="৳" error={errors.price}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={fmtTakaInput(form.price)}
-                    onChange={(e) => set("price", parseTaka(e.target.value))}
-                    placeholder="0"
-                    className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-                  />
-                </FieldShell>
-                <ErrorText>{errors.price}</ErrorText>
-              </div>
-              <div>
-                <Label hint="optional">Discount price</Label>
-                <FieldShell prefix="৳" error={liveErrors.discountPrice}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={fmtTakaInput(form.discountPrice)}
-                    onChange={(e) => set("discountPrice", parseTaka(e.target.value))}
-                    placeholder="0"
-                    className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-                  />
-                </FieldShell>
-                {liveErrors.discountPrice ? (
-                  <ErrorText>{liveErrors.discountPrice}</ErrorText>
-                ) : discountPct > 0 ? (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-500" />
-                    -{discountPct}% off
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-5 border-t border-stone-100 pt-5">
+          {/* In variant mode the price, discount, stock and colour swatches all
+              come from the variant rows below. Showing them here — filled with
+              values derived from those rows — read as a second, conflicting copy
+              of the variant data, so they're hidden rather than disabled. What
+              stays is product-level only (cost, low-stock alert, stock
+              visibility, price colour) and remains editable in both modes. */}
+          <Card
+            icon="tag"
+            title="Pricing & stock"
+            hint={
+              isVariantMode
+                ? "Price, stock & colours come from the variant rows below — only these product-level settings apply here."
+                : "One price for the whole product, with its photos and colours."
+            }
+          >
+            <fieldset className="contents">
+            {!isVariantMode && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <Label required>Price</Label>
+                  <FieldShell prefix="৳" error={errors.price}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={fmtTakaInput(form.price)}
+                      onChange={(e) => set("price", parseTaka(e.target.value))}
+                      placeholder="0"
+                      className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+                    />
+                  </FieldShell>
+                  <ErrorText>{errors.price}</ErrorText>
+                </div>
+                <div>
+                  <Label hint="optional">Discount price</Label>
+                  <FieldShell prefix="৳" error={liveErrors.discountPrice}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={fmtTakaInput(form.discountPrice)}
+                      onChange={(e) => set("discountPrice", parseTaka(e.target.value))}
+                      placeholder="0"
+                      className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+                    />
+                  </FieldShell>
+                  {liveErrors.discountPrice ? (
+                    <ErrorText>{liveErrors.discountPrice}</ErrorText>
+                  ) : discountPct > 0 ? (
+                    <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-brand-600">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-500" />
+                      -{discountPct}% off
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            )}
+            <div className={isVariantMode ? "" : "mt-5 border-t border-stone-100 pt-5"}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {!isVariantMode && (
                 <div>
                   <Label required>Stock on hand</Label>
                   <FieldShell error={errors.stock}>
@@ -856,6 +873,7 @@ export default function ProductForm({ categories, product }: Props) {
                     </p>
                   )}
                 </div>
+                )}
                 <div>
                   <Label hint="for profit reports">Sourcing cost</Label>
                   <FieldShell prefix="৳" error={errors.purchaseCost}>
@@ -870,7 +888,9 @@ export default function ProductForm({ categories, product }: Props) {
                     />
                   </FieldShell>
                   <ErrorText>{errors.purchaseCost}</ErrorText>
-                  {marginPct != null && !errors.purchaseCost && (
+                  {/* Margin is against the single price, which variant mode
+                      doesn't have — each row is priced on its own. */}
+                  {marginPct != null && !isVariantMode && !errors.purchaseCost && (
                     <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-emerald-600">
                       <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
                       {marginPct}% margin per unit
@@ -936,7 +956,10 @@ export default function ProductForm({ categories, product }: Props) {
                     className="text-[18px] font-extrabold"
                     style={form.priceColor ? { color: form.priceColor } : undefined}
                   >
-                    {fmtTaka(form.price === "" ? 0 : Number(form.price))}
+                    {/* Variant mode has no single price to preview — each row
+                        carries its own — so show a neutral sample instead of a
+                        number derived from the variants. */}
+                    {isVariantMode ? "৳ Price" : fmtTaka(form.price === "" ? 0 : Number(form.price))}
                   </span>
                   {form.priceColor && (
                     <button
@@ -950,7 +973,9 @@ export default function ProductForm({ categories, product }: Props) {
                 </div>
                 <p className="mt-1.5 text-[12px] text-stone-400">
                   {form.priceColor
-                    ? "Used for this product’s price on the storefront."
+                    ? isVariantMode
+                      ? "Used for prices on the storefront, unless a variant row sets its own."
+                      : "Used for this product’s price on the storefront."
                     : "Not set — the price shows in the default colour (black)."}
                 </p>
               </div>
@@ -1039,7 +1064,12 @@ export default function ProductForm({ categories, product }: Props) {
 
             {/* Colour swatches for a single-price product. All colours share the
                 one price above — use Variants instead if they differ. Each may
-                carry an uploaded photo; without one the swatch shows its hex. */}
+                carry an uploaded photo; without one the swatch shows its hex.
+                Hidden in variant mode: the swatch list is derived from the
+                colours on the variant rows there (see cleanColors), so editing
+                a second copy of them here would go nowhere. Rows are kept in
+                form.colors so switching back to single price restores them. */}
+            {!isVariantMode && (
             <div className="mt-5 border-t border-stone-100 pt-5">
               <Label hint="optional">Colours</Label>
               <p className="-mt-1 mb-2.5 text-[12px] text-stone-400">
@@ -1129,6 +1159,7 @@ export default function ProductForm({ categories, product }: Props) {
                 <Icon name="plus" size={15} /> Add colour
               </button>
             </div>
+            )}
 
             </fieldset>
           </Card>
