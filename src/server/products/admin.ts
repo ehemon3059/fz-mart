@@ -21,6 +21,11 @@ export async function listAllProducts() {
     orderBy: { createdAt: "desc" },
     include: {
       images: { orderBy: { sortOrder: "asc" } },
+      // Photos can live on a variant row or a colour swatch instead of the
+      // gallery, so the list thumbnail needs them to fall back on
+      // (resolvePrimaryImage) — a variant product often has an empty gallery.
+      variants: { select: { imageUrl: true }, orderBy: { sortOrder: "asc" } },
+      colors: { select: { imageUrl: true }, orderBy: { sortOrder: "asc" } },
       category: true,
     },
   });

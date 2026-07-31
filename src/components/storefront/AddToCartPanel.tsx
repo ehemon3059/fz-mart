@@ -223,8 +223,11 @@ function VariantPurchase({
   const needSize = sizes.length > 0;
 
   // Color swatches in their defined order, enriched with hex/image where known.
-  // A photo uploaded on the variant row itself wins over the shared ProductColor
-  // image (which older products still rely on).
+  // `imageUrl` is the photo the *gallery* swaps to when this colour is picked —
+  // a photo uploaded on the variant row itself wins over the shared ProductColor
+  // image (which older products still rely on). The swatch button itself renders
+  // `hexCode`, never this photo: it is a product shot, not a colour chip, and
+  // shrunk to swatch size it read as an unrecognisable thumbnail.
   const colorOptions = useMemo(
     () =>
       colorNames.map((cn) => {
@@ -357,16 +360,14 @@ function VariantPurchase({
                   aria-pressed={selected}
                   onClick={() => pickColor(c.name)}
                   className={[
-                    "relative h-12 w-12 overflow-hidden rounded-lg border transition",
+                    // A colour chip, matching the single-price "Available Color"
+                    // picker. The variant's photo belongs in the gallery.
+                    "relative h-9 w-9 overflow-hidden rounded-full border transition",
                     soldOut ? "cursor-not-allowed opacity-40" : "",
                     selected ? "border-brand-600 ring-2 ring-brand-600 ring-offset-1" : "border-gray-300 hover:border-gray-400",
                   ].join(" ")}
-                  style={c.imageUrl ? undefined : { backgroundColor: c.hexCode }}
+                  style={{ backgroundColor: c.hexCode }}
                 >
-                  {c.imageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
-                  )}
                   {soldOut && <span className="absolute inset-0 grid place-items-center text-[10px] font-bold text-gray-700">✕</span>}
                 </button>
               );

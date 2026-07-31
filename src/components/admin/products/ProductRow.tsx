@@ -3,6 +3,7 @@ import { Icon } from "@/components/icons";
 import { Thumb, PriceDisplay, StockDisplay, StatusPill, PromoBadge } from "./badges";
 import { DeleteBtn } from "./DeleteBtn";
 import type { AdminProduct } from "./ProductsListClient";
+import { resolvePrimaryImage } from "@/lib/product-images";
 
 interface Props {
   p: AdminProduct;
@@ -14,7 +15,9 @@ interface Props {
 
 /** Desktop table row */
 export function ProductRow({ p, isConfirm, onDeleteFirst, onDeleteConfirm, onDeleteCancel }: Props) {
-  const thumbUrl = p.images.find((i) => i.isPrimary)?.url ?? p.images[0]?.url;
+  // Gallery first, then the variant/colour photos — same resolution as the
+  // storefront, so a variant product with no gallery still shows a thumbnail.
+  const thumbUrl = resolvePrimaryImage(p) ?? undefined;
 
   return (
     <tr

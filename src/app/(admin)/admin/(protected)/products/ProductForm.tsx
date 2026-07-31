@@ -9,6 +9,7 @@ import { saveProduct } from "./actions";
 import type { listAllCategories } from "@/server/categories/admin";
 import type { getProductById } from "@/server/products/admin";
 import { buildTree, ancestorsOf, type TreeNode } from "@/server/categories/tree";
+import { resolvePrimaryImage } from "@/lib/product-images";
 
 /* Product photos are square 1000×1000 thumbnails, kept light so the catalog
    and product pages stay fast. Up to 10 per product; the first is the cover. */
@@ -383,7 +384,16 @@ function CategorySelect({
 
 /* ─────────── live preview ─────────── */
 function LivePreview({ form, basePricePaisa, fromPrice }: { form: FormState; basePricePaisa: number | ""; fromPrice: boolean }) {
-  const firstImg = form.images.find((i) => i.url.trim())?.url;
+  // Same fallback the storefront uses: a variant product is often saved with an
+  // empty gallery because every photo lives on a variant row, and the preview
+  // showed the placeholder for it. resolvePrimaryImage prefers the curated
+  // gallery and drops to the option photos only when there is none.
+  const firstImg =
+    resolvePrimaryImage({
+      images: form.images.filter((i) => i.url.trim()),
+      variants: form.variants,
+      colors: form.colors,
+    }) ?? undefined;
   // In variant mode there's no product-level discount; price is the "from" price.
   const hasDiscount = !fromPrice && form.discountPrice !== "" && basePricePaisa !== "" && Number(form.discountPrice) < Number(basePricePaisa);
 

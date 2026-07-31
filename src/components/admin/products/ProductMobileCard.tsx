@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { Thumb, PriceDisplay, StockDisplay, StatusPill, PromoBadge } from "./badges";
 import type { AdminProduct } from "./ProductsListClient";
+import { resolvePrimaryImage } from "@/lib/product-images";
 
 interface Props {
   p: AdminProduct;
@@ -13,7 +14,8 @@ interface Props {
 
 /** Mobile-only product card */
 export function ProductMobileCard({ p, isConfirm, onDeleteFirst, onDeleteConfirm, onDeleteCancel }: Props) {
-  const thumbUrl = p.images.find((i) => i.isPrimary)?.url ?? p.images[0]?.url;
+  // Same gallery → variant/colour fallback as the desktop row.
+  const thumbUrl = resolvePrimaryImage(p) ?? undefined;
 
   return (
     <div
