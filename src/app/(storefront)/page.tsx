@@ -46,7 +46,6 @@ export default async function HomePage() {
   return (
     <>
       <Hero banners={banners} />
-      <TrustStrip />
       <CategoryTiles categories={rootCategories} />
       {flashSale && (
         <FlashSale
@@ -75,6 +74,9 @@ export default async function HomePage() {
         products={featuredGrid}
         grid
       />
+      {/* Trust badges sit directly above the newsletter, as the last thing a
+          shopper reads before the sign-up box. */}
+      <TrustStrip />
       <Newsletter title={newsletter.title} subtitle={newsletter.subtitle} />
     </>
   );
