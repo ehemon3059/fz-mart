@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { listCartEvents } from "@/server/customer-cart";
 import { formatTaka } from "@/lib/money";
+import { resolvePrimaryImage } from "@/lib/product-images";
 
 export const metadata = { title: "Cart History", robots: { index: false } };
 
@@ -29,7 +30,7 @@ export default async function AccountCartHistoryPage() {
   return (
     <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
       {events.map((event) => {
-        const image = event.product.images[0]?.url ?? null;
+        const image = resolvePrimaryImage(event.product);
         const price = event.product.discountPrice ?? event.product.price;
         return (
           <Link

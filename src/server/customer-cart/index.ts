@@ -136,6 +136,13 @@ export async function listCartEvents(customerId: string, take = 50, skip = 0) {
             take: 1,
             select: { url: true },
           },
+          // A variant product often has an empty gallery — every photo lives on
+          // its variant row — so the thumbnail falls back to the option photos
+          // (resolvePrimaryImage), same as the storefront.
+          // Not take:1 — the first row by sortOrder may be the one without a
+          // photo, and the resolver skips empties in order.
+          variants: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
+          colors: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
         },
       },
     },
