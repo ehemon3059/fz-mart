@@ -10,6 +10,7 @@ import {
   moveCategorySibling,
 } from "@/server/categories/admin";
 import type { DeleteImpact } from "@/server/categories/tree";
+import { CATEGORY_ICONS } from "@/lib/category-icons";
 
 export interface ActionResult {
   error?: string;
@@ -34,6 +35,10 @@ export async function saveCategory(
   const parentRaw = String(formData.get("parentId") ?? "").trim();
   const parentId = parentRaw ? Number(parentRaw) : null;
   const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
+  const iconKeyRaw = String(formData.get("iconKey") ?? "").trim() || null;
+  // Reject unknown keys rather than storing them: a bad key would render as a
+  // blank tile on the storefront with nothing to explain why.
+  const iconKey = iconKeyRaw && iconKeyRaw in CATEGORY_ICONS ? iconKeyRaw : null;
   const description = String(formData.get("description") ?? "").trim() || null;
   const sortOrder = Number(formData.get("sortOrder") ?? 0);
   const isActive = formData.get("isActive") === "on";
@@ -43,7 +48,7 @@ export async function saveCategory(
   if (!name) return { error: "Name is required." };
   if (parentId != null && Number.isNaN(parentId)) return { error: "Invalid parent category." };
 
-  const data = { name, parentId, imageUrl, description, sortOrder, isActive, metaTitle, metaDescription };
+  const data = { name, parentId, imageUrl, iconKey, description, sortOrder, isActive, metaTitle, metaDescription };
   try {
     if (id) {
       await updateCategory(id, data);

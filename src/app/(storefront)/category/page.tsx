@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listActiveCategories } from "@/server/categories";
 import { buildTree } from "@/server/categories/tree";
-import { CategoryIcon, categoryVisual } from "@/components/storefront/icons";
+import { CategoryVisual } from "@/components/storefront/CategoryVisual";
 
 // "All categories" destination — the full department directory. Each top-level
 // category lists its direct sub-categories so shoppers can drill down through
@@ -23,9 +23,30 @@ export default async function AllCategoriesPage() {
           No categories to show yet.
         </p>
       ) : (
+        <>
+        {/* Circular quick-pick strip: every department at a glance, scrollable
+            sideways on narrow screens. The uploaded 800×800 square crops to a
+            circle cleanly, so images and icons sit in the same shape. */}
+        <nav className="cat-circles" aria-label="Shop by department">
+          {categories.map((cat) => (
+            <Link key={cat.id} href={`/category/${cat.slug}`} className="cat-circle">
+              <span className="cat-circle-ring">
+                <CategoryVisual
+                  name={cat.name}
+                  imageUrl={cat.imageUrl}
+                  iconKey={cat.iconKey}
+                  imgClassName="cat-circle-img"
+                  iconClassName="cat-circle-ic"
+                  iconSize={32}
+                />
+              </span>
+              <span className="cat-circle-label">{cat.name}</span>
+            </Link>
+          ))}
+        </nav>
+
         <div className="cat-grid">
           {categories.map((cat, i) => {
-            const v = categoryVisual(cat.name);
             const subCount = cat.children.length;
             return (
               <div
@@ -34,17 +55,13 @@ export default async function AllCategoriesPage() {
                 style={{ animationDelay: `${Math.min(i * 60, 480)}ms` }}
               >
                 <Link href={`/category/${cat.slug}`} className="cat-c-top">
-                  {cat.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cat.imageUrl} alt="" className="cat-c-img" />
-                  ) : (
-                    <span
-                      className="cat-c-ic"
-                      style={{ "--ct-bg": v.bg, "--ct-fg": v.fg } as React.CSSProperties}
-                    >
-                      <CategoryIcon name={cat.name} />
-                    </span>
-                  )}
+                  <CategoryVisual
+                    name={cat.name}
+                    imageUrl={cat.imageUrl}
+                    iconKey={cat.iconKey}
+                    imgClassName="cat-c-img"
+                    iconClassName="cat-c-ic"
+                  />
                   <span>
                     <b>{cat.name}</b>
                     <span className="cat-c-count">
@@ -87,6 +104,7 @@ export default async function AllCategoriesPage() {
             );
           })}
         </div>
+        </>
       )}
     </div>
   );

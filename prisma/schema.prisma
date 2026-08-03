@@ -35,6 +35,11 @@ model Category {
   slug            String     @unique
   // Optional hero image + short blurb shown on the storefront category pages.
   imageUrl        String?
+  // Alternative to imageUrl: a key from CATEGORY_ICONS (lib/category-icons.tsx)
+  // drawn as an inline SVG. A category shows its image when imageUrl is set,
+  // otherwise this icon, otherwise a letter tile — see CategoryVisual. Both may
+  // be stored; imageUrl wins, so switching back to the icon needs no re-upload.
+  iconKey         String?
   description     String?    @db.Text
   sortOrder       Int        @default(0)
   isActive        Boolean    @default(true)

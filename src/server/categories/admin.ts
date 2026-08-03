@@ -25,6 +25,7 @@ export interface CategoryInput {
   // null / undefined → a root node; otherwise the parent node's id.
   parentId?: number | null;
   imageUrl?: string | null;
+  iconKey?: string | null;
   description?: string | null;
   sortOrder?: number;
   isActive?: boolean;
@@ -51,6 +52,7 @@ export async function createCategory(input: CategoryInput) {
       slug: await uniqueSlug(input.name),
       parentId: input.parentId ?? null,
       imageUrl: input.imageUrl ?? null,
+      iconKey: input.iconKey ?? null,
       description: input.description ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
@@ -83,6 +85,7 @@ export async function updateCategory(id: number, input: CategoryInput) {
       slug: await uniqueSlug(input.name, id),
       parentId: input.parentId ?? null,
       imageUrl: input.imageUrl ?? null,
+      iconKey: input.iconKey ?? null,
       description: input.description ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,

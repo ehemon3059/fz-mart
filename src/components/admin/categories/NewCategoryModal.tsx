@@ -3,6 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import { saveCategory } from "@/app/(admin)/admin/(protected)/categories/actions";
+import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
+import CategoryIconPicker from "@/components/admin/CategoryIconPicker";
 
 interface Props {
   open: boolean;
@@ -52,6 +54,8 @@ function Toggle({
 
 export function NewCategoryModal({ open, onClose, onCreated, parentId, parentName }: Props) {
   const [name, setName] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [iconKey, setIconKey] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +65,8 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
   useEffect(() => {
     if (open) {
       setName("");
+      setImageUrl("");
+      setIconKey("");
       setSortOrder(0);
       setIsActive(true);
       setError(null);
@@ -84,6 +90,8 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
     setError(null);
     const formData = new FormData();
     formData.set("name", name);
+    formData.set("imageUrl", imageUrl);
+    formData.set("iconKey", iconKey);
     formData.set("sortOrder", String(sortOrder));
     if (isActive) formData.set("isActive", "on");
     if (parentId != null) formData.set("parentId", String(parentId));
@@ -125,7 +133,9 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 px-5 py-5">
+          {/* The pickers make this dialog taller than a short viewport, so the
+              body scrolls while the header and footer buttons stay put. */}
+          <div className="max-h-[calc(100vh-15rem)] space-y-4 overflow-y-auto px-5 py-5">
             {error && (
               <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p>
             )}
@@ -146,6 +156,19 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
                   className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[13px] font-semibold text-stone-700">Picture</label>
+              <CategoryImagePicker value={imageUrl} onChange={setImageUrl} label="Category image" />
+            </div>
+
+            <div>
+              <label className="mb-1.5 flex items-baseline gap-1.5 text-[13px] font-semibold text-stone-700">
+                <span>Or pick an icon</span>
+                <span className="ml-auto text-[12px] font-normal text-stone-400">used when there's no picture</span>
+              </label>
+              <CategoryIconPicker value={iconKey} onChange={setIconKey} />
             </div>
 
             <div>

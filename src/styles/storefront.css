@@ -311,6 +311,31 @@
 .fz .cat-dir-hd p{font-size:14.5px;color:var(--ink-mute);margin:0;}
 .fz .cat-grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));}
 
+/* Circular department strip above the grid. Scrolls sideways rather than
+   wrapping, so the row stays one line at any width. */
+.fz .cat-circles{display:flex;gap:22px;overflow-x:auto;padding:4px 2px 18px;margin-bottom:10px;
+  scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+.fz .cat-circles::-webkit-scrollbar{height:5px;}
+.fz .cat-circles::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px;}
+.fz .cat-circle{flex:0 0 auto;width:104px;display:flex;flex-direction:column;align-items:center;gap:9px;
+  text-decoration:none;scroll-snap-align:start;}
+.fz .cat-circle-ring{width:96px;height:96px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
+  background:var(--bg);border:1px solid var(--line);
+  transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s,border-color .25s;}
+.fz .cat-circle:hover .cat-circle-ring{transform:translateY(-4px) scale(1.04);
+  box-shadow:var(--shadow-hover);border-color:var(--brand);}
+.fz .cat-circle-img{width:100%;height:100%;object-fit:cover;display:block;}
+.fz .cat-circle-ic{width:100%;height:100%;display:grid;place-items:center;
+  background:var(--ct-bg,var(--brand-tint));color:var(--ct-fg,var(--brand-dark));}
+.fz .cat-circle-label{font-size:13px;font-weight:600;color:var(--ink);text-align:center;line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.fz .cat-circle:hover .cat-circle-label{color:var(--brand-dark);}
+@media (max-width:640px){
+  .fz .cat-circles{gap:16px;}
+  .fz .cat-circle{width:84px;}
+  .fz .cat-circle-ring{width:76px;height:76px;}
+}
+
 .fz .cat-c{position:relative;background:var(--card);border:1px solid var(--line);border-radius:18px;
   padding:22px;overflow:hidden;opacity:0;transform:translateY(14px);
   animation:cat-rise .5s cubic-bezier(.16,1,.3,1) forwards;
