@@ -7,7 +7,7 @@ import { CategoryIcon as PickedIcon, CATEGORY_ICONS } from "@/lib/category-icons
  *
  * The last step is the pre-existing keyword matcher in storefront/icons.tsx,
  * kept as the floor so every category still renders something recognisable
- * with no admin action — choosing an icon just overrides the guess.
+ * with no admin action — the other two just override the guess.
  */
 export function CategoryVisual({
   name,
@@ -29,10 +29,11 @@ export function CategoryVisual({
     return <img src={imageUrl} alt="" className={imgClassName} />;
   }
 
-  // Colour pair comes from the keyword matcher either way, so an admin-picked
-  // icon still gets a tinted tile consistent with the rest of the grid.
+  // Colour pair comes from the keyword matcher either way, so an icon still
+  // gets a tinted tile consistent with the rest of the grid.
   const v = categoryVisual(name);
   const style = { "--ct-bg": v.bg, "--ct-fg": v.fg } as React.CSSProperties;
+
   const valid = iconKey && iconKey in CATEGORY_ICONS;
 
   return (

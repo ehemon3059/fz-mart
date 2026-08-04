@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
-import CategoryIconPicker from "@/components/admin/CategoryIconPicker";
 import { saveCategory } from "./actions";
 import { buildTree, collectDescendantIds, type TreeNode } from "@/server/categories/tree";
 
@@ -21,7 +20,6 @@ interface Props {
     name: string;
     parentId: number | null;
     imageUrl: string | null;
-    iconKey: string | null;
     description: string | null;
     sortOrder: number;
     isActive: boolean;
@@ -95,7 +93,6 @@ export default function CategoryForm({ category, allCategories, defaultParentId 
   );
   const options = useMemo(() => parentOptions(allCategories, category?.id), [allCategories, category?.id]);
   const [imageUrl, setImageUrl] = useState(category?.imageUrl ?? "");
-  const [iconKey, setIconKey] = useState(category?.iconKey ?? "");
   const [description, setDescription] = useState(category?.description ?? "");
   const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 0);
   const [isActive, setIsActive] = useState(category?.isActive ?? true);
@@ -123,7 +120,6 @@ export default function CategoryForm({ category, allCategories, defaultParentId 
       <input type="hidden" name="name" value={name} />
       <input type="hidden" name="parentId" value={parentId} />
       <input type="hidden" name="imageUrl" value={imageUrl} />
-      <input type="hidden" name="iconKey" value={iconKey} />
       <input type="hidden" name="description" value={description} />
       <input type="hidden" name="sortOrder" value={String(sortOrder)} />
       {isActive && <input type="hidden" name="isActive" value="on" />}
@@ -215,14 +211,6 @@ export default function CategoryForm({ category, allCategories, defaultParentId 
             <div>
               <label className="mb-1.5 block text-[13px] font-semibold text-stone-700">Image</label>
               <CategoryImagePicker value={imageUrl} onChange={setImageUrl} label="Category image" />
-            </div>
-
-            <div>
-              <label className="mb-1.5 flex items-baseline gap-1.5 text-[13px] font-semibold text-stone-700">
-                <span>Icon</span>
-                <span className="ml-auto text-[12px] font-normal text-stone-400">used when there&apos;s no picture</span>
-              </label>
-              <CategoryIconPicker value={iconKey} onChange={setIconKey} />
             </div>
 
             <div>

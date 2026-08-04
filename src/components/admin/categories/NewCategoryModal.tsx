@@ -4,7 +4,6 @@ import { useEffect, useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import { saveCategory } from "@/app/(admin)/admin/(protected)/categories/actions";
 import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
-import CategoryIconPicker from "@/components/admin/CategoryIconPicker";
 
 interface Props {
   open: boolean;
@@ -55,7 +54,6 @@ function Toggle({
 export function NewCategoryModal({ open, onClose, onCreated, parentId, parentName }: Props) {
   const [name, setName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [iconKey, setIconKey] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +64,6 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
     if (open) {
       setName("");
       setImageUrl("");
-      setIconKey("");
       setSortOrder(0);
       setIsActive(true);
       setError(null);
@@ -91,7 +88,6 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
     const formData = new FormData();
     formData.set("name", name);
     formData.set("imageUrl", imageUrl);
-    formData.set("iconKey", iconKey);
     formData.set("sortOrder", String(sortOrder));
     if (isActive) formData.set("isActive", "on");
     if (parentId != null) formData.set("parentId", String(parentId));
@@ -161,14 +157,6 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
             <div>
               <label className="mb-1.5 block text-[13px] font-semibold text-stone-700">Picture</label>
               <CategoryImagePicker value={imageUrl} onChange={setImageUrl} label="Category image" />
-            </div>
-
-            <div>
-              <label className="mb-1.5 flex items-baseline gap-1.5 text-[13px] font-semibold text-stone-700">
-                <span>Or pick an icon</span>
-                <span className="ml-auto text-[12px] font-normal text-stone-400">used when there's no picture</span>
-              </label>
-              <CategoryIconPicker value={iconKey} onChange={setIconKey} />
             </div>
 
             <div>
