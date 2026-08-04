@@ -33,11 +33,12 @@ export default async function AllCategoriesPage() {
               <span className="cat-circle-ring">
                 <CategoryVisual
                   name={cat.name}
+                  slug={cat.slug}
                   imageUrl={cat.imageUrl}
                   iconKey={cat.iconKey}
                   imgClassName="cat-circle-img"
                   iconClassName="cat-circle-ic"
-                  iconSize={72}
+                  iconSize={56}
                 />
               </span>
               <span className="cat-circle-label">{cat.name}</span>
@@ -57,6 +58,7 @@ export default async function AllCategoriesPage() {
                 <Link href={`/category/${cat.slug}`} className="cat-c-top">
                   <CategoryVisual
                     name={cat.name}
+                    slug={cat.slug}
                     imageUrl={cat.imageUrl}
                     iconKey={cat.iconKey}
                     imgClassName="cat-c-img"

@@ -78,11 +78,12 @@ export default async function CategoryPage({
           <span className="cat-hero-ring">
             <CategoryVisual
               name={category.name}
+              slug={category.slug}
               imageUrl={category.imageUrl}
               iconKey={category.iconKey}
               imgClassName="cat-hero-img"
               iconClassName="cat-hero-ic"
-              iconSize={96}
+              iconSize={104}
             />
           </span>
           <h1 className="cat-hero-title">{category.name}</h1>
@@ -99,11 +100,12 @@ export default async function CategoryPage({
                 <span className="cat-circle-ring">
                   <CategoryVisual
                     name={sub.name}
+                    slug={sub.slug}
                     imageUrl={sub.imageUrl}
                     iconKey={sub.iconKey}
                     imgClassName="cat-circle-img"
                     iconClassName="cat-circle-ic"
-                    iconSize={72}
+                    iconSize={56}
                   />
                 </span>
                 <span className="cat-circle-label">{sub.name}</span>

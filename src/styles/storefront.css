@@ -296,7 +296,11 @@
    sweep button. The art lives in /public/categories/<slug>.svg and is set as a
    background-image from the markup; a category with no art file falls back to
    the inline keyword icon (.cat-ic) in the same slot. */
-.fz .cat-tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:18px;}
+/* Poppins comes with this card design. Scoped to the tiles rather than applied
+   globally (the source design used `* { font-family: Poppins }`) so the rest of
+   the storefront keeps Manrope. */
+.fz .cat-tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:18px;
+  font-family:var(--font-poppins),var(--font-manrope),system-ui,sans-serif;}
 .fz .cat-tile{position:relative;background:var(--card);border:1.5px solid color-mix(in srgb,var(--brand) 8%,transparent);
   border-radius:20px;padding:26px 14px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;
   text-align:center;cursor:pointer;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.06);
@@ -374,7 +378,7 @@
    --ring is the single knob for the circle's diameter: the tile width, the
    label's max width and the mobile step-downs are all derived from it, so
    resizing the strip means changing one number per breakpoint. */
-.fz .cat-circles{--ring:200px;
+.fz .cat-circles{--ring:140px;
   display:flex;gap:28px;overflow-x:auto;padding:6px 2px 20px;margin-bottom:10px;
   scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
 .fz .cat-circles::-webkit-scrollbar{height:5px;}
@@ -411,6 +415,9 @@
 .fz .cat-circle-ic{width:100%;height:100%;display:grid;place-items:center;
   background:var(--ct-bg,var(--brand-tint));color:var(--ct-fg,var(--brand-dark));
   transition:transform .55s cubic-bezier(.16,1,.3,1);}
+/* As with the hero: cap the fixed-size art to a share of the ring so it keeps
+   its proportion once the ring goes fluid on phones. */
+.fz .cat-circle-ic img{max-width:58%;max-height:58%;}
 .fz .cat-circle:hover .cat-circle-ic{transform:scale(1.07);}
 /* Label scales with the bigger circle; the underline grows out from centre. */
 .fz .cat-circle-label{position:relative;font-size:15px;font-weight:650;color:var(--ink);text-align:center;
@@ -423,13 +430,13 @@
 .fz .cat-circle:hover .cat-circle-label{color:var(--brand-dark);}
 .fz .cat-circle:hover .cat-circle-label::after{width:38%;}
 @media (max-width:1024px){
-  .fz .cat-circles{--ring:164px;gap:22px;}
+  .fz .cat-circles{--ring:120px;gap:18px;}
   .fz .cat-circle-label{font-size:14px;}
 }
 @media (max-width:640px){
-  /* Below this width a fixed 200px tile would show barely one and a half
-     circles, so the ring tracks the viewport and two sit side by side. */
-  .fz .cat-circles{--ring:min(38vw,140px);gap:16px;padding-bottom:16px;}
+  /* The ring tracks the viewport so roughly three sit across a phone screen
+     instead of the desktop size carrying over unchanged. */
+  .fz .cat-circles{--ring:min(28vw,110px);gap:14px;padding-bottom:16px;}
   .fz .cat-circle{gap:10px;}
   .fz .cat-circle-label{font-size:13px;}
   /* Touch devices never hover: keep the lift/sheen from sticking after a tap. */
@@ -449,17 +456,22 @@
    distortion. Sized in vw below the breakpoint so it scales down on phones
    instead of pushing the product grid off the first screen. */
 .fz .cat-hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 4px;}
-/* Kept clearly larger than the 200px sub-category circles below it, so the
-   page's subject still outranks its children. */
-.fz .cat-hero-ring{width:280px;height:280px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
+/* Still larger than the sub-category circles below it so the page's subject
+   outranks its children, but sized to leave the product grid closer to the
+   fold rather than filling the first screen on its own. */
+.fz .cat-hero-ring{width:200px;height:200px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
   background:var(--bg);border:1px solid var(--line);box-shadow:var(--shadow);}
 .fz .cat-hero-img{width:100%;height:100%;object-fit:cover;display:block;}
 .fz .cat-hero-ic{width:100%;height:100%;display:grid;place-items:center;
   background:var(--ct-bg,var(--brand-tint));color:var(--ct-fg,var(--brand-dark));}
+/* The art is passed a fixed pixel size from the page, which would stay put when
+   the ring shrinks on phones. Capping it to a share of the ring keeps the same
+   proportion at every width. */
+.fz .cat-hero-ic img{max-width:56%;max-height:56%;}
 .fz .cat-hero-title{font-size:28px;font-weight:800;letter-spacing:-.03em;color:var(--ink);margin:18px 0 0;}
 .fz .cat-hero-desc{font-size:14.5px;color:var(--ink-mute);margin:8px 0 0;max-width:560px;white-space:pre-line;}
 @media (max-width:640px){
-  .fz .cat-hero-ring{width:min(60vw,200px);height:min(60vw,200px);}
+  .fz .cat-hero-ring{width:min(46vw,164px);height:min(46vw,164px);}
   .fz .cat-hero-title{font-size:22px;margin-top:14px;}
   .fz .cat-hero-desc{font-size:13.5px;}
 }

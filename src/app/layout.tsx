@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono, Manrope, Spline_Sans_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Manrope, Poppins, Spline_Sans_Mono } from "next/font/google";
 import TopProgressBar from "@/components/TopProgressBar";
 import { isIpBlocked } from "@/lib/ip-block";
 import { getClientIp } from "@/lib/client-ip";
@@ -29,6 +29,19 @@ const manrope = Manrope({
 const splineSansMono = Spline_Sans_Mono({
   variable: "--font-spline-mono",
   subsets: ["latin"],
+});
+
+// Poppins ships with the category-card design. Self-hosted through next/font
+// rather than the design's <link> to fonts.googleapis.com: that would add two
+// render-blocking round-trips to a third party on every page, and next/font
+// already inlines the @font-face with the file served from our own origin.
+// Weights are pinned to the four the design uses — a variable axis would ship
+// more than is needed here.
+const poppins = Poppins({
+  variable: "--font-poppins",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 // Async so the admin-configured domain is loaded before metadataBase is built;
@@ -65,7 +78,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${splineSansMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${poppins.variable} ${splineSansMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-gray-50">
         {/* Top loading bar (YouTube/Facebook style). Wrapped in Suspense
