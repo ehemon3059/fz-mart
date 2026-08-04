@@ -378,7 +378,7 @@
    --ring is the single knob for the circle's diameter: the tile width, the
    label's max width and the mobile step-downs are all derived from it, so
    resizing the strip means changing one number per breakpoint. */
-.fz .cat-circles{--ring:140px;
+.fz .cat-circles{--ring:104px;
   display:flex;gap:28px;overflow-x:auto;padding:6px 2px 20px;margin-bottom:10px;
   scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
 .fz .cat-circles::-webkit-scrollbar{height:5px;}
@@ -430,13 +430,13 @@
 .fz .cat-circle:hover .cat-circle-label{color:var(--brand-dark);}
 .fz .cat-circle:hover .cat-circle-label::after{width:38%;}
 @media (max-width:1024px){
-  .fz .cat-circles{--ring:120px;gap:18px;}
+  .fz .cat-circles{--ring:92px;gap:16px;}
   .fz .cat-circle-label{font-size:14px;}
 }
 @media (max-width:640px){
   /* The ring tracks the viewport so roughly three sit across a phone screen
      instead of the desktop size carrying over unchanged. */
-  .fz .cat-circles{--ring:min(28vw,110px);gap:14px;padding-bottom:16px;}
+  .fz .cat-circles{--ring:min(21vw,80px);gap:12px;padding-bottom:16px;}
   .fz .cat-circle{gap:10px;}
   .fz .cat-circle-label{font-size:13px;}
   /* Touch devices never hover: keep the lift/sheen from sticking after a tap. */
@@ -459,7 +459,7 @@
 /* Still larger than the sub-category circles below it so the page's subject
    outranks its children, but sized to leave the product grid closer to the
    fold rather than filling the first screen on its own. */
-.fz .cat-hero-ring{width:200px;height:200px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
+.fz .cat-hero-ring{width:150px;height:150px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
   background:var(--bg);border:1px solid var(--line);box-shadow:var(--shadow);}
 .fz .cat-hero-img{width:100%;height:100%;object-fit:cover;display:block;}
 .fz .cat-hero-ic{width:100%;height:100%;display:grid;place-items:center;
@@ -471,7 +471,7 @@
 .fz .cat-hero-title{font-size:28px;font-weight:800;letter-spacing:-.03em;color:var(--ink);margin:18px 0 0;}
 .fz .cat-hero-desc{font-size:14.5px;color:var(--ink-mute);margin:8px 0 0;max-width:560px;white-space:pre-line;}
 @media (max-width:640px){
-  .fz .cat-hero-ring{width:min(46vw,164px);height:min(46vw,164px);}
+  .fz .cat-hero-ring{width:100px;height:100px;}
   .fz .cat-hero-title{font-size:22px;margin-top:14px;}
   .fz .cat-hero-desc{font-size:13.5px;}
 }
