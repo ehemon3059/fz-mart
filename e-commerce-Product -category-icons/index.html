@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Category Showcase</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        /* ── Reset & base ── */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 48px 0;
+            background: #f6f7fa;
+        }
+
+        /* ── Grid ── */
+        .all-card {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(180px, 1fr));
+            gap: 28px;
+            width: 100%;
+            max-width: 1300px;
+            padding: 0 24px;
+        }
+
+        /* ── Modern Card ── */
+        .card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 28px 18px 22px;
+            text-align: center;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.4s ease,
+                border-color 0.4s ease;
+            position: relative;
+            border: 1.5px solid rgba(229, 77, 115, 0.08);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        /* subtle top accent line */
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40%;
+            height: 4px;
+            background: #E54D73;
+            border-radius: 0 0 8px 8px;
+            opacity: 0;
+            transition: opacity 0.4s ease, width 0.4s ease;
+        }
+
+        .card:hover::before {
+            opacity: 1;
+            width: 70%;
+        }
+
+        /* hover card lift + glow */
+        .card:hover {
+            transform: translateY(-12px);
+            box-shadow: 0 20px 48px rgba(229, 77, 115, 0.18);
+            border-color: rgba(229, 77, 115, 0.25);
+        }
+
+        /* ── Icon wrapper ── */
+        .icon-wrapper {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 14px;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            animation: floating 3.2s ease-in-out infinite;
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+            will-change: transform;
+        }
+
+        /* SVG hover animation: scale + playful rotate */
+        .card:hover .icon-wrapper {
+            transform: scale(1.12) rotate(-5deg);
+            animation-play-state: paused;
+        }
+
+        /* ── Typography ── */
+        .card h2 {
+            font-size: 17px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 4px;
+            letter-spacing: -0.01em;
+            position: relative;
+            transition: color 0.3s ease;
+        }
+
+        .card:hover h2 {
+            color: #E54D73;
+        }
+
+        /* subtle decorative dot */
+        .card h2::after {
+            content: '·';
+            display: inline-block;
+            margin-left: 2px;
+            color: #E54D73;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover h2::after {
+            opacity: 1;
+        }
+
+        /* ── "Shop Now" button (hover effect KEPT AS-IS) ── */
+        .btn {
+            position: relative;
+            display: inline-block;
+            padding: 9px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 8px;
+            border: 1.5px solid #E54D73;
+            background: transparent;
+            color: #E54D73;
+            text-decoration: none;
+            overflow: hidden;
+            isolation: isolate;
+            transition: color 0.4s ease;
+            margin-top: 8px;
+            /* keep exactly as original */;
+        }
+
+        .btn span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            z-index: -1;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            width: 120%;
+            height: 100%;
+            background-color: #E54D73;
+            backface-visibility: hidden;
+            will-change: transform;
+            transform: rotate3d(0, 0, 1, 10deg) translate3d(-1.2em, 110%, 0);
+            transform-origin: 0% 100%;
+            transition: transform 0.45s ease;
+        }
+
+        .btn:hover {
+            color: #ffffff;
+        }
+
+        .btn:hover::after {
+            transform: rotate3d(0, 0, 1, 0deg) translate3d(0, 0, 0);
+        }
+
+        /* ── Floating keyframes ── */
+        @keyframes floating {
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        /* ── Category Slider ── */
+        .cat-section {
+            width: 100%;
+            max-width: 1300px;
+            margin: 64px auto 0;
+            padding: 0 24px;
+        }
+
+        .cat-section h3 {
+            font-size: 22px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 20px;
+            letter-spacing: -0.01em;
+        }
+
+        .cat-slider {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .cat-track {
+            display: flex;
+            gap: 18px;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            padding: 8px 4px 18px;
+            scrollbar-width: none;
+        }
+
+        .cat-track::-webkit-scrollbar {
+            display: none;
+        }
+
+        .cat-card {
+            flex: 0 0 auto;
+            width: 130px;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 20px 12px 16px;
+            text-align: center;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+            transition: transform 0.35s ease, box-shadow 0.35s ease;
+            cursor: pointer;
+            border: 1.5px solid rgba(229, 77, 115, 0.06);
+        }
+
+        .cat-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 14px 32px rgba(229, 77, 115, 0.16);
+            border-color: rgba(229, 77, 115, 0.20);
+        }
+
+        .cat-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 10px;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .cat-card:hover .cat-icon {
+            transform: scale(1.10) rotate(-4deg);
+        }
+
+        .cat-card span {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #111827;
+            transition: color 0.3s ease;
+        }
+
+        .cat-card:hover span {
+            color: #E54D73;
+        }
+
+        .cat-arrow {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: #1f2937;
+            color: #fff;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.25s ease, transform 0.25s ease;
+            z-index: 2;
+        }
+
+        .cat-arrow:hover {
+            background: #111827;
+            transform: scale(1.06);
+        }
+
+        .cat-arrow.prev {
+            margin-right: 14px;
+        }
+
+        .cat-arrow.next {
+            margin-left: 14px;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 1024px) {
+            .all-card {
+                grid-template-columns: repeat(3, minmax(160px, 1fr));
+                gap: 22px;
+            }
+            .icon-wrapper {
+                width: 104px;
+                height: 104px;
+            }
+            .card {
+                padding: 24px 14px 18px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 28px 0;
+            }
+
+            .all-card {
+                grid-template-columns: repeat(2, minmax(140px, 1fr));
+                gap: 16px;
+                padding: 0 16px;
+            }
+
+            .card {
+                padding: 20px 12px 16px;
+                border-radius: 16px;
+            }
+
+            .icon-wrapper {
+                width: 88px;
+                height: 88px;
+            }
+
+            .card h2 {
+                font-size: 15px;
+            }
+
+            .btn {
+                padding: 7px 14px;
+                font-size: 13px;
+                margin-top: 6px;
+            }
+
+            .cat-section {
+                margin-top: 44px;
+                padding: 0 16px;
+            }
+
+            .cat-card {
+                width: 105px;
+                padding: 16px 8px 12px;
+            }
+
+            .cat-icon {
+                width: 50px;
+                height: 50px;
+            }
+
+            .cat-card span {
+                font-size: 12px;
+            }
+
+            .cat-arrow {
+                width: 34px;
+                height: 34px;
+                font-size: 14px;
+            }
+            .cat-arrow.prev {
+                margin-right: 8px;
+            }
+            .cat-arrow.next {
+                margin-left: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .all-card {
+                grid-template-columns: repeat(2, minmax(110px, 1fr));
+                gap: 12px;
+                padding: 0 12px;
+            }
+
+            .card {
+                padding: 16px 8px 14px;
+                border-radius: 14px;
+            }
+
+            .icon-wrapper {
+                width: 72px;
+                height: 72px;
+                margin-bottom: 10px;
+            }
+
+            .card h2 {
+                font-size: 13px;
+            }
+
+            .btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                border-radius: 6px;
+                margin-top: 4px;
+            }
+
+            .cat-section h3 {
+                font-size: 18px;
+            }
+
+            .cat-card {
+                width: 88px;
+                padding: 12px 6px 10px;
+                border-radius: 12px;
+            }
+
+            .cat-icon {
+                width: 42px;
+                height: 42px;
+            }
+
+            .cat-card span {
+                font-size: 11px;
+            }
+
+            .cat-arrow {
+                width: 30px;
+                height: 30px;
+                font-size: 12px;
+            }
+            .cat-arrow.prev {
+                margin-right: 4px;
+            }
+            .cat-arrow.next {
+                margin-left: 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ─── PRODUCT GRID ─── -->
+    <div class="all-card">
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Baby%20Items.svg');"></div>
+            <h2>Baby Items</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Bags.svg');"></div>
+            <h2>Bags</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Bathroom%20Counter%20Storage.svg');"></div>
+            <h2>Bathroom Storage</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Beauty.svg');"></div>
+            <h2>Beauty</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Bedding%20Accessories.svg');"></div>
+            <h2>Bedding Accessories</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Eyewear.svg');"></div>
+            <h2>Eyewear</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Gadgets.svg');"></div>
+            <h2>Gadgets</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Gifts%20%26%20Craft.svg');"></div>
+            <h2>Gifts &amp; Craft</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Groceries.svg');"></div>
+            <h2>Groceries</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Health.svg');"></div>
+            <h2>Health</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Home%20Decoration.svg');"></div>
+            <h2>Home Decoration</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Jewelry.svg');"></div>
+            <h2>Jewelry</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Kitchen%20Accessories.svg');"></div>
+            <h2>Kitchen Accessories</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Men%27s%20%26%20Boy%27s%20Fashion.svg');"></div>
+            <h2>Men's &amp; Boy's Fashion</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Mens%20Wear.svg');"></div>
+            <h2>Mens Wear</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Mother%20%26%20Baby.svg');"></div>
+            <h2>Mother &amp; Baby</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Shoes.svg');"></div>
+            <h2>Shoes</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Tools%20%26%20Hardware.svg');"></div>
+            <h2>Tools &amp; Hardware</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Toys.svg');"></div>
+            <h2>Toys</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Watches.svg');"></div>
+            <h2>Watches</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Women%20Wear.svg');"></div>
+            <h2>Women Wear</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+        <div class="card">
+            <div class="icon-wrapper" style="background-image: url('./Women%27s%20%26%20Girl%27s%20Fashion.svg');"></div>
+            <h2>Women's &amp; Girl's Fashion</h2>
+            <a href="#" class="btn"><span>Shop Now</span></a>
+        </div>
+
+    </div>
+
+    <!-- ─── CATEGORY SLIDER ─── -->
+    <section class="cat-section">
+        <h3>Shop by Category</h3>
+        <div class="cat-slider">
+            <button class="cat-arrow prev" onclick="scrollCat(-1)">&#10094;</button>
+
+            <div class="cat-track" id="catTrack">
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Baby%20Items.svg');"></div>
+                    <span>Baby Items</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Bags.svg');"></div>
+                    <span>Bags</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Bathroom%20Counter%20Storage.svg');"></div>
+                    <span>Bathroom Storage</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Beauty.svg');"></div>
+                    <span>Beauty</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Bedding%20Accessories.svg');"></div>
+                    <span>Bedding</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Eyewear.svg');"></div>
+                    <span>Eyewear</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Gadgets.svg');"></div>
+                    <span>Gadgets</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Gifts%20%26%20Craft.svg');"></div>
+                    <span>Gifts &amp; Craft</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Groceries.svg');"></div>
+                    <span>Groceries</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Health.svg');"></div>
+                    <span>Health</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Home%20Decoration.svg');"></div>
+                    <span>Home Decore</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Jewelry.svg');"></div>
+                    <span>Jewelry</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Kitchen%20Accessories.svg');"></div>
+                    <span>Kitchen</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Men%27s%20%26%20Boy%27s%20Fashion.svg');"></div>
+                    <span>Men's Fashion</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Mens%20Wear.svg');"></div>
+                    <span>Mens Wear</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Mother%20%26%20Baby.svg');"></div>
+                    <span>Mother &amp; Baby</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Shoes.svg');"></div>
+                    <span>Shoes</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Tools%20%26%20Hardware.svg');"></div>
+                    <span>Tools &amp; Hardware</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Toys.svg');"></div>
+                    <span>Toys</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Watches.svg');"></div>
+                    <span>Watches</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Women%20Wear.svg');"></div>
+                    <span>Women Wear</span>
+                </div>
+                <div class="cat-card">
+                    <div class="cat-icon" style="background-image: url('./Women%27s%20%26%20Girl%27s%20Fashion.svg');"></div>
+                    <span>Women's Fashion</span>
+                </div>
+            </div>
+
+            <button class="cat-arrow next" onclick="scrollCat(1)">&#10095;</button>
+        </div>
+    </section>
+
+    <script>
+        function scrollCat(direction) {
+            const track = document.getElementById('catTrack');
+            track.scrollBy({ left: direction * 300, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
