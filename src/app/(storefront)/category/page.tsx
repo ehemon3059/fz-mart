@@ -37,7 +37,7 @@ export default async function AllCategoriesPage() {
                   iconKey={cat.iconKey}
                   imgClassName="cat-circle-img"
                   iconClassName="cat-circle-ic"
-                  iconSize={32}
+                  iconSize={72}
                 />
               </span>
               <span className="cat-circle-label">{cat.name}</span>

@@ -312,28 +312,79 @@
 .fz .cat-grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));}
 
 /* Circular department strip above the grid. Scrolls sideways rather than
-   wrapping, so the row stays one line at any width. */
-.fz .cat-circles{display:flex;gap:22px;overflow-x:auto;padding:4px 2px 18px;margin-bottom:10px;
+   wrapping, so the row stays one line at any width.
+
+   --ring is the single knob for the circle's diameter: the tile width, the
+   label's max width and the mobile step-downs are all derived from it, so
+   resizing the strip means changing one number per breakpoint. */
+.fz .cat-circles{--ring:200px;
+  display:flex;gap:28px;overflow-x:auto;padding:6px 2px 20px;margin-bottom:10px;
   scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
 .fz .cat-circles::-webkit-scrollbar{height:5px;}
 .fz .cat-circles::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px;}
-.fz .cat-circle{flex:0 0 auto;width:104px;display:flex;flex-direction:column;align-items:center;gap:9px;
+.fz .cat-circle{flex:0 0 auto;width:var(--ring);display:flex;flex-direction:column;align-items:center;gap:13px;
   text-decoration:none;scroll-snap-align:start;}
-.fz .cat-circle-ring{width:96px;height:96px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
+.fz .cat-circle-ring{position:relative;width:var(--ring);height:var(--ring);border-radius:50%;
+  overflow:hidden;display:grid;place-items:center;isolation:isolate;
   background:var(--bg);border:1px solid var(--line);
-  transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s,border-color .25s;}
-.fz .cat-circle:hover .cat-circle-ring{transform:translateY(-4px) scale(1.04);
-  box-shadow:var(--shadow-hover);border-color:var(--brand);}
-.fz .cat-circle-img{width:100%;height:100%;object-fit:cover;display:block;}
+  transition:transform .45s cubic-bezier(.16,1,.3,1),box-shadow .45s cubic-bezier(.16,1,.3,1),
+    border-color .3s;}
+/* Gradient ring drawn just inside the edge, masked to a 2px band so it reads as
+   a stroke rather than a fill. Same mask-composite trick as .cat-c::before. */
+.fz .cat-circle-ring::after{content:"";position:absolute;inset:0;border-radius:50%;padding:2px;
+  background:conic-gradient(from 210deg,var(--brand),var(--brand-tint-2),var(--brand));
+  opacity:0;transform:rotate(-25deg);transition:opacity .4s,transform .7s cubic-bezier(.16,1,.3,1);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;z-index:2;}
+/* Sheen sweeps diagonally across the picture on hover. */
+.fz .cat-circle-ring::before{content:"";position:absolute;inset:0;border-radius:50%;z-index:1;
+  background:linear-gradient(115deg,transparent 32%,rgba(255,255,255,.42) 48%,transparent 62%);
+  transform:translateX(-120%);transition:transform .75s cubic-bezier(.16,1,.3,1);pointer-events:none;}
+.fz .cat-circle:hover .cat-circle-ring,
+.fz .cat-circle:focus-visible .cat-circle-ring{transform:translateY(-8px);
+  box-shadow:0 18px 38px -14px rgba(20,18,14,.32);border-color:transparent;}
+.fz .cat-circle:hover .cat-circle-ring::after,
+.fz .cat-circle:focus-visible .cat-circle-ring::after{opacity:1;transform:rotate(0deg);}
+.fz .cat-circle:hover .cat-circle-ring::before{transform:translateX(120%);}
+.fz .cat-circle:focus-visible{outline:none;}
+/* Slow zoom on the picture itself, clipped by the ring's overflow:hidden. */
+.fz .cat-circle-img{width:100%;height:100%;object-fit:cover;display:block;
+  transition:transform .55s cubic-bezier(.16,1,.3,1);}
+.fz .cat-circle:hover .cat-circle-img{transform:scale(1.09);}
 .fz .cat-circle-ic{width:100%;height:100%;display:grid;place-items:center;
-  background:var(--ct-bg,var(--brand-tint));color:var(--ct-fg,var(--brand-dark));}
-.fz .cat-circle-label{font-size:13px;font-weight:600;color:var(--ink);text-align:center;line-height:1.3;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  background:var(--ct-bg,var(--brand-tint));color:var(--ct-fg,var(--brand-dark));
+  transition:transform .55s cubic-bezier(.16,1,.3,1);}
+.fz .cat-circle:hover .cat-circle-ic{transform:scale(1.07);}
+/* Label scales with the bigger circle; the underline grows out from centre. */
+.fz .cat-circle-label{position:relative;font-size:15px;font-weight:650;color:var(--ink);text-align:center;
+  line-height:1.35;letter-spacing:-.01em;max-width:100%;padding-bottom:3px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  transition:color .25s;}
+.fz .cat-circle-label::after{content:"";position:absolute;left:50%;bottom:0;width:0;height:1.5px;
+  background:var(--brand);border-radius:999px;transform:translateX(-50%);
+  transition:width .35s cubic-bezier(.16,1,.3,1);}
 .fz .cat-circle:hover .cat-circle-label{color:var(--brand-dark);}
+.fz .cat-circle:hover .cat-circle-label::after{width:38%;}
+@media (max-width:1024px){
+  .fz .cat-circles{--ring:164px;gap:22px;}
+  .fz .cat-circle-label{font-size:14px;}
+}
 @media (max-width:640px){
-  .fz .cat-circles{gap:16px;}
-  .fz .cat-circle{width:84px;}
-  .fz .cat-circle-ring{width:76px;height:76px;}
+  /* Below this width a fixed 200px tile would show barely one and a half
+     circles, so the ring tracks the viewport and two sit side by side. */
+  .fz .cat-circles{--ring:min(38vw,140px);gap:16px;padding-bottom:16px;}
+  .fz .cat-circle{gap:10px;}
+  .fz .cat-circle-label{font-size:13px;}
+  /* Touch devices never hover: keep the lift/sheen from sticking after a tap. */
+  .fz .cat-circle:hover .cat-circle-ring{transform:none;box-shadow:var(--shadow);}
+  .fz .cat-circle:hover .cat-circle-img,
+  .fz .cat-circle:hover .cat-circle-ic{transform:none;}
+}
+@media (prefers-reduced-motion:reduce){
+  .fz .cat-circle-ring,.fz .cat-circle-ring::before,.fz .cat-circle-ring::after,
+  .fz .cat-circle-img,.fz .cat-circle-ic,.fz .cat-circle-label::after{transition:none;}
+  .fz .cat-circle:hover .cat-circle-ring{transform:none;}
+  .fz .cat-circle:hover .cat-circle-img,.fz .cat-circle:hover .cat-circle-ic{transform:none;}
 }
 
 /* ---------- single category page hero ---------- */
@@ -341,7 +392,9 @@
    distortion. Sized in vw below the breakpoint so it scales down on phones
    instead of pushing the product grid off the first screen. */
 .fz .cat-hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 4px;}
-.fz .cat-hero-ring{width:240px;height:240px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
+/* Kept clearly larger than the 200px sub-category circles below it, so the
+   page's subject still outranks its children. */
+.fz .cat-hero-ring{width:280px;height:280px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
   background:var(--bg);border:1px solid var(--line);box-shadow:var(--shadow);}
 .fz .cat-hero-img{width:100%;height:100%;object-fit:cover;display:block;}
 .fz .cat-hero-ic{width:100%;height:100%;display:grid;place-items:center;
