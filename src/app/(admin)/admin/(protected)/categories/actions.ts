@@ -61,6 +61,7 @@ export async function saveCategory(
 
   revalidatePath("/admin/categories");
   revalidatePath("/category");
+  revalidatePath("/category/[slug]", "page");
   return {};
 }
 
@@ -89,6 +90,7 @@ export async function removeCategory(id: number): Promise<DeleteResult> {
   }
   revalidatePath("/admin/categories");
   revalidatePath("/category");
+  revalidatePath("/category/[slug]", "page");
   return { ok: true };
 }
 
@@ -101,5 +103,6 @@ export async function moveCategory(id: number, direction: "up" | "down"): Promis
   }
   revalidatePath("/admin/categories");
   revalidatePath("/category");
+  revalidatePath("/category/[slug]", "page");
   return {};
 }
