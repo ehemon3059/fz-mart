@@ -34,21 +34,27 @@ export default function CategoryTiles({ categories }: { categories: Cat[] }) {
               {art ? (
                 // Background image rather than <img>: the art is decorative
                 // (the name below already labels the tile), and this keeps the
-                // float/scale transforms on one element.
+                // scale/rotate transform on a single element.
                 <span className="cat-art" style={{ backgroundImage: `url("${art}")` }} />
               ) : (
                 <span
                   className="cat-ic"
                   style={{ "--ct-bg": v!.bg, "--ct-fg": v!.fg } as React.CSSProperties}
                 >
-                  {/* Sized up from the 28px default: the tinted circle matches
-                      the illustrations' 112px footprint, so a default-size
-                      glyph would float in the middle of it. */}
-                  <CategoryIcon name={cat.name} size={52} />
+                  {/* Sized up from the 28px default so the glyph fills the same
+                      footprint the illustrations occupy. */}
+                  <CategoryIcon name={cat.name} size={46} />
                 </span>
               )}
               <b>{cat.name}</b>
-              {count > 0 && <span className="cat-sub">{count} subcategories</span>}
+              {count > 0 && (
+                <span className="cat-sub">
+                  {count} {count === 1 ? "subcategory" : "subcategories"}
+                </span>
+              )}
+              {/* Grows to fill the leftover height so the button sits on the
+                  card's baseline whether or not the sub-count line is there. */}
+              <span className="cat-spacer" />
               <span className="cat-cta">
                 <span>Shop Now</span>
               </span>

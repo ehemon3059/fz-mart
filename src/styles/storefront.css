@@ -292,46 +292,52 @@
 .fz .viewall:hover{background:var(--chip-bg,var(--brand-tint));}
 
 /* ---------- category tiles ---------- */
-/* Illustrated department cards: a floating SVG, the name, and a "Shop Now"
-   sweep button. The art lives in /public/categories/<slug>.svg and is set as a
-   background-image from the markup; a category with no art file falls back to
-   the inline keyword icon (.cat-ic) in the same slot. */
-/* Poppins comes with this card design. Scoped to the tiles rather than applied
-   globally (the source design used `* { font-family: Poppins }`) so the rest of
-   the storefront keeps Manrope. */
-.fz .cat-tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:18px;
+/* Department cards: a colour illustration, the name, an optional sub-count and
+   a "Shop Now" sweep button. The art lives in /public/categories/<slug>.svg and
+   is set as a background-image from the markup; a category with no art file
+   falls back to the inline keyword icon (.cat-ic) in the same slot.
+
+   Poppins ships with this design. Scoped to the tiles rather than applied
+   globally (the source used `* { font-family: Poppins }`) so the rest of the
+   storefront keeps Manrope. */
+.fz .cat-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:18px;
   font-family:var(--font-poppins),var(--font-manrope),system-ui,sans-serif;}
-.fz .cat-tile{position:relative;background:var(--card);border:1.5px solid color-mix(in srgb,var(--brand) 8%,transparent);
-  border-radius:20px;padding:26px 14px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;
-  text-align:center;cursor:pointer;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.06);
-  transition:transform .4s cubic-bezier(.25,.46,.45,.94),box-shadow .4s ease,border-color .4s ease;}
+.fz .cat-tile{position:relative;background:var(--card);border:1px solid color-mix(in srgb,var(--ink) 6%,transparent);
+  border-radius:14px;padding:26px 14px 20px;display:flex;flex-direction:column;align-items:center;
+  text-align:center;cursor:pointer;overflow:hidden;box-shadow:0 2px 10px color-mix(in srgb,var(--ink) 5%,transparent);
+  transition:transform .35s cubic-bezier(.25,.46,.45,.94),box-shadow .35s ease,border-color .35s ease;}
 /* Accent bar that widens out of the top edge on hover. */
 .fz .cat-tile::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
   width:40%;height:4px;background:var(--brand);border-radius:0 0 8px 8px;opacity:0;
-  transition:opacity .4s ease,width .4s ease;}
+  transition:opacity .35s ease,width .35s ease;}
 .fz .cat-tile:hover::before{opacity:1;width:70%;}
-.fz .cat-tile:hover{transform:translateY(-12px);border-color:color-mix(in srgb,var(--brand) 25%,transparent);
-  box-shadow:0 20px 48px color-mix(in srgb,var(--brand) 18%,transparent);}
-/* The illustration. Drifts gently at rest; the drift pauses on hover so the
-   scale/rotate reads cleanly instead of fighting the loop. */
-.fz .cat-art{width:112px;height:112px;background-repeat:no-repeat;background-position:center;
-  background-size:contain;animation:cat-float 3.2s ease-in-out infinite;will-change:transform;
+.fz .cat-tile:hover{transform:translateY(-8px);border-color:color-mix(in srgb,var(--brand) 22%,transparent);
+  box-shadow:0 18px 40px color-mix(in srgb,var(--brand) 16%,transparent);}
+/* The illustration. cubic-bezier(.34,1.56,.64,1) overshoots past 1 before
+   settling, which is what gives the scale its bounce. */
+.fz .cat-art{width:96px;height:96px;margin-bottom:16px;background-repeat:no-repeat;
+  background-position:center;background-size:contain;will-change:transform;
   transition:transform .45s cubic-bezier(.34,1.56,.64,1);}
-.fz .cat-tile:hover .cat-art{transform:scale(1.12) rotate(-5deg);animation-play-state:paused;}
+.fz .cat-tile:hover .cat-art{transform:scale(1.1) rotate(-5deg);}
 /* Fallback slot — same footprint as .cat-art so both lay out identically. */
-.fz .cat-ic{width:112px;height:112px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+.fz .cat-ic{width:96px;height:96px;margin-bottom:16px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
   background:var(--ct-bg,#eef2f1);color:var(--ct-fg,#475569);
   transition:transform .45s cubic-bezier(.34,1.56,.64,1);}
-.fz .cat-tile:hover .cat-ic{transform:scale(1.08) rotate(-4deg);}
-.fz .cat-tile b{font-size:15.5px;font-weight:600;letter-spacing:-.01em;color:var(--ink);
-  transition:color .3s ease;}
+.fz .cat-tile:hover .cat-ic{transform:scale(1.1) rotate(-5deg);}
+.fz .cat-tile b{font-size:15px;font-weight:700;line-height:1.35;letter-spacing:-.01em;
+  color:var(--ink);transition:color .3s ease;}
 .fz .cat-tile:hover b{color:var(--brand);}
-.fz .cat-tile .cat-sub{font-size:11.5px;color:var(--ink-mute);}
-/* "Shop Now" — the fill sweeps up from the bottom-left on hover. */
-/* margin-top:auto pins the button to the card's bottom edge. Grid rows stretch
-   every card to a common height, so without this the optional sub-count line
-   would leave the buttons sitting at different heights across a row. */
-.fz .cat-cta{position:relative;display:inline-block;margin-top:auto;padding:8px 17px;font-size:13.5px;
+.fz .cat-tile .cat-sub{font-size:12px;font-weight:400;color:var(--ink-mute);margin-top:6px;}
+/* Grows to absorb the leftover height so every button lands on the same
+   baseline whether or not its card has a sub-count line. */
+.fz .cat-spacer{flex:1 1 auto;min-height:16px;}
+/* "Shop Now" — the fill sweeps up from the bottom-left on hover. Three details
+   are load-bearing: the label is wrapped in a <span> (the fill sits at
+   z-index:-1 and would paint over bare text), `isolation:isolate` keeps that
+   negative z-index inside the button, and the fill is 120% wide because the
+   10deg rotation would otherwise leave a corner gap. */
+.fz .cat-cta{position:relative;display:inline-block;padding:8px 20px;font-size:13px;
   font-weight:500;border-radius:8px;border:1.5px solid var(--brand);background:transparent;color:var(--brand);
   overflow:hidden;isolation:isolate;transition:color .4s ease;}
 .fz .cat-cta span{position:relative;z-index:1;}
@@ -341,23 +347,19 @@
   transition:transform .45s ease;}
 .fz .cat-tile:hover .cat-cta{color:#fff;}
 .fz .cat-tile:hover .cat-cta::after{transform:rotate3d(0,0,1,0deg) translate3d(0,0,0);}
-@keyframes cat-float{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
 /* Touch devices report no hover: swap the lift for a press-down, so tapping
    gives feedback instead of leaving the hover state stuck after the tap. */
 @media (hover:none){
-  .fz .cat-tile:hover{transform:none;box-shadow:0 8px 28px rgba(0,0,0,.06);
-    border-color:color-mix(in srgb,var(--brand) 8%,transparent);}
+  .fz .cat-tile:hover{transform:none;border-color:color-mix(in srgb,var(--ink) 6%,transparent);
+    box-shadow:0 2px 10px color-mix(in srgb,var(--ink) 5%,transparent);}
   .fz .cat-tile:hover::before{opacity:0;width:40%;}
   .fz .cat-tile:hover .cat-art,.fz .cat-tile:hover .cat-ic{transform:none;}
   .fz .cat-tile:hover b{color:var(--ink);}
-  .fz .cat-tile:active{transform:scale(.96);transition:transform .12s ease;}
+  .fz .cat-tile:active{transform:scale(.97);transition:transform .12s ease;}
 }
-/* NOTE: the narrow-phone (<=400px) overrides for these tiles live next to the
-   760px block further down — both target the same properties, so they have to
-   stay in cascade order to win. */
 @media (prefers-reduced-motion:reduce){
-  .fz .cat-art{animation:none;}
-  .fz .cat-tile,.fz .cat-art,.fz .cat-ic,.fz .cat-cta,.fz .cat-cta::after,.fz .cat-tile::before{transition:none;}
+  .fz .cat-tile,.fz .cat-art,.fz .cat-ic,.fz .cat-cta,.fz .cat-cta::after,
+  .fz .cat-tile::before{transition:none;}
   .fz .cat-tile:hover{transform:none;}
   .fz .cat-tile:hover .cat-art,.fz .cat-tile:hover .cat-ic{transform:none;}
 }
@@ -869,9 +871,6 @@
   .fz .co-side{position:static;}
   .fz .hero-grid{grid-template-columns:1fr;}
   .fz .promo-col{flex-direction:row;}
-  .fz .cat-tiles{grid-template-columns:repeat(4,1fr);gap:16px;}
-  .fz .cat-tile{padding:22px 12px 18px;}
-  .fz .cat-art,.fz .cat-ic{width:100px;height:100px;}
   .fz .prow,.fz .pgrid{grid-template-columns:repeat(4,1fr);}
   .fz .banner .b-art{display:none;} .fz .banner .b-copy{max-width:100%;}
 }
@@ -888,16 +887,6 @@
   .fz .trust-ic{width:38px;height:38px;border-radius:11px;}
   .fz .trust-item b{font-size:13.5px;}
   .fz .trust-sub{font-size:12px;}
-  /* Three up on phones. The "Shop Now" button and sub-count are dropped here:
-     there is no hover on touch, so the button is decoration that would cost a
-     row of height per card — the whole tile is the tap target already. */
-  .fz .cat-tiles{grid-template-columns:repeat(3,1fr);gap:10px;}
-  .fz .cat-tile{padding:14px 8px 12px;border-radius:16px;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.05);}
-  /* Fluid rather than stepped, so the art keeps its proportion to the tile
-     across the 320-760px range instead of jumping at a breakpoint. */
-  .fz .cat-art,.fz .cat-ic{width:clamp(54px,17vw,78px);height:clamp(54px,17vw,78px);animation:none;}
-  .fz .cat-tile b{font-size:12.5px;line-height:1.3;}
-  .fz .cat-tile .cat-sub,.fz .cat-tile .cat-cta{display:none;}
   .fz .prow,.fz .pgrid{grid-template-columns:repeat(2,1fr);}
   .fz .ft-top{grid-template-columns:1fr 1fr;}
   .fz .banner h1{font-size:32px;}
@@ -914,13 +903,23 @@
   .fz .news input{font-size:16px;padding:0 16px;}
 }
 
-/* Narrow phones: three category columns still fit, just tighter. Must follow
-   the 760px block above — same properties, so cascade order decides. The art
-   itself is fluid (clamp) up there, so only spacing is stepped here. */
-@media(max-width:400px){
-  .fz .cat-tiles{gap:8px;}
-  .fz .cat-tile{padding:12px 5px 10px;border-radius:14px;}
-  .fz .cat-tile b{font-size:11.5px;}
+/* Category-tile breakpoints, from the source design: 6 -> 4 -> 3 -> 2 columns.
+   These sit AFTER the generic 1080/760px blocks above deliberately — they set
+   the same properties, so cascade order is what makes them win. */
+@media(max-width:1200px){
+  .fz .cat-tiles{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+@media(max-width:900px){
+  .fz .cat-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
+  .fz .cat-art,.fz .cat-ic{width:84px;height:84px;}
+}
+@media(max-width:640px){
+  .fz .cat-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+  .fz .cat-tile{padding:20px 10px 16px;border-radius:12px;}
+  .fz .cat-art,.fz .cat-ic{width:72px;height:72px;margin-bottom:12px;}
+  .fz .cat-tile b{font-size:13px;}
+  .fz .cat-tile .cat-sub{font-size:11px;}
+  .fz .cat-cta{padding:7px 16px;font-size:12px;}
 }
 
 /* ---------- mobile bottom tab bar ---------- */
