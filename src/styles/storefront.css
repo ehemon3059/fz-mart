@@ -306,11 +306,16 @@
   border-radius:14px;padding:26px 14px 20px;display:flex;flex-direction:column;align-items:center;
   text-align:center;cursor:pointer;overflow:hidden;box-shadow:0 2px 10px color-mix(in srgb,var(--ink) 5%,transparent);
   transition:transform .35s cubic-bezier(.25,.46,.45,.94),box-shadow .35s ease,border-color .35s ease;}
-/* Accent bar that widens out of the top edge on hover. */
-.fz .cat-tile::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:40%;height:4px;background:var(--brand);border-radius:0 0 8px 8px;opacity:0;
-  transition:opacity .35s ease,width .35s ease;}
-.fz .cat-tile:hover::before{opacity:1;width:70%;}
+/* Accent bar that widens out of the top edge on hover. Animated with scaleX
+   rather than width: the source design transitioned `width`, which forces a
+   layout pass on every frame, while a transform runs on the compositor. The
+   box is laid out at the full 70% and scaled down to 40% (0.5714 = 40/70) at
+   rest, so the visible result is identical. */
+.fz .cat-tile::before{content:"";position:absolute;top:0;left:50%;
+  width:70%;height:4px;background:var(--brand);border-radius:0 0 8px 8px;opacity:0;
+  transform:translateX(-50%) scaleX(.5714);will-change:transform,opacity;
+  transition:opacity .35s ease,transform .35s ease;}
+.fz .cat-tile:hover::before{opacity:1;transform:translateX(-50%) scaleX(1);}
 .fz .cat-tile:hover{transform:translateY(-8px);border-color:color-mix(in srgb,var(--brand) 22%,transparent);
   box-shadow:0 18px 40px color-mix(in srgb,var(--brand) 16%,transparent);}
 /* The illustration. cubic-bezier(.34,1.56,.64,1) overshoots past 1 before
@@ -354,6 +359,10 @@
 @media (hover:none){
   .fz .cat-tile:active{transform:scale(.97);transition:transform .12s ease;}
 }
+
+
+
+
 
 /* ---------- all-categories directory page ---------- */
 .fz .cat-dir{padding-top:40px;}

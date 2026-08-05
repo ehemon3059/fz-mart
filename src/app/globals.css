@@ -21,11 +21,21 @@
   }
 }
 
-/* Honour reduced-motion for every admin micro-interaction. */
+/* Honour reduced-motion for admin micro-interactions.
+ *
+ * Deliberately NOT applied to the storefront (`.fz`): this used to be a global
+ * `*` rule, which forced every transition site-wide to 0.01ms — silently
+ * flattening the storefront's category-card hover and the top progress bar on
+ * any machine with the OS "reduce animations" setting on (Windows ships it off
+ * by default on some setups). The storefront's motion is the product design and
+ * is expected to run; the admin panel keeps the accessibility opt-out. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  /* .topbar-progress is excluded too: it renders in the root layout, outside
+   * `.fz`, and a progress indicator that snaps between steps reads as broken
+   * rather than as a considerate lack of motion. */
+  *:not(.fz *):not(.fz):not(.topbar-progress),
+  *:not(.fz *):not(.fz):not(.topbar-progress)::before,
+  *:not(.fz *):not(.fz):not(.topbar-progress)::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

@@ -163,9 +163,6 @@ export default function TopProgressBar() {
           transition: transform 0.2s ease, opacity 0.2s ease 0.1s;
           pointer-events: none;
         }
-        @media (prefers-reduced-motion: reduce) {
-          .topbar-progress { transition: opacity 0.2s ease; }
-        }
       `}</style>
     </>
   );
