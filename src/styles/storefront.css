@@ -511,19 +511,19 @@
 .fz .strip-track::-webkit-scrollbar{display:none;}
 /* No card chrome — just the round visual and its label. The lift and icon
    bounce are kept so the strip still animates like the rest of the system. */
-.fz .strip-card{flex:0 0 auto;width:112px;background:none;border:0;box-shadow:none;
+.fz .strip-card{flex:0 0 auto;width:200px;background:none;border:0;box-shadow:none;
   padding:4px 2px;text-align:center;text-decoration:none;display:block;
   transition:transform .35s ease;}
 .fz .strip-card:hover{transform:translateY(-6px);}
 /* Same overshoot easing as the home tiles, so both read as one system. */
-.fz .strip-icon{width:84px;height:84px;margin:0 auto 10px;border-radius:50%;overflow:hidden;
+.fz .strip-icon{width:180px;height:180px;margin:0 auto 10px;border-radius:50%;overflow:hidden;
   display:grid;place-items:center;background:var(--ct-bg,var(--brand-tint));
   transition:transform .4s cubic-bezier(.34,1.56,.64,1);}
 .fz .strip-card:hover .strip-icon{transform:scale(1.06);}
 /* Art is passed a fixed pixel size, so cap it to the slot on small screens. */
 .fz .strip-icon img{max-width:70%;max-height:70%;object-fit:contain;}
 /* Uploaded photos fill the circle instead of sitting inside it as artwork. */
-.fz .strip-icon-img{width:84px;height:84px;margin:0 auto 10px;border-radius:50%;
+.fz .strip-icon-img{width:180px;height:180px;margin:0 auto 10px;border-radius:50%;
   object-fit:cover;display:block;transition:transform .4s cubic-bezier(.34,1.56,.64,1);}
 .fz .strip-card:hover .strip-icon-img{transform:scale(1.06);}
 .fz .strip-card span{display:block;font-size:13px;font-weight:600;color:var(--ink);
