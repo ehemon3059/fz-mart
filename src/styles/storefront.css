@@ -347,21 +347,12 @@
   transition:transform .45s ease;}
 .fz .cat-tile:hover .cat-cta{color:#fff;}
 .fz .cat-tile:hover .cat-cta::after{transform:rotate3d(0,0,1,0deg) translate3d(0,0,0);}
-/* Touch devices report no hover: swap the lift for a press-down, so tapping
-   gives feedback instead of leaving the hover state stuck after the tap. */
+/* Touch devices have no hover, so the lift would otherwise stick after a tap
+   until you tapped elsewhere. Only the sticky part is corrected — a press-down
+   for tap feedback — while the hover animation itself is left exactly as the
+   source design specifies, with no reduced-motion opt-out. */
 @media (hover:none){
-  .fz .cat-tile:hover{transform:none;border-color:color-mix(in srgb,var(--ink) 6%,transparent);
-    box-shadow:0 2px 10px color-mix(in srgb,var(--ink) 5%,transparent);}
-  .fz .cat-tile:hover::before{opacity:0;width:40%;}
-  .fz .cat-tile:hover .cat-art,.fz .cat-tile:hover .cat-ic{transform:none;}
-  .fz .cat-tile:hover b{color:var(--ink);}
   .fz .cat-tile:active{transform:scale(.97);transition:transform .12s ease;}
-}
-@media (prefers-reduced-motion:reduce){
-  .fz .cat-tile,.fz .cat-art,.fz .cat-ic,.fz .cat-cta,.fz .cat-cta::after,
-  .fz .cat-tile::before{transition:none;}
-  .fz .cat-tile:hover{transform:none;}
-  .fz .cat-tile:hover .cat-art,.fz .cat-tile:hover .cat-ic{transform:none;}
 }
 
 /* ---------- all-categories directory page ---------- */
