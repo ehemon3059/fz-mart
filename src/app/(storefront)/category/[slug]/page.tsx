@@ -9,6 +9,7 @@ import { breadcrumbJsonLd } from "@/lib/jsonld";
 import ProductCard from "@/components/storefront/ProductCard";
 import JsonLd from "@/components/seo/JsonLd";
 import { CategoryVisual } from "@/components/storefront/CategoryVisual";
+import CategoryStrip from "@/components/storefront/CategoryStrip";
 
 export async function generateMetadata({
   params,
@@ -91,29 +92,18 @@ export default async function CategoryPage({
             <p className="cat-hero-desc">{category.description}</p>
           )}
         </div>
-        {/* Sub-categories reuse the round strip from the directory page, so a
-            child reads the same here as it does there. */}
-        {children.length > 0 && (
-          <nav className="cat-circles mt-6" aria-label={`Sub-categories of ${category.name}`}>
-            {children.map((sub) => (
-              <Link key={sub.id} href={`/category/${sub.slug}`} className="cat-circle">
-                <span className="cat-circle-ring">
-                  <CategoryVisual
-                    name={sub.name}
-                    slug={sub.slug}
-                    imageUrl={sub.imageUrl}
-                    iconKey={sub.iconKey}
-                    imgClassName="cat-circle-img"
-                    iconClassName="cat-circle-ic"
-                    iconSize={56}
-                  />
-                </span>
-                <span className="cat-circle-label">{sub.name}</span>
-              </Link>
-            ))}
-          </nav>
-        )}
       </div>
+
+      {/* Sub-categories as the scrolling card strip from the design, so a child
+          category carries the same card treatment as the home page tiles. */}
+      {children.length > 0 && (
+        <CategoryStrip
+          items={children}
+          title="Browse categories"
+          subtitle="Scroll to explore more"
+          label={`Sub-categories of ${category.name}`}
+        />
+      )}
 
       {products.length === 0 ? (
         <p className="text-gray-500">No products in this category yet.</p>
