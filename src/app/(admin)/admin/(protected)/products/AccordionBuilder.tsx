@@ -11,6 +11,8 @@
  *
  * Content is Markdown, rendered through the same `renderMarkdown` used by the
  * storefront, so tables/bullets/emoji look identical in preview and production.
+ * The body editor uses the same ./MarkdownToolbar as the product description —
+ * one set of buttons, emoji picker and insert menu across both surfaces.
  * State lives here and is lifted to ProductForm, which serialises it into the
  * hidden `accordionSections` input — one Save persists the whole set, and array
  * order IS display order (the server assigns sortOrder positionally).
@@ -19,6 +21,7 @@
 import { useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { renderMarkdown } from "@/lib/markdown";
+import MarkdownToolbar, { useMarkdownActions, type MarkdownSnippet } from "./MarkdownToolbar";
 
 export interface AccordionSectionRow {
   title: string;
@@ -140,22 +143,75 @@ const EMOJI_GROUPS: { tab: string; label: string; emojis: string[] }[] = [
   { tab: "💡", label: "Tips & Styling", emojis: ["💡", "👉", "📌", "🎨", "💃", "🕺", "👟", "👜", "💍", "🕶️"] },
 ];
 
-/* ─────────── markdown toolbar atoms ─────────── */
-function TB({ title, onClick, text }: { title: string; onClick: () => void; text: string }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onMouseDown={(e) => e.preventDefault()} // keep the textarea selection
-      onClick={onClick}
-      className="flex h-7 min-w-[1.9rem] items-center justify-center rounded-md px-1.5 text-[12.5px] font-bold text-stone-600 transition hover:bg-white hover:text-stone-900 hover:shadow-sm"
-    >
-      {text}
-    </button>
-  );
-}
+/* ─────────── content blocks ─────────── */
+/** Ready-made bodies for the panel being edited. These drop Markdown *inside*
+ *  one panel — distinct from PRESETS above, which add whole panels. No `##`
+ *  headings: the panel title is already that level on the storefront. */
+const CONTENT_BLOCKS: MarkdownSnippet[] = [
+  {
+    label: "⚙️ Spec table",
+    hint: "Attribute / detail rows",
+    md: `| Attribute | Detail |
+| --- | --- |
+| **Material** | value |
+| **Dimensions** | value |
+| **Weight** | value |
+| **Colour** | value |`,
+  },
+  {
+    label: "⭐ Highlight bullets",
+    hint: "Benefit-led list",
+    md: `- ✅ **Highlight** — what the buyer actually gets
+- ✅ **Highlight** — why it beats the alternative
+- ✅ **Highlight** — the detail people ask about`,
+  },
+  {
+    label: "📐 Size chart",
+    hint: "Measurements per size",
+    md: `| Size | Chest | Length | Sleeve |
+| --- | --- | --- | --- |
+| **S** | 38" | 26" | 7" |
+| **M** | 40" | 27" | 7.5" |
+| **L** | 42" | 28" | 8" |
+| **XL** | 44" | 29" | 8.5" |
 
-const Divider = () => <span className="mx-0.5 h-4 w-px bg-stone-200" />;
+*Measurements are in inches and may vary by ±0.5".*`,
+  },
+  {
+    label: "🧼 Care instructions",
+    hint: "Washing & storage",
+    md: `- 💧 Machine wash cold with like colours
+- ☀️ Dry in shade — avoid direct sunlight
+- 🚫 Do not bleach or tumble dry
+- 🔥 Warm iron on the reverse side`,
+  },
+  {
+    label: "🚚 Delivery & returns",
+    hint: "Timeline + policy",
+    md: `- 📍 **Inside Dhaka:** ৳0 — ⏳ 1–2 business days
+- 🚛 **Outside Dhaka:** ৳0 — ⏳ 2–4 business days
+- 🔄 **Returns:** 7-day easy return on unused items in original packaging
+
+*Unboxing video required for damage claims.*`,
+  },
+  {
+    label: "🏭 Manufacturing details",
+    hint: "SKU, origin, contact",
+    md: `| Field | Detail |
+| --- | --- |
+| **SKU** | value |
+| **Marketed By** | value |
+| **Country Of Origin** | value |
+| **For Complaints** | phone · email |`,
+  },
+  {
+    label: "❓ Question & answer",
+    hint: "One FAQ pair",
+    md: `### Question here?
+
+Answer in one or two plain sentences.`,
+  },
+];
 
 const blankRow = (): AccordionSectionRow => ({ title: "", icon: "", content: "", isOpen: false });
 
@@ -203,58 +259,12 @@ export default function AccordionBuilder({ value, onChange }: Props) {
     setSelected((prev) => (prev === idx ? next : prev === next ? idx : prev));
   };
 
-  /* ── markdown insert helpers (operate on the selected row's content) ── */
-  const replaceSelection = (text: string, selFrom = text.length, selTo = text.length) => {
-    if (selected == null) return;
-    const el = ref.current;
-    const content = value[selected].content;
-    const start = el?.selectionStart ?? content.length;
-    const end = el?.selectionEnd ?? content.length;
-    setRow(selected, { content: content.slice(0, start) + text + content.slice(end) });
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(start + selFrom, start + selTo);
-    });
-  };
-
-  const wrap = (token: string, placeholder: string) => {
-    if (selected == null) return;
-    const el = ref.current;
-    const content = value[selected].content;
-    const start = el?.selectionStart ?? 0;
-    const end = el?.selectionEnd ?? 0;
-    const sel = content.slice(start, end) || placeholder;
-    replaceSelection(`${token}${sel}${token}`, token.length, token.length + sel.length);
-  };
-
-  const prefixLines = (token: string, placeholder: string) => {
-    if (selected == null) return;
-    const el = ref.current;
-    const content = value[selected].content;
-    const start = el?.selectionStart ?? 0;
-    const end = el?.selectionEnd ?? 0;
-    const lineStart = content.lastIndexOf("\n", start - 1) + 1;
-    const sel = content.slice(lineStart, end) || placeholder;
-    const prefixed = sel
-      .split("\n")
-      .map((l) => (l.startsWith(token) ? l : token + l.replace(/^(#{1,6}\s|[*-]\s|>\s)/, "")))
-      .join("\n");
-    setRow(selected, { content: content.slice(0, lineStart) + prefixed + content.slice(end) });
-    requestAnimationFrame(() => {
-      ref.current?.focus();
-      ref.current?.setSelectionRange(lineStart + prefixed.length, lineStart + prefixed.length);
-    });
-  };
-
-  const insertBlock = (block: string) => {
-    if (selected == null) return;
-    const el = ref.current;
-    const content = value[selected].content;
-    const start = el?.selectionStart ?? content.length;
-    const before = content.slice(0, start);
-    const lead = !before || before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
-    replaceSelection(lead + block.trimEnd() + "\n");
-  };
+  /* Caret-aware Markdown edits against the selected panel's body — the same
+     helpers the description editor uses, so both toolbars behave identically.
+     Writes are dropped while nothing is selected (the toolbar is hidden then). */
+  const actions = useMarkdownActions(ref, current?.content ?? "", (md) => {
+    if (selected != null) setRow(selected, { content: md });
+  });
 
   return (
     // On a wide canvas the list and the editor sit side by side (the layout
@@ -522,23 +532,14 @@ export default function AccordionBuilder({ value, onChange }: Props) {
               <label className="mb-1 block text-[12px] font-semibold text-stone-600">Content (Markdown)</label>
               {tab === "write" ? (
                 <div className="overflow-hidden rounded-lg border border-stone-200">
-                  <div className="flex flex-wrap items-center gap-0.5 border-b border-stone-100 bg-stone-50/60 px-1.5 py-1">
-                    <TB title="Sub-heading" text="H3" onClick={() => prefixLines("### ", "Sub-section")} />
-                    <Divider />
-                    <TB title="Bold" text="B" onClick={() => wrap("**", "bold text")} />
-                    <TB title="Italic" text="I" onClick={() => wrap("*", "italic note")} />
-                    <Divider />
-                    <TB title="Bullet list" text="• list" onClick={() => prefixLines("- ", "List item")} />
-                    <TB title="Numbered list" text="1. list" onClick={() => prefixLines("1. ", "List item")} />
-                    <Divider />
-                    <TB
-                      title="Attribute table"
-                      text="⎔ table"
-                      onClick={() =>
-                        insertBlock("| Attribute | Detail |\n| --- | --- |\n| **Label** | Value |\n| **Label** | Value |")
-                      }
-                    />
-                  </div>
+                  {/* Same toolbar as the product description, minus H2 — the
+                      panel title is already that heading level. */}
+                  <MarkdownToolbar
+                    actions={actions}
+                    showH2={false}
+                    snippets={CONTENT_BLOCKS}
+                    snippetLabel="Add block"
+                  />
                   <textarea
                     ref={ref}
                     value={current.content}
