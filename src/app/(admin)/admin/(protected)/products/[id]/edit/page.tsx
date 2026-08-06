@@ -24,7 +24,9 @@ export default async function EditProductPage({
       <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
       <ProductForm categories={categories} product={product} />
 
-      <div className="mx-auto w-full max-w-[960px] px-5 lg:px-8">
+      {/* Matches the form above, which is now full-bleed — a centred column here
+          would sit oddly under a full-width form. */}
+      <div className="w-full px-5 lg:px-8">
         <StockPanel
           productId={product.id}
           currentStock={product.stock}

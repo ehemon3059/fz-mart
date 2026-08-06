@@ -257,9 +257,12 @@ export default function AccordionBuilder({ value, onChange }: Props) {
   };
 
   return (
-    <div className="space-y-4">
+    // On a wide canvas the list and the editor sit side by side (the layout
+    // this builder was designed around); below 2xl the form's left column is
+    // too narrow to split, so the grid collapses to the stacked order.
+    <div className="grid gap-4 2xl:grid-cols-[320px_minmax(0,1fr)] 2xl:items-start">
       {/* ── section list ── */}
-      <div>
+      <div className="min-w-0 2xl:sticky 2xl:top-6">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[12px] font-semibold uppercase tracking-wide text-stone-400">
             Sections{value.length > 0 && ` · ${value.length}`}
@@ -404,7 +407,7 @@ export default function AccordionBuilder({ value, onChange }: Props) {
 
       {/* ── editor for the selected section ── */}
       {current && selected != null && (
-        <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+        <div className="min-w-0 overflow-hidden rounded-xl border border-stone-200 bg-white">
           <div className="flex items-center justify-between border-b border-stone-100 bg-stone-50/70 px-3 py-2">
             <span className="text-[12.5px] font-semibold text-stone-700">
               Editing section {selected + 1} of {value.length}
@@ -545,11 +548,11 @@ export default function AccordionBuilder({ value, onChange }: Props) {
                     placeholder={
                       "Write this section in Markdown.\n\n| Attribute | Detail |\n| --- | --- |\n| **Material** | 100% cotton |\n\n- **Highlight** — why it matters"
                     }
-                    className="block w-full resize-y bg-white px-3 py-2.5 font-spline-mono text-[12.5px] leading-[1.7] text-stone-800 outline-none placeholder:text-stone-300"
+                    className="block max-h-[70vh] min-h-[260px] w-full resize-y bg-white px-3 py-2.5 font-spline-mono text-[12.5px] leading-[1.7] text-stone-800 outline-none placeholder:text-stone-300 2xl:min-h-[460px]"
                   />
                 </div>
               ) : (
-                <div className="min-h-[200px] rounded-lg border border-stone-200 bg-white px-3.5 py-3">
+                <div className="min-h-[260px] rounded-lg border border-stone-200 bg-white px-3.5 py-3 2xl:min-h-[460px]">
                   {current.content.trim() ? (
                     <div
                       className="prose prose-sm max-w-none prose-headings:font-bold prose-headings:text-stone-900 prose-h3:mb-1.5 prose-h3:mt-4 prose-h3:text-[14.5px] prose-p:text-stone-700 prose-strong:text-stone-900 prose-li:my-0.5 prose-li:text-stone-700 prose-table:text-[13px] prose-th:text-left"
@@ -565,9 +568,21 @@ export default function AccordionBuilder({ value, onChange }: Props) {
         </div>
       )}
 
+      {/* Side-by-side only: keeps the editor column from collapsing to nothing
+          while no section is selected. Stacked layouts just omit it. */}
+      {!current && (
+        <div className="hidden min-h-[300px] items-center justify-center rounded-xl border border-dashed border-stone-200 bg-stone-50/40 px-6 text-center 2xl:flex">
+          <p className="text-[13px] text-stone-400">
+            {value.length === 0
+              ? "Add a section on the left — it opens here for editing."
+              : "Pick a section on the left to edit it here."}
+          </p>
+        </div>
+      )}
+
       {/* ── live accordion preview ── */}
       {value.length > 0 && (
-        <div>
+        <div className="min-w-0 2xl:col-span-2">
           <div className="mb-2 flex items-center gap-1.5">
             <Icon name="eye" size={14} className="text-stone-400" />
             <span className="text-[12px] font-semibold uppercase tracking-wide text-stone-400">

@@ -684,7 +684,9 @@ export default function ProductForm({ categories, product }: Props) {
 
   return (
     <>
-    <form onSubmit={handleSubmit} className="font-manrope mx-auto w-full max-w-[1200px] px-5 py-6 pb-32 lg:px-8 lg:pb-10">
+    {/* Full-bleed: the form spans the whole admin canvas rather than a centred
+        column, so wide screens gain editing room instead of empty gutters. */}
+    <form onSubmit={handleSubmit} className="font-manrope w-full px-5 py-6 pb-32 lg:px-8 lg:pb-10">
       {/* hidden inputs for the server action — saveProduct expects taka, not paisa */}
       <input type="hidden" name="name" value={form.name} />
       <input type="hidden" name="categoryId" value={form.categoryId} />
@@ -748,7 +750,7 @@ export default function ProductForm({ categories, product }: Props) {
         <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">{errors._form}</p>
       )}
 
-      <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:gap-8 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-6 min-w-0">
           <Card icon="info" title="Basic info" hint="The essentials your customers will see.">
             <div className="space-y-4">
@@ -1043,7 +1045,7 @@ export default function ProductForm({ categories, product }: Props) {
                   Shown on the product page and in listings. Square 1000×1000px · ≤200 KB each. The
                   first photo is the cover.
                 </p>
-                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 2xl:grid-cols-6">
                   {form.images.map((img, idx) => (
                     <div
                       key={img.url + idx}
