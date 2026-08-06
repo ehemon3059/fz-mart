@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fabric Product · Admin Details</title>
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <style>
+    /* ----- reset & base ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #f1f5f9;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      padding: 2rem 1.5rem;
+      color: #0b1a33;
+    }
+
+    .admin-container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* ----- header ----- */
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .admin-header h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .admin-header h1 i {
+      color: #2563eb;
+    }
+    .admin-header .badge {
+      background: #eef4ff;
+      padding: 0.3rem 1.2rem;
+      border-radius: 30px;
+      font-size: 0.85rem;
+      color: #1a3c7a;
+      font-weight: 500;
+      border: 1px solid #d6e0f0;
+    }
+
+    /* ----- grid: editor + preview ----- */
+    .admin-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    /* --- editor panel --- */
+    .editor-panel {
+      background: #ffffff;
+      border-radius: 28px;
+      padding: 1.8rem 2rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      border: 1px solid #e9edf4;
+    }
+
+    .editor-panel h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .editor-panel h2 i {
+      color: #2563eb;
+    }
+
+    /* each section card */
+    .section-card {
+      background: #fafcff;
+      border: 1px solid #eef2f8;
+      border-radius: 18px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .section-card .section-title {
+      font-weight: 600;
+      font-size: 1rem;
+      color: #14233c;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.8rem;
+    }
+    .section-card .section-title i {
+      color: #2563eb;
+      width: 1.5rem;
+    }
+
+    /* product details – dynamic table */
+    .attr-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .attr-table td {
+      padding: 0.35rem 0.2rem;
+      vertical-align: middle;
+    }
+    .attr-table .attr-label {
+      font-weight: 500;
+      color: #1f3450;
+      width: 40%;
+    }
+    .attr-table input[type="text"] {
+      width: 100%;
+      padding: 0.4rem 0.6rem;
+      border: 1.5px solid #dce3ed;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      background: #ffffff;
+      transition: border 0.2s;
+    }
+    .attr-table input[type="text"]:focus {
+      border-color: #2563eb;
+      outline: none;
+      box-shadow: 0 0 0 3px #2563eb20;
+    }
+    .attr-table .remove-row {
+      color: #b0c2da;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: color 0.15s;
+      background: none;
+      border: none;
+      padding: 0 0.2rem;
+    }
+    .attr-table .remove-row:hover {
+      color: #dc2626;
+    }
+
+    .add-row-btn {
+      margin-top: 0.5rem;
+      background: transparent;
+      border: 1px dashed #d6e0f0;
+      border-radius: 30px;
+      padding: 0.3rem 1.2rem;
+      font-size: 0.85rem;
+      color: #2563eb;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .add-row-btn:hover {
+      background: #eef4ff;
+      border-color: #2563eb;
+    }
+
+    /* textarea for rich text */
+    .section-card textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.6rem 1rem;
+      border: 1.5px solid #dce3ed;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: #ffffff;
+      resize: vertical;
+      transition: border 0.2s;
+    }
+    .section-card textarea:focus {
+      border-color: #2563eb;
+      outline: none;
+      box-shadow: 0 0 0 3px #2563eb20;
+    }
+
+    /* manufacturing details – key-value */
+    .kv-row {
+      display: flex;
+      gap: 0.8rem;
+      align-items: center;
+      margin-bottom: 0.4rem;
+    }
+    .kv-row input {
+      flex: 1;
+      padding: 0.4rem 0.6rem;
+      border: 1.5px solid #dce3ed;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      background: #ffffff;
+      transition: border 0.2s;
+    }
+    .kv-row input:focus {
+      border-color: #2563eb;
+      outline: none;
+      box-shadow: 0 0 0 3px #2563eb20;
+    }
+    .kv-row .remove-kv {
+      color: #b0c2da;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background: none;
+      border: none;
+      padding: 0 0.2rem;
+    }
+    .kv-row .remove-kv:hover {
+      color: #dc2626;
+    }
+
+    .add-kv-btn {
+      margin-top: 0.3rem;
+      background: transparent;
+      border: 1px dashed #d6e0f0;
+      border-radius: 30px;
+      padding: 0.2rem 1.2rem;
+      font-size: 0.85rem;
+      color: #2563eb;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .add-kv-btn:hover {
+      background: #eef4ff;
+      border-color: #2563eb;
+    }
+
+    /* save button */
+    .save-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #eef2f8;
+    }
+    .btn {
+      padding: 0.6rem 2rem;
+      border: none;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid #dce3ed;
+      color: #1f3450;
+    }
+    .btn-outline:hover {
+      background: #f2f6fe;
+      border-color: #2563eb;
+    }
+
+    /* --- preview panel --- */
+    .preview-panel {
+      background: #ffffff;
+      border-radius: 28px;
+      padding: 1.8rem 2rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      border: 1px solid #e9edf4;
+      position: sticky;
+      top: 2rem;
+    }
+    .preview-panel h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 0.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .preview-panel h2 i {
+      color: #2563eb;
+    }
+    .preview-panel .sub {
+      color: #4f6582;
+      font-size: 0.9rem;
+      margin-bottom: 1.2rem;
+    }
+
+    /* accordion preview (read-only) */
+    .accordion-preview {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .accordion-item {
+      border: 1px solid #e9edf4;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .accordion-item .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.7rem 1.2rem;
+      background: #fafcff;
+      cursor: pointer;
+      user-select: none;
+    }
+    .accordion-item .header .label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 500;
+      font-size: 0.98rem;
+    }
+    .accordion-item .header .label i {
+      color: #2563eb;
+      width: 1.3rem;
+      text-align: center;
+    }
+    .accordion-item .header .chevron {
+      color: #6b7b94;
+      transition: transform 0.3s;
+    }
+    .accordion-item.open .header .chevron {
+      transform: rotate(180deg);
+    }
+    .accordion-item .body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, padding 0.3s ease;
+      padding: 0 1.2rem;
+      background: #fbfdff;
+      border-top: 0px solid transparent;
+    }
+    .accordion-item.open .body {
+      max-height: 800px;
+      padding: 1.2rem 1.2rem 1.5rem;
+      border-top: 1px solid #eef2f8;
+    }
+    .accordion-item .body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.5rem 0;
+    }
+    .accordion-item .body table td {
+      padding: 0.3rem 0.4rem;
+      border-bottom: 1px solid #eef2f8;
+    }
+    .accordion-item .body table .label-cell {
+      font-weight: 500;
+      color: #1f3450;
+      width: 40%;
+    }
+    .accordion-item .body p {
+      margin-bottom: 0.5rem;
+      line-height: 1.6;
+    }
+    .accordion-item .body .kv-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .accordion-item .body .kv-list .kv-item {
+      display: flex;
+      padding: 0.2rem 0;
+      border-bottom: 1px dashed #eef2f8;
+    }
+    .accordion-item .body .kv-list .kv-item .k {
+      font-weight: 500;
+      width: 40%;
+      color: #1f3450;
+    }
+    .accordion-item .body .kv-list .kv-item .v {
+      color: #0b1a33;
+    }
+
+    .empty-preview {
+      text-align: center;
+      padding: 2rem 0;
+      color: #6b7f9e;
+    }
+    .empty-preview i {
+      font-size: 2rem;
+      color: #cdd6e6;
+      margin-bottom: 0.5rem;
+    }
+
+    /* responsive */
+    @media (max-width: 1024px) {
+      .admin-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+      .preview-panel {
+        position: static;
+      }
+    }
+    @media (max-width: 480px) {
+      body { padding: 0.8rem; }
+      .editor-panel, .preview-panel { padding: 1.2rem; }
+      .section-card { padding: 1rem; }
+      .kv-row { flex-wrap: wrap; }
+      .attr-table td { display: block; width: 100%; }
+      .attr-table .attr-label { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="admin-container">
+  <!-- header -->
+  <header class="admin-header">
+    <h1><i class="fas fa-tshirt"></i> Fabric Product Details</h1>
+    <span class="badge"><i class="fas fa-pencil-alt"></i> Admin · live preview</span>
+  </header>
+
+  <!-- main grid -->
+  <div class="admin-grid">
+
+    <!-- EDITOR PANEL -->
+    <div class="editor-panel">
+      <h2><i class="fas fa-sliders-h"></i> Edit Sections</h2>
+
+      <!-- 1. Product Details (attribute table) -->
+      <div class="section-card">
+        <div class="section-title"><i class="fas fa-list-ul"></i> Product Details</div>
+        <table class="attr-table" id="attrTable">
+          <tbody id="attrBody">
+            <!-- rows will be inserted by JS -->
+          </tbody>
+        </table>
+        <button class="add-row-btn" id="addAttrRow"><i class="fas fa-plus"></i> Add attribute</button>
+      </div>
+
+      <!-- 2. Know Your Wear (rich text) -->
+      <div class="section-card">
+        <div class="section-title"><i class="fas fa-align-left"></i> Know Your Wear</div>
+        <textarea id="knowYourWear" placeholder="Write the product story…"></textarea>
+      </div>
+
+      <!-- 3. Styling Suggestion (rich text) -->
+      <div class="section-card">
+        <div class="section-title"><i class="fas fa-lightbulb"></i> Styling Suggestion</div>
+        <textarea id="stylingSuggestion" placeholder="Suggest how to style…"></textarea>
+      </div>
+
+      <!-- 4. Manufacturing Details (key-value) -->
+      <div class="section-card">
+        <div class="section-title"><i class="fas fa-industry"></i> Manufacturing Details</div>
+        <div id="kvContainer">
+          <!-- dynamic key-value rows -->
+        </div>
+        <button class="add-kv-btn" id="addKvRow"><i class="fas fa-plus"></i> Add field</button>
+      </div>
+
+      <!-- save actions -->
+      <div class="save-actions">
+        <button class="btn btn-primary" id="saveBtn"><i class="fas fa-save"></i> Save Product</button>
+        <button class="btn btn-outline" id="resetBtn"><i class="fas fa-undo"></i> Reset to default</button>
+      </div>
+    </div>
+
+    <!-- PREVIEW PANEL -->
+    <div class="preview-panel">
+      <h2><i class="fas fa-eye"></i> Live Preview</h2>
+      <div class="sub">Accordion as seen on storefront</div>
+      <div id="previewContainer" class="accordion-preview">
+        <!-- rendered by JS -->
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function() {
+    "use strict";
+
+    // ----- default data (from your screenshots) -----
+    const DEFAULT_ATTRS = [
+      { label: 'Colour', value: 'Black' },
+      { label: 'Fabric Content', value: '100% Viscose' },
+      { label: 'Fabric Detail', value: 'Viscose' },
+      { label: 'Neck Type', value: 'V Neck' },
+      { label: 'Closure', value: 'Slip on' },
+      { label: 'Sleeve', value: 'Three-Quarter Sleeves' },
+      { label: 'Sleeve Styling', value: 'Three-Quarter Sleeves' },
+      { label: 'Ethnicity', value: 'Fusion' },
+      { label: 'Colour Details', value: 'Black' },
+      { label: 'Slit Detail', value: 'Side Slits' },
+      { label: 'Occasion', value: 'Casual' },
+      { label: 'Pattern', value: 'Ethnic Motifs' },
+      { label: 'Care', value: 'Delicate Wash' },
+      { label: 'Fabric Family', value: 'Viscose' },
+      { label: 'Transparency', value: 'Opaque' }
+    ];
+
+    const DEFAULT_KNOW = "black woven top in soft 100% viscose features an all-over ethnic motif print with subtle foil accents for a refined bohemian finish. Cut in a straight silhouette with a V-neck and three-quarter sleeves, it falls at hip length with a clean straight hem. The slip-on style keeps dressing effortless, while the opaque, unlined build feels light for day-to-night wear. A handy slit pocket adds function without disrupting the print. Style it as a printed top for women with denims or tailored trousers for casual wear, workwear, college days, and street-ready looks through the Fall season.";
+
+    const DEFAULT_STYLING = "Pair this black V-neck ethnic motifs printed viscose top with straight-fit jeans or ankle-length trousers and tan flats. Add silver hoops and a sling bag for easy work-to-college casual days.";
+
+    const DEFAULT_KV = [
+      { key: 'SKU', value: 'F31570-912219B' },
+      { key: 'Quantity', value: '1N' },
+      { key: 'Marketed By', value: 'Aditya Birla Fashion and Retail Limited (TCNS Division) Delhi 110030' },
+      { key: 'Name of Manufacturer', value: 'Aditya Birla Fashion and Retail Limited (TCNS Division)' },
+      { key: 'Place of Manufacturer', value: 'Aditya Birla Fashion and Retail Limited (TCNS Division)' },
+      { key: 'Country Of Origin', value: 'India' },
+      { key: 'For Complaints', value: 'Customer Care No 7316830787, customercare.tcns@abfrl.adityabirla.com' },
+      { key: 'Registered Office Address', value: 'Piramal Agastya Corporate Park, Building \'A\', 4th and 5th Floor, Mumbai - 400070' },
+      { key: 'Communication Address', value: '119, W House, New Manglapur, New Delhi' }
+    ];
+
+    // ----- state -----
+    let attrs = [];      // array of {label, value}
+    let know = '';
+    let styling = '';
+    let kv = [];         // array of {key, value}
+
+    // DOM refs
+    const attrBody = document.getElementById('attrBody');
+    const knowTextarea = document.getElementById('knowYourWear');
+    const stylingTextarea = document.getElementById('stylingSuggestion');
+    const kvContainer = document.getElementById('kvContainer');
+    const previewContainer = document.getElementById('previewContainer');
+    const addAttrBtn = document.getElementById('addAttrRow');
+    const addKvBtn = document.getElementById('addKvRow');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // ----- render functions -----
+    function renderAttrTable() {
+      let html = '';
+      attrs.forEach((item, index) => {
+        html += `
+          <tr>
+            <td class="attr-label"><input type="text" class="attr-label-input" value="${escapeHtml(item.label)}" placeholder="Attribute" data-index="${index}" /></td>
+            <td><input type="text" class="attr-value-input" value="${escapeHtml(item.value)}" placeholder="Value" data-index="${index}" /></td>
+            <td style="width:30px;"><button class="remove-row" data-index="${index}"><i class="fas fa-times"></i></button></td>
+          </tr>
+        `;
+      });
+      attrBody.innerHTML = html;
+
+      // attach events to inputs and remove buttons
+      document.querySelectorAll('.attr-label-input').forEach(inp => {
+        inp.addEventListener('input', function() {
+          const idx = parseInt(this.dataset.index);
+          attrs[idx].label = this.value;
+          updatePreview();
+        });
+      });
+      document.querySelectorAll('.attr-value-input').forEach(inp => {
+        inp.addEventListener('input', function() {
+          const idx = parseInt(this.dataset.index);
+          attrs[idx].value = this.value;
+          updatePreview();
+        });
+      });
+      document.querySelectorAll('.attr-table .remove-row').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const idx = parseInt(this.dataset.index);
+          attrs.splice(idx, 1);
+          renderAttrTable();
+          updatePreview();
+        });
+      });
+    }
+
+    function renderKv() {
+      let html = '';
+      kv.forEach((item, index) => {
+        html += `
+          <div class="kv-row" data-index="${index}">
+            <input type="text" class="kv-key" value="${escapeHtml(item.key)}" placeholder="Key" data-index="${index}" />
+            <input type="text" class="kv-value" value="${escapeHtml(item.value)}" placeholder="Value" data-index="${index}" />
+            <button class="remove-kv" data-index="${index}"><i class="fas fa-times"></i></button>
+          </div>
+        `;
+      });
+      kvContainer.innerHTML = html;
+
+      document.querySelectorAll('.kv-key').forEach(inp => {
+        inp.addEventListener('input', function() {
+          const idx = parseInt(this.dataset.index);
+          kv[idx].key = this.value;
+          updatePreview();
+        });
+      });
+      document.querySelectorAll('.kv-value').forEach(inp => {
+        inp.addEventListener('input', function() {
+          const idx = parseInt(this.dataset.index);
+          kv[idx].value = this.value;
+          updatePreview();
+        });
+      });
+      document.querySelectorAll('.remove-kv').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const idx = parseInt(this.dataset.index);
+          kv.splice(idx, 1);
+          renderKv();
+          updatePreview();
+        });
+      });
+    }
+
+    function updatePreview() {
+      // sync textareas
+      know = knowTextarea.value;
+      styling = stylingTextarea.value;
+
+      // build preview accordion
+      let html = '';
+
+      // Section 1: Product Details
+      if (attrs.length > 0) {
+        html += `
+          <div class="accordion-item open">
+            <div class="header" onclick="this.closest('.accordion-item').classList.toggle('open')">
+              <span class="label"><i class="fas fa-list-ul"></i> Product Details</span>
+              <span class="chevron"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="body">
+              <table>
+                ${attrs.map(a => `<tr><td class="label-cell">${escapeHtml(a.label)}</td><td>${escapeHtml(a.value)}</td></tr>`).join('')}
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      // Section 2: Know Your Wear
+      if (know.trim()) {
+        html += `
+          <div class="accordion-item open">
+            <div class="header" onclick="this.closest('.accordion-item').classList.toggle('open')">
+              <span class="label"><i class="fas fa-align-left"></i> Know Your Wear</span>
+              <span class="chevron"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="body">
+              <p>${escapeHtml(know).replace(/\n/g, '<br>')}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      // Section 3: Styling Suggestion
+      if (styling.trim()) {
+        html += `
+          <div class="accordion-item open">
+            <div class="header" onclick="this.closest('.accordion-item').classList.toggle('open')">
+              <span class="label"><i class="fas fa-lightbulb"></i> Styling Suggestion</span>
+              <span class="chevron"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="body">
+              <p>${escapeHtml(styling).replace(/\n/g, '<br>')}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      // Section 4: Manufacturing Details
+      if (kv.length > 0) {
+        html += `
+          <div class="accordion-item open">
+            <div class="header" onclick="this.closest('.accordion-item').classList.toggle('open')">
+              <span class="label"><i class="fas fa-industry"></i> Manufacturing Details</span>
+              <span class="chevron"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="body">
+              <div class="kv-list">
+                ${kv.map(item => `<div class="kv-item"><span class="k">${escapeHtml(item.key)}</span><span class="v">${escapeHtml(item.value)}</span></div>`).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (!html) {
+        html = `<div class="empty-preview"><i class="fas fa-box-open"></i><p>No data yet — fill in the form to preview</p></div>`;
+      }
+      previewContainer.innerHTML = html;
+    }
+
+    // ----- helper: escape HTML -----
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ----- load default data -----
+    function loadDefaults() {
+      attrs = DEFAULT_ATTRS.map(a => ({ ...a }));
+      know = DEFAULT_KNOW;
+      styling = DEFAULT_STYLING;
+      kv = DEFAULT_KV.map(k => ({ ...k }));
+      knowTextarea.value = know;
+      stylingTextarea.value = styling;
+      renderAttrTable();
+      renderKv();
+      updatePreview();
+    }
+
+    // ----- add row handlers -----
+    addAttrBtn.addEventListener('click', function() {
+      attrs.push({ label: '', value: '' });
+      renderAttrTable();
+      updatePreview();
+    });
+
+    addKvBtn.addEventListener('click', function() {
+      kv.push({ key: '', value: '' });
+      renderKv();
+      updatePreview();
+    });
+
+    // ----- save (mock) -----
+    saveBtn.addEventListener('click', function() {
+      // In real app, send data to API
+      alert('Product details saved! (mock)');
+      console.log('Attributes:', attrs);
+      console.log('Know Your Wear:', know);
+      console.log('Styling Suggestion:', styling);
+      console.log('Manufacturing:', kv);
+    });
+
+    // ----- reset -----
+    resetBtn.addEventListener('click', function() {
+      if (confirm('Reset to default fabric product data?')) {
+        loadDefaults();
+      }
+    });
+
+    // sync textareas on input
+    knowTextarea.addEventListener('input', updatePreview);
+    stylingTextarea.addEventListener('input', updatePreview);
+
+    // ----- init -----
+    loadDefaults();
+  })();
+</script>
+</body>
+</html>

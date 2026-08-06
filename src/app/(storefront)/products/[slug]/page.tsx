@@ -232,6 +232,15 @@ export default async function ProductPage({
       {/* ── lower section: tabs ── */}
       <ProductTabs
         detailsHtml={product.description ? renderMarkdown(product.description) : ""}
+        // Markdown → HTML on the server: keeps the parser out of the client
+        // bundle and puts the full text in the initial HTML for crawlers.
+        accordionPanels={product.accordionSections.map((s) => ({
+          id: s.id,
+          title: s.title,
+          icon: s.icon,
+          contentHtml: renderMarkdown(s.content),
+          isOpen: s.isOpen,
+        }))}
         reviewCount={ratingSummary.total}
         shipping={
           <ShippingPanel

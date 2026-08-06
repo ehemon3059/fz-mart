@@ -40,6 +40,10 @@ const productWithDetails = {
   specifications: { orderBy: { sortOrder: "asc" } },
   features: { orderBy: { sortOrder: "asc" } },
   variants: { orderBy: { sortOrder: "asc" } },
+  // Collapsible "Features & Specs" panels. Cached with the rest of the product
+  // (product:slug:<slug>) and cleared by the same invalidateProductCaches call
+  // on every admin write, so an edited accordion shows up immediately.
+  accordionSections: { orderBy: { sortOrder: "asc" } },
   // The product's own category node. The full ancestor chain for breadcrumbs +
   // SEO is derived on the page from the cached category tree (ancestorsOf).
   category: true,

@@ -106,6 +106,7 @@ model Product {
   colors             ProductColor[]
   specifications     ProductSpecification[]
   features           ProductFeature[]
+  accordionSections  ProductAccordionSection[]
   reviews            ProductReview[]
   variants           ProductVariant[]
   wishlistItems      WishlistItem[]
@@ -214,6 +215,27 @@ model ProductFeature {
   id        Int     @id @default(autoincrement())
   productId Int
   text      String
+  sortOrder Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+// One collapsible panel in the product page's "Features & Specs" accordion,
+// authored in the admin's Accordion Builder. Ordered by sortOrder; when a
+// product has any of these they REPLACE the flat Markdown description in that
+// tab (see ProductTabs). Body is Markdown, rendered with the same pipeline as
+// Product.description, so tables/bullets/emoji all work.
+model ProductAccordionSection {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  title     String
+  // Leading emoji shown before the title on the storefront ("⚙️"). Optional —
+  // blank renders the title alone.
+  icon      String?
+  content   String  @db.Text
+  // Whether this panel starts expanded on first paint.
+  isOpen    Boolean @default(false)
   sortOrder Int     @default(0)
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 

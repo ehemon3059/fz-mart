@@ -8,6 +8,7 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  type ProductAccordionSectionInput,
   type ProductColorInput,
   type ProductImageInput,
   type ProductSpecificationInput,
@@ -142,6 +143,37 @@ function parseVariants(formData: FormData): ProductVariantInput[] {
   }
 }
 
+/**
+ * Accordion panels arrive as JSON: { title, icon, content, isOpen }. A panel
+ * needs a title and a body — blank rows the admin never filled in are dropped
+ * rather than saved as empty accordion headers. Array order IS display order
+ * (the server assigns sortOrder positionally).
+ *
+ * The Markdown body is NOT sanitised here: it goes through the same
+ * renderMarkdown pipeline as Product.description, which handles escaping.
+ */
+function parseAccordionSections(formData: FormData): ProductAccordionSectionInput[] {
+  const raw = String(formData.get("accordionSections") ?? "[]");
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (s): s is { title: string; content: string; icon?: unknown; isOpen?: unknown } =>
+          typeof s?.title === "string" && typeof s?.content === "string",
+      )
+      .map((s) => ({
+        title: s.title.trim(),
+        icon: typeof s.icon === "string" && s.icon.trim() ? s.icon.trim() : null,
+        content: s.content.trim(),
+        isOpen: s.isOpen === true,
+      }))
+      .filter((s) => s.title && s.content);
+  } catch {
+    return [];
+  }
+}
+
 function parseSpecifications(formData: FormData): ProductSpecificationInput[] {
   const raw = String(formData.get("specifications") ?? "[]");
   try {
@@ -183,6 +215,7 @@ export async function saveProduct(
   const colors = parseColors(formData);
   const specifications = parseSpecifications(formData);
   const features = parseFeatures(formData);
+  const accordionSections = parseAccordionSections(formData);
   const variants = parseVariants(formData);
   // Drop any image→variant link whose label no longer matches a submitted
   // variant row (row deleted/renamed since the photo was tagged).
@@ -231,6 +264,7 @@ export async function saveProduct(
     colors,
     specifications,
     features,
+    accordionSections,
     variants,
   };
 

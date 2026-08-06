@@ -2,10 +2,17 @@
 
 import { useState, type ReactNode } from "react";
 import { FileText, Truck, MessageSquare } from "lucide-react";
+import ProductAccordion, { type AccordionPanel } from "./ProductAccordion";
 
 interface Props {
   /** Rendered Markdown description (HTML string from renderMarkdown). */
   detailsHtml: string;
+  /**
+   * Admin-authored collapsible panels. When non-empty these REPLACE
+   * `detailsHtml` in the details tab — the description stays behind for SEO
+   * and search, but the accordion is what the shopper reads.
+   */
+  accordionPanels?: AccordionPanel[];
   shipping: ReactNode;
   reviews: ReactNode;
   reviewCount: number;
@@ -28,11 +35,19 @@ const TABS: { id: TabId; label: string; short: string; Icon: typeof FileText }[]
  * Panels are toggled with `hidden` rather than unmounted, so switching tabs
  * doesn't discard typed review text or re-request anything.
  */
-export default function ProductTabs({ detailsHtml, shipping, reviews, reviewCount }: Props) {
+export default function ProductTabs({
+  detailsHtml,
+  accordionPanels = [],
+  shipping,
+  reviews,
+  reviewCount,
+}: Props) {
   const [active, setActive] = useState<TabId>("details");
 
   const panels: Record<TabId, ReactNode> = {
-    details: detailsHtml ? (
+    details: accordionPanels.length > 0 ? (
+      <ProductAccordion panels={accordionPanels} />
+    ) : detailsHtml ? (
       <div
         className="prose prose-sm sm:prose-base max-w-none prose-headings:font-bold prose-headings:text-slate-900 prose-h2:mt-8 prose-h2:mb-3 prose-h2:text-[19px] prose-h3:mt-5 prose-h3:mb-2 prose-h3:text-[15.5px] prose-p:text-slate-700 prose-li:my-1 prose-li:text-slate-700 prose-strong:text-slate-900 prose-hr:my-8 prose-table:text-sm prose-th:bg-slate-50 prose-th:text-left prose-td:align-top first:prose-h2:mt-0"
         dangerouslySetInnerHTML={{ __html: detailsHtml }}

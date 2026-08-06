@@ -40,6 +40,7 @@ export async function getProductById(id: number) {
       specifications: { orderBy: { sortOrder: "asc" } },
       features: { orderBy: { sortOrder: "asc" } },
       variants: { orderBy: { sortOrder: "asc" } },
+      accordionSections: { orderBy: { sortOrder: "asc" } },
     },
   });
 }
@@ -53,6 +54,17 @@ export interface ProductColorInput {
 export interface ProductSpecificationInput {
   label: string;
   value: string;
+}
+
+/** One collapsible panel in the storefront's "Features & Specs" accordion. */
+export interface ProductAccordionSectionInput {
+  title: string;
+  /** Leading emoji ("⚙️"); null/empty renders the title alone. */
+  icon?: string | null;
+  /** Markdown body — same pipeline as Product.description. */
+  content: string;
+  /** Whether the panel starts expanded. */
+  isOpen?: boolean;
 }
 
 export interface ProductVariantInput {
@@ -115,6 +127,11 @@ export interface ProductInput {
   specifications?: ProductSpecificationInput[];
   /** Feature bullet points, in display order. */
   features?: string[];
+  /**
+   * Accordion panels for the "Features & Specs" tab, in display order. When a
+   * product has any, they replace the flat description in that tab.
+   */
+  accordionSections?: ProductAccordionSectionInput[];
   /** Size/option variants (e.g. oil 500ml/1L/5L). Empty/undefined = no variants. */
   variants?: ProductVariantInput[];
 }
@@ -184,6 +201,19 @@ export async function createProduct(input: ProductInput) {
         ? {
             createMany: {
               data: input.features.map((text, i) => ({ text, sortOrder: i })),
+            },
+          }
+        : undefined,
+      accordionSections: input.accordionSections?.length
+        ? {
+            createMany: {
+              data: input.accordionSections.map((s, i) => ({
+                title: s.title,
+                icon: s.icon ?? null,
+                content: s.content,
+                isOpen: s.isOpen ?? false,
+                sortOrder: i,
+              })),
             },
           }
         : undefined,
@@ -298,6 +328,24 @@ export async function updateProduct(id: number, input: ProductInput) {
       if (input.features.length > 0) {
         await tx.productFeature.createMany({
           data: input.features.map((text, i) => ({ productId: id, text, sortOrder: i })),
+        });
+      }
+    }
+
+    // Replace the whole accordion set — sortOrder is positional, so a reorder
+    // in the builder is just a different array order here.
+    if (input.accordionSections) {
+      await tx.productAccordionSection.deleteMany({ where: { productId: id } });
+      if (input.accordionSections.length > 0) {
+        await tx.productAccordionSection.createMany({
+          data: input.accordionSections.map((s, i) => ({
+            productId: id,
+            title: s.title,
+            icon: s.icon ?? null,
+            content: s.content,
+            isOpen: s.isOpen ?? false,
+            sortOrder: i,
+          })),
         });
       }
     }

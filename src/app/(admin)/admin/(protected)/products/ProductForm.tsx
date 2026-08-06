@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import ImageCustomizer from "@/components/admin/ImageCustomizer";
 import DescriptionEditor from "./DescriptionEditor";
+import AccordionBuilder, { type AccordionSectionRow } from "./AccordionBuilder";
 import { saveProduct } from "./actions";
 import type { listAllCategories } from "@/server/categories/admin";
 import type { getProductById } from "@/server/products/admin";
@@ -95,6 +96,8 @@ interface FormState {
   images: ImageRow[]; // photo URLs + optional variant link; first is the cover
   colors: ColorRow[]; // read-only: existing ProductColor rows, kept only to seed variant swatches
   variants: VariantRow[];
+  /** Collapsible "Features & Specs" panels; empty = show the description instead. */
+  accordionSections: AccordionSectionRow[];
 }
 
 interface Props {
@@ -142,6 +145,7 @@ function initialFromProduct(p?: Product): FormState {
       images: [],
       colors: [],
       variants: [],
+      accordionSections: [],
     };
   }
   const imageRows: ImageRow[] = p.images
@@ -167,6 +171,13 @@ function initialFromProduct(p?: Product): FormState {
     isFeatured: p.isFeatured,
     images: imageRows,
     colors: p.colors?.map((c) => ({ name: c.name, hexCode: c.hexCode, imageUrl: c.imageUrl ?? "" })) ?? [],
+    accordionSections:
+      p.accordionSections?.map((s) => ({
+        title: s.title,
+        icon: s.icon ?? "",
+        content: s.content,
+        isOpen: s.isOpen,
+      })) ?? [],
     // A variant's colour swatch/image used to live in the shared ProductColor
     // list, matched by name. Colours are now entered per row, so backfill hex &
     // image from that list for existing products — the row's own imageUrl wins
@@ -623,6 +634,20 @@ export default function ProductForm({ categories, product }: Props) {
     return [...seen.values()];
   };
 
+  // Accordion panels for the storefront's "Features & Specs" tab, serialized
+  // for submit. A panel needs both a title and a body — half-filled rows the
+  // admin abandoned are dropped rather than saved as empty headers. Array order
+  // is display order; the server assigns sortOrder positionally.
+  const cleanAccordionSections = () =>
+    form.accordionSections
+      .map((s) => ({
+        title: s.title.trim(),
+        icon: s.icon.trim(),
+        content: s.content.trim(),
+        isOpen: s.isOpen,
+      }))
+      .filter((s) => s.title && s.content);
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -631,6 +656,7 @@ export default function ProductForm({ categories, product }: Props) {
     fd.set("stock", base.stock === "" ? "" : String(base.stock));
     fd.set("images", JSON.stringify(cleanImages()));
     fd.set("colors", JSON.stringify(cleanColors()));
+    fd.set("accordionSections", JSON.stringify(cleanAccordionSections()));
     fd.set("variants", JSON.stringify(cleanVariants()));
 
     const clientErrors: Record<string, string> = { ...liveErrors };
@@ -677,6 +703,7 @@ export default function ProductForm({ categories, product }: Props) {
       {form.isFeatured && <input type="hidden" name="isFeatured" value="on" />}
       <input type="hidden" name="images" value={JSON.stringify(cleanImages())} />
       <input type="hidden" name="colors" value={JSON.stringify(cleanColors())} />
+      <input type="hidden" name="accordionSections" value={JSON.stringify(cleanAccordionSections())} />
       <input type="hidden" name="variants" value={JSON.stringify(cleanVariants())} />
 
       <nav className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-stone-500">
@@ -739,7 +766,15 @@ export default function ProductForm({ categories, product }: Props) {
                 <ErrorText>{errors.name}</ErrorText>
               </div>
               <div>
-                <Label hint="specs, features, shipping & warranty — all in one">Description</Label>
+                <Label
+                  hint={
+                    form.accordionSections.length > 0
+                      ? "still used for SEO & search — the accordion below replaces it on the product page"
+                      : "specs, features, shipping & warranty — all in one"
+                  }
+                >
+                  Description
+                </Label>
                 <DescriptionEditor
                   value={form.description}
                   onChange={(md) => set("description", md)}
@@ -747,6 +782,24 @@ export default function ProductForm({ categories, product }: Props) {
                 />
               </div>
             </div>
+          </Card>
+
+          {/* Collapsible panels for the storefront's "Features & Specs" tab.
+              Optional: with no sections the tab keeps rendering the flat
+              description above, so existing products are unaffected. */}
+          <Card
+            icon="grid"
+            title="Features & Specs accordion"
+            hint={
+              form.accordionSections.length > 0
+                ? "These panels replace the description under “Features & Specs” on the product page."
+                : "Optional — break the details into collapsible panels instead of one long description."
+            }
+          >
+            <AccordionBuilder
+              value={form.accordionSections}
+              onChange={(rows) => set("accordionSections", rows)}
+            />
           </Card>
 
           {/* Pricing mode selector — a product is priced by a single price/stock
