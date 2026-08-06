@@ -90,7 +90,6 @@ export default function AddToCartPanel({
       unitPrice={unitPrice}
       imageUrl={imageUrl}
       stock={stock}
-      colors={colors}
       quantity={quantity}
       setQuantity={setQuantity}
       addItem={addItem}
@@ -454,7 +453,7 @@ function VariantPurchase({
   );
 }
 
-/* ─────────── legacy: product with no variants (optional plain colours) ─────────── */
+/* ─────────── legacy: product with no variants ─────────── */
 function LegacyPurchase({
   productId,
   slug,
@@ -462,7 +461,6 @@ function LegacyPurchase({
   unitPrice,
   imageUrl,
   stock,
-  colors,
   quantity,
   setQuantity,
   addItem,
@@ -474,97 +472,28 @@ function LegacyPurchase({
   unitPrice: number;
   imageUrl: string | null;
   stock: number;
-  colors: ColorOption[];
   quantity: number;
   setQuantity: (n: number | ((q: number) => number)) => void;
   addItem: AddItem;
   router: Router;
 }) {
-  const [colorId, setColorId] = useState<number | null>(null);
-  const [colorError, setColorError] = useState(false);
   const outOfStock = stock <= 0;
-  const needsColor = colors.length > 0;
-  const selectedColor = colors.find((c) => c.id === colorId) ?? null;
 
-  // Show the picked colour's photo in the gallery on the left.
-  const { setUrl: setGalleryImage } = useVariantImage();
-  useEffect(() => {
-    setGalleryImage(selectedColor?.imageUrl ?? null);
-  }, [selectedColor, setGalleryImage]);
-
-  function ensureReady(): boolean {
-    if (needsColor && !selectedColor) {
-      setColorError(true);
-      return false;
-    }
-    return true;
-  }
   function addToCart() {
-    const displayName = selectedColor ? `${name} — ${selectedColor.name}` : name;
-    addItem({ productId, slug, name: displayName, unitPrice, imageUrl }, quantity);
+    addItem({ productId, slug, name, unitPrice, imageUrl }, quantity);
     trackAddToCart({ value: (unitPrice * quantity) / 100 });
   }
   function handleAdd() {
-    if (!ensureReady()) return;
     addToCart();
     router.push("/cart");
   }
   function handleBuy() {
-    if (!ensureReady()) return;
     addToCart();
     router.push(`/checkout?buyNow=${productId}`);
   }
 
   return (
     <div className="space-y-4">
-      {needsColor && (
-        <div>
-          <p className="mb-1.5 text-sm font-medium text-gray-700">
-            Available Color:
-            {selectedColor && <span className="ml-1.5 font-semibold text-gray-900">{selectedColor.name}</span>}
-          </p>
-          <div className="flex flex-wrap gap-2.5">
-            {colors.map((color) => {
-              const selected = color.id === colorId;
-              return (
-                <button
-                  key={color.id}
-                  type="button"
-                  title={color.name}
-                  aria-label={color.name}
-                  aria-pressed={selected}
-                  onClick={() => {
-                    setColorId(color.id);
-                    setColorError(false);
-                  }}
-                  className={[
-                    "relative flex items-center justify-center overflow-hidden transition",
-                    // A photo needs room to read; a plain hex chip stays compact.
-                    color.imageUrl ? "h-12 w-12 rounded-lg" : "h-8 w-8 rounded-full",
-                    selected ? "ring-2 ring-brand-600 ring-offset-2" : "ring-1 ring-gray-300 hover:ring-gray-400",
-                  ].join(" ")}
-                  style={color.imageUrl ? undefined : { backgroundColor: color.hexCode }}
-                >
-                  {color.imageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={color.imageUrl} alt={color.name} className="h-full w-full object-cover" />
-                  )}
-                  {selected && (
-                    <Icon
-                      name="check"
-                      size={15}
-                      strokeWidth={3}
-                      className="absolute text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {colorError && <p className="mt-1.5 text-xs font-medium text-red-600">Please select a color first.</p>}
-        </div>
-      )}
-
       <QtyStepper quantity={quantity} setQuantity={setQuantity} max={Math.max(stock, 1)} disabled={outOfStock} />
       <ActionButtons onAdd={handleAdd} onBuy={handleBuy} disabled={outOfStock} soldOut={outOfStock} />
     </div>

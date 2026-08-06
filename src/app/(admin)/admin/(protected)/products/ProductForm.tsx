@@ -27,7 +27,8 @@ interface ImageRow {
   url: string;
 }
 
-/** A colour swatch on a simple (single-price) product. */
+/** A colour swatch, derived from variant rows in variant mode. Simple
+ *  (single-price) products no longer carry colours. */
 interface ColorRow {
   name: string;
   hexCode: string;
@@ -38,7 +39,6 @@ interface ColorRow {
 /** Where an uploaded photo should land. */
 type UploadTarget =
   | { kind: "product" }
-  | { kind: "color"; idx: number }
   | { kind: "variant"; idx: number };
 
 /** Same target twice? Used to drive per-tile spinners. */
@@ -93,7 +93,7 @@ interface FormState {
   metaDescription: string;
   isFeatured: boolean;
   images: ImageRow[]; // photo URLs + optional variant link; first is the cover
-  colors: ColorRow[]; // simple-mode swatches; variant mode derives its own
+  colors: ColorRow[]; // read-only: existing ProductColor rows, kept only to seed variant swatches
   variants: VariantRow[];
 }
 
@@ -454,8 +454,8 @@ export default function ProductForm({ categories, product }: Props) {
   const [form, setForm] = useState<FormState>(() => initialFromProduct(product));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, startSave] = useTransition();
-  // What the image customizer is uploading for: the product gallery, one colour
-  // row, or one variant row. Null = closed.
+  // What the image customizer is uploading for: the product gallery or one
+  // variant row. Null = closed.
   const [customizing, setCustomizing] = useState<UploadTarget | null>(null);
   // Which target is mid-upload, so only that tile shows a spinner.
   const [uploading, setUploading] = useState<UploadTarget | null>(null);
@@ -503,11 +503,6 @@ export default function ProductForm({ categories, product }: Props) {
       next.unshift(img);
       return { ...f, images: next };
     });
-  const setColor = (idx: number, val: Partial<ColorRow>) =>
-    set("colors", form.colors.map((c, i) => (i === idx ? { ...c, ...val } : c)));
-  const addColor = () => set("colors", [...form.colors, { name: "", hexCode: "#000000", imageUrl: "" }]);
-  const removeColor = (idx: number) => set("colors", form.colors.filter((_, i) => i !== idx));
-
   // The customizer hands back a JPEG already cropped to 1000×1000 and compressed
   // under 200 KB, so it just needs uploading and storing against its target.
   // The gallery appends (capped at MAX_IMAGES); a colour or variant row replaces,
@@ -528,12 +523,6 @@ export default function ProductForm({ categories, product }: Props) {
       setForm((f) => {
         if (target.kind === "product") {
           return { ...f, images: [...f.images, { url: data.url }].slice(0, MAX_IMAGES) };
-        }
-        if (target.kind === "color") {
-          return {
-            ...f,
-            colors: f.colors.map((c, i) => (i === target.idx ? { ...c, imageUrl: data.url } : c)),
-          };
         }
         return {
           ...f,
@@ -615,18 +604,13 @@ export default function ProductForm({ categories, product }: Props) {
   const submitStock = (): number | "" => (isVariantMode ? derivedBase().stock : form.stock);
 
   // The ProductColor swatch list (name → hex/photo) — the source of the
-  // storefront swatches. In simple mode it's the colour rows entered on the
-  // Pricing & stock card; a simple product can absolutely have colours without
-  // per-colour pricing. In variant mode it's derived by deduping the colours on
+  // storefront swatches. Simple (single-price) products no longer carry
+  // colours at all. In variant mode it's derived by deduping the colours on
   // the variant rows (first occurrence wins); the row's uploaded photo is NOT
   // copied here, since it belongs to the variant so rows sharing a colour keep
   // their own images.
   const cleanColors = () => {
-    if (!isVariantMode) {
-      return form.colors
-        .filter((c) => c.name.trim() && c.hexCode.trim())
-        .map((c) => ({ name: c.name.trim(), hexCode: c.hexCode.trim(), imageUrl: c.imageUrl.trim() }));
-    }
+    if (!isVariantMode) return [];
     const seen = new Map<string, { name: string; hexCode: string; imageUrl: string }>();
     for (const v of form.variants) {
       const name = v.color.trim();
@@ -1072,105 +1056,6 @@ export default function ProductForm({ categories, product }: Props) {
               </div>
             )}
 
-            {/* Colour swatches for a single-price product. All colours share the
-                one price above — use Variants instead if they differ. Each may
-                carry an uploaded photo; without one the swatch shows its hex.
-                Hidden in variant mode: the swatch list is derived from the
-                colours on the variant rows there (see cleanColors), so editing
-                a second copy of them here would go nowhere. Rows are kept in
-                form.colors so switching back to single price restores them. */}
-            {!isVariantMode && (
-            <div className="mt-5 border-t border-stone-100 pt-5">
-              <Label hint="optional">Colours</Label>
-              <p className="-mt-1 mb-2.5 text-[12px] text-stone-400">
-                Shoppers pick one on the product page. Leave empty for a single-colour product.
-              </p>
-              <div className="space-y-2">
-                {form.colors.map((c, idx) => (
-                  <div key={idx} className="rounded-lg border border-stone-200 bg-stone-50/60 p-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={c.hexCode || "#000000"}
-                        onChange={(e) => setColor(idx, { hexCode: e.target.value })}
-                        title="Swatch colour"
-                        className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-stone-200 bg-white p-0.5"
-                      />
-                      <input
-                        value={c.name}
-                        onChange={(e) => setColor(idx, { name: e.target.value })}
-                        placeholder="Colour name (e.g. Navy Blue)"
-                        className="min-w-0 flex-1 rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500 placeholder:text-stone-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeColor(idx)}
-                        aria-label="Remove colour"
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-red-50 hover:text-red-500"
-                      >
-                        <Icon name="trash" size={15} />
-                      </button>
-                    </div>
-
-                    {/* Uploaded photo for this colour — the swatch image shown
-                        on the storefront. */}
-                    <div className="mt-2 flex items-center gap-2.5">
-                      {c.imageUrl ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setCustomizing({ kind: "color", idx })}
-                            disabled={sameTarget(uploading, { kind: "color", idx })}
-                            title="Replace photo"
-                            className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-white disabled:opacity-50"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={c.imageUrl} alt="" className="h-full w-full object-cover" />
-                          </button>
-                          <span className="min-w-0 flex-1 text-[12px] text-stone-500">
-                            {sameTarget(uploading, { kind: "color", idx })
-                              ? "Uploading…"
-                              : "Swatch photo"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setColor(idx, { imageUrl: "" })}
-                            aria-label="Remove colour photo"
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-red-50 hover:text-red-500"
-                          >
-                            <Icon name="trash" size={14} />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setCustomizing({ kind: "color", idx })}
-                          disabled={sameTarget(uploading, { kind: "color", idx })}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-300 bg-white py-2 text-[12.5px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600 disabled:opacity-50"
-                        >
-                          {sameTarget(uploading, { kind: "color", idx }) ? (
-                            "Uploading…"
-                          ) : (
-                            <>
-                              <Icon name="image" size={14} /> Add photo for this colour
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addColor}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 py-2 text-[13px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600"
-              >
-                <Icon name="plus" size={15} /> Add colour
-              </button>
-            </div>
-            )}
-
             </fieldset>
           </Card>
 
@@ -1524,11 +1409,7 @@ export default function ProductForm({ categories, product }: Props) {
     {customizing !== null && (
       <ImageCustomizer
         label={
-          customizing.kind === "product"
-            ? "Product photo"
-            : customizing.kind === "color"
-              ? "Colour photo"
-              : "Variant photo"
+          customizing.kind === "product" ? "Product photo" : "Variant photo"
         }
         targetWidth={PRODUCT_IMG.width}
         targetHeight={PRODUCT_IMG.height}
