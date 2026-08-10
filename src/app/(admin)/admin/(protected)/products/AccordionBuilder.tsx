@@ -106,19 +106,36 @@ Who it is for, the problem it solves, and what makes it different. Keep this to 
   },
   {
     label: "👕 Product Details",
-    hint: "Attribute table (fabric)",
+    hint: "Two-column spec grid (fabric)",
     row: {
       title: "Product Details",
       icon: "👕",
       isOpen: true,
-      content: `| Attribute | Detail |
-| --- | --- |
-| **Colour** | value |
-| **Fabric Content** | value |
-| **Neck Type** | value |
-| **Sleeve** | value |
-| **Pattern** | value |
-| **Care** | value |`,
+      // A `::specs` grid, not a table: garments carry twenty-odd attributes and
+      // the marketplace label-above-value layout stays readable at that length.
+      // Rows are free-form — delete what does not apply, add whatever does.
+      content: `::specs
+Colour: Black
+Fabric Content: 100% Viscose
+Fabric Detail: Viscose
+Neck Type: V Neck
+Closure: Slip on
+Sleeve: Three-Quarter Sleeves
+Sleeve Styling: Three-Quarter Sleeves
+Fit: Regular Fit
+Ethnicity: Fusion
+Ornamentation: Foil Print
+Colour Details: Black
+Shape: Straight
+Slit Detail: Side Slits
+Hemline: Straight
+Occasion: Casual
+Length: Hip Length
+Pattern: Ethnic Motifs
+Fabric Family: Viscose
+Care: Delicate Wash
+Transparency: Opaque
+::`,
     },
   },
   {
@@ -159,6 +176,20 @@ const CONTENT_BLOCKS: MarkdownSnippet[] = [
 | **Dimensions** | value |
 | **Weight** | value |
 | **Colour** | value |`,
+  },
+  {
+    label: "👕 Product details grid",
+    hint: "Label above value, two per row",
+    md: `::specs
+Colour: value
+Fabric Content: value
+Neck Type: value
+Sleeve: value
+Fit: value
+Pattern: value
+Occasion: value
+Care: value
+::`,
   },
   {
     label: "⭐ Highlight bullets",

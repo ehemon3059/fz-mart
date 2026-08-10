@@ -137,6 +137,9 @@ function TB({ title, onClick, icon, text }: { title: string; onClick: () => void
 const Divider = () => <span className="mx-1 h-5 w-px bg-stone-200" />;
 
 const SPEC_TABLE = "| Attribute | Detail |\n| --- | --- |\n| **Label** | Value |\n| **Label** | Value |";
+/** `::specs` block — label above value, two per row. One `Label: Value` per
+ *  line, so an admin adds attributes by typing more lines. */
+const SPEC_GRID = "::specs\nLabel: Value\nLabel: Value\nLabel: Value\nLabel: Value\n::";
 
 interface Props {
   actions: MarkdownActions;
@@ -221,6 +224,11 @@ export default function MarkdownToolbar({
       <TB title="Quote" icon="quote" onClick={() => prefixLines("> ", "Quoted note")} />
       <Divider />
       <TB title="Spec table" icon="grid" onClick={() => insertBlock(SPEC_TABLE)} />
+      <TB
+        title="Product details grid (label above value)"
+        icon="specGrid"
+        onClick={() => insertBlock(SPEC_GRID)}
+      />
       <TB title="Divider" icon="minus" onClick={() => insertBlock("---")} />
       <TB
         title="Link"

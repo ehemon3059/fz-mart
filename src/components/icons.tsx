@@ -37,6 +37,8 @@ const PATHS: Record<string, string> = {
   shield: "M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6Z M9 12l2 2 4-4",
   ban: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M5 5l14 14",
   minus: "M5 12h14",
+  // Two columns of label-over-value pairs — the `::specs` product-detail grid.
+  specGrid: "M3 5h5 M3 9h7 M14 5h5 M14 9h7 M3 15h5 M3 19h7 M14 15h5 M14 19h7",
   globe: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M2 12h20 M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10Z",
 };
 

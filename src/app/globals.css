@@ -74,6 +74,56 @@ label {
   color: #374151; /* gray-700 */
 }
 
+/* ── Product spec grid ───────────────────────────────────────────
+   Output of the `::specs` Markdown block (see src/lib/markdown.ts): the
+   marketplace-style "Product Details" list — muted label above a bold value,
+   two per row, hairline separated. Plain CSS rather than Tailwind classes
+   because the markup is built in src/lib, which the Tailwind content globs
+   do not scan. The `not-prose` on the <dl> keeps Typography off it, so these
+   rules are the whole appearance in both the storefront panel and the admin
+   preview. */
+.fz-specs {
+  display: grid;
+  grid-template-columns: 1fr;
+  column-gap: 2.5rem;
+  margin: 0.25rem 0;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .fz-specs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fz-specs .fz-spec {
+  min-width: 0;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid #ececea;
+}
+
+.fz-specs dt {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #94918b;
+}
+
+.fz-specs dd {
+  margin: 0.2rem 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #1f1d1a;
+  overflow-wrap: anywhere;
+}
+
+.fz-specs dd a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 /* ── Pages admin / storefront prose ──────────────────────────────
    Used by .prose-editor (RichTextEditor) and .prose-article (storefront
    page view). Kept separate from Tailwind Typography's `.prose` so the

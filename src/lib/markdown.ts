@@ -3,7 +3,8 @@
  *
  * Deliberately not a full CommonMark implementation. It covers exactly the
  * subset the product description editor can produce (headings, bold/italic,
- * bullet lists, pipe tables, dividers, links, paragraphs) and nothing else.
+ * bullet lists, pipe tables, dividers, links, paragraphs, spec grids) and
+ * nothing else.
  *
  * Safety: the source is escaped *first*, so any raw HTML an admin pastes is
  * shown as literal text rather than executed. That keeps the output safe to
@@ -41,6 +42,46 @@ const isTableDivider = (l: string) => /^\s*\|[\s:|-]+\|\s*$/.test(l) && l.includ
 const splitCells = (l: string) =>
   l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
 
+/* ─────────── spec grid ─────────── */
+/**
+ * `::specs` … `::` — the marketplace-style "Product Details" block: label above
+ * value, two per row, hairline separated. A pipe table gets heavy fast once a
+ * garment carries twenty attributes, and its `Attribute | Detail` header adds
+ * nothing the labels don't already say.
+ *
+ * Body lines are `Label: Value`. A block where no line has a colon is read as
+ * alternating label / value lines instead, so an admin can paste a spec list
+ * copied off a marketplace page straight in.
+ */
+const SPEC_OPEN_RE = /^\s*::+\s*(?:specs?|details|product[\s-]?details)\s*$/i;
+const SPEC_CLOSE_RE = /^\s*::+\s*$/;
+
+/** Tolerate list markers and bold wrapping around a pasted label. */
+const cleanCell = (s: string) =>
+  s
+    .trim()
+    .replace(/^[*-]\s+/, "")
+    .replace(/^\*\*(.+)\*\*$/, "$1")
+    .trim();
+
+function specPairs(lines: string[]): [string, string][] {
+  const rows = lines.map((l) => l.trim()).filter(Boolean);
+  if (!rows.length) return [];
+
+  // `Label: Value` — the authored form.
+  if (rows.some((l) => l.includes(":"))) {
+    return rows.map((l): [string, string] => {
+      const at = l.indexOf(":");
+      return at === -1 ? [cleanCell(l), ""] : [cleanCell(l.slice(0, at)), cleanCell(l.slice(at + 1))];
+    });
+  }
+
+  // Colon-free block — label and value on their own lines, as pasted.
+  const pairs: [string, string][] = [];
+  for (let i = 0; i < rows.length; i += 2) pairs.push([cleanCell(rows[i]), cleanCell(rows[i + 1] ?? "")]);
+  return pairs;
+}
+
 export function renderMarkdown(src: string): string {
   if (!src?.trim()) return "";
 
@@ -70,6 +111,30 @@ export function renderMarkdown(src: string): string {
       const level = Math.min(Math.max(heading[1].length, 2), 4); // h1 collapses to h2 — the page owns the h1
       out.push(`<h${level}>${inline(heading[2].trim())}</h${level}>`);
       i++;
+      continue;
+    }
+
+    // Spec grid — `::specs` … `::`
+    if (SPEC_OPEN_RE.test(line)) {
+      i++;
+      const body: string[] = [];
+      while (i < lines.length && !SPEC_CLOSE_RE.test(lines[i])) {
+        body.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++; // consume the closing `::`
+      const pairs = specPairs(body).filter(([label, value]) => label || value);
+      if (pairs.length) {
+        const items = pairs
+          .map(
+            ([label, value]) =>
+              `<div class="fz-spec"><dt>${inline(label)}</dt><dd>${inline(value) || "&mdash;"}</dd></div>`,
+          )
+          .join("");
+        // `not-prose` keeps Tailwind Typography's dl/dt/dd rules off the grid —
+        // the storefront and the admin preview both render it inside `.prose`.
+        out.push(`<dl class="fz-specs not-prose">${items}</dl>`);
+      }
       continue;
     }
 
@@ -131,7 +196,8 @@ export function renderMarkdown(src: string): string {
       !bullet.test(lines[i]) &&
       !ordered.test(lines[i]) &&
       !BLOCKQUOTE_RE.test(lines[i]) &&
-      !isTableRow(lines[i])
+      !isTableRow(lines[i]) &&
+      !SPEC_OPEN_RE.test(lines[i])
     ) {
       para.push(lines[i].trim());
       i++;
@@ -145,6 +211,7 @@ export function renderMarkdown(src: string): string {
 /** Markdown → plain text, for meta descriptions / JSON-LD / previews. */
 export function markdownToPlainText(src: string): string {
   return src
+    .replace(/^\s*::+\s*(?:specs?|details|product[\s-]?details)?\s*$/gim, "") // spec-grid fences
     .replace(/^\s*\|[\s:|-]+\|\s*$/gm, "") // table divider rows
     .replace(/^\s*(---+|\*\*\*+|___+)\s*$/gm, "") // section dividers
     .replace(/\|/g, " ")
