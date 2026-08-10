@@ -31,6 +31,8 @@ export interface CategoryInput {
   isActive?: boolean;
   metaTitle?: string | null;
   metaDescription?: string | null;
+  /** Default size guide for this branch of the tree; null = inherit/none. */
+  sizeGuideId?: number | null;
 }
 
 /** A slug guaranteed unique across the whole tree. Tries the plain slug, then
@@ -58,6 +60,7 @@ export async function createCategory(input: CategoryInput) {
       isActive: input.isActive ?? true,
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
+      sizeGuideId: input.sizeGuideId ?? null,
     },
   });
   await invalidateCategoryCaches(category.slug);
@@ -91,6 +94,7 @@ export async function updateCategory(id: number, input: CategoryInput) {
       isActive: input.isActive ?? true,
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
+      sizeGuideId: input.sizeGuideId ?? null,
     },
   });
   await invalidateCategoryCaches(category.slug);

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import { seedSizeGuides } from "./seed-size-guides";
 
 // Seed minimal, realistic demo data so `npm run dev` shows a populated
 // storefront and you can log into admin immediately.
@@ -183,6 +184,11 @@ async function main() {
       data: { imageUrl: "/placeholder.svg", link: "/category/electronics", sortOrder: 0 },
     });
   }
+
+  // ── Size guides ───────────────────────────────────────────
+  // Defined in their own file so they can also be seeded on their own against
+  // a live database, without the demo catalog below coming along.
+  await seedSizeGuides(prisma);
 
   console.log("✅ Seed complete.");
   console.log(`   Admin login → username: admin  password: ${adminPassword}`);

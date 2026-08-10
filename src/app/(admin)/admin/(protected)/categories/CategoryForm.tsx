@@ -7,11 +7,22 @@ import { Icon } from "@/components/icons";
 import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
 import { saveCategory } from "./actions";
 import { buildTree, collectDescendantIds, type TreeNode } from "@/server/categories/tree";
+import { inheritedGuideId } from "@/lib/size-guide-inheritance";
 
 interface CatLite {
   id: number;
   name: string;
   parentId: number | null;
+  /** Set here = this branch's default size guide; null = inherit from above. */
+  sizeGuideId?: number | null;
+}
+
+export interface SizeGuideOption {
+  id: number;
+  name: string;
+  sizeLabel: string | null;
+  /** First few values, for the "32, 33, 34 …" hint under the picker. */
+  values: string[];
 }
 
 interface Props {
@@ -25,12 +36,16 @@ interface Props {
     isActive: boolean;
     metaTitle: string | null;
     metaDescription: string | null;
+    sizeGuideId?: number | null;
   };
   /** All categories (flat) for the parent picker. */
   allCategories: CatLite[];
+  /** Active size guides, for the size-guide picker. */
+  sizeGuides?: SizeGuideOption[];
   /** Pre-selected parent when creating a child from the tree ("Add sub"). */
   defaultParentId?: number | null;
 }
+
 
 /** Flatten the tree into indented <option>s, disabling the node being edited
  *  and its descendants so a category can't be moved inside itself. */
@@ -84,7 +99,7 @@ function Toggle({
   );
 }
 
-export default function CategoryForm({ category, allCategories, defaultParentId }: Props) {
+export default function CategoryForm({ category, allCategories, sizeGuides = [], defaultParentId }: Props) {
   const isEdit = !!category;
   const router = useRouter();
   const [name, setName] = useState(category?.name ?? "");
@@ -96,8 +111,16 @@ export default function CategoryForm({ category, allCategories, defaultParentId 
   const [description, setDescription] = useState(category?.description ?? "");
   const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 0);
   const [isActive, setIsActive] = useState(category?.isActive ?? true);
+  const [sizeGuideId, setSizeGuideId] = useState<string>(String(category?.sizeGuideId ?? ""));
   const [metaTitle, setMetaTitle] = useState(category?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(category?.metaDescription ?? "");
+  // What "inherit" resolves to right now — follows the parent picker live, so
+  // re-parenting a category shows the guide it would pick up.
+  const inheritedGuide = useMemo(() => {
+    const id = inheritedGuideId(allCategories, parentId ? Number(parentId) : null, true);
+    return id != null ? (sizeGuides.find((g) => g.id === id) ?? null) : null;
+  }, [allCategories, parentId, sizeGuides]);
+  const selectedGuide = sizeGuides.find((g) => String(g.id) === sizeGuideId) ?? null;
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -122,6 +145,7 @@ export default function CategoryForm({ category, allCategories, defaultParentId 
       <input type="hidden" name="imageUrl" value={imageUrl} />
       <input type="hidden" name="description" value={description} />
       <input type="hidden" name="sortOrder" value={String(sortOrder)} />
+      <input type="hidden" name="sizeGuideId" value={sizeGuideId} />
       {isActive && <input type="hidden" name="isActive" value="on" />}
 
       {/* breadcrumb + header */}
@@ -261,6 +285,72 @@ export default function CategoryForm({ category, allCategories, defaultParentId 
               label="Active"
               sublabel={isActive ? "Visible on the storefront" : "Hidden — won't show in the catalog"}
             />
+          </div>
+        </section>
+
+        {/* Sizing default for this whole branch. A product with no guide of its
+            own uses the nearest ancestor that has one, so setting it high in
+            the tree covers everything below without touching each leaf. */}
+        <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-soft">
+          <header className="flex items-center gap-2.5 border-b border-stone-100 px-5 py-3.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-stone-100 text-stone-500">
+              <Icon name="specGrid" size={15} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[14.5px] font-bold tracking-tight text-stone-800">Sizes</h2>
+              <p className="text-[12.5px] text-stone-400">Applies to every product in this category and below it.</p>
+            </div>
+          </header>
+          <div className="p-5">
+            <label className="mb-1.5 flex items-baseline gap-1.5 text-[13px] font-semibold text-stone-700">
+              <span>Size guide</span>
+              <span className="ml-auto text-[12px] font-normal text-stone-400">optional</span>
+            </label>
+            <select
+              value={sizeGuideId}
+              onChange={(e) => setSizeGuideId(e.target.value)}
+              className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-[14px] text-stone-800 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
+            >
+              <option value="">
+                {inheritedGuide
+                  ? `— Inherit: ${inheritedGuide.name} —`
+                  : "— None —"}
+              </option>
+              {sizeGuides.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                  {g.sizeLabel ? ` · ${g.sizeLabel}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[12px] text-stone-400">
+              {selectedGuide ? (
+                <>
+                  Products here start with{" "}
+                  <span className="font-semibold text-stone-500">
+                    {selectedGuide.values.slice(0, 8).join(", ")}
+                    {selectedGuide.values.length > 8 ? " …" : ""}
+                  </span>{" "}
+                  and show “Select {selectedGuide.sizeLabel || "Size"}:”.
+                </>
+              ) : inheritedGuide ? (
+                <>
+                  Inherited from a parent category:{" "}
+                  <span className="font-semibold text-stone-500">{inheritedGuide.name}</span>. Pick one above to
+                  override it here.
+                </>
+              ) : sizeGuides.length === 0 ? (
+                <>
+                  No size guides yet —{" "}
+                  <Link href="/admin/size-guides/new" className="font-semibold text-brand-600 hover:underline">
+                    create one
+                  </Link>
+                  .
+                </>
+              ) : (
+                "Nothing inherited — products here get plain sizes with no chart until you pick a guide."
+              )}
+            </p>
           </div>
         </section>
 

@@ -5,6 +5,7 @@ import { listActiveCategories } from "@/server/categories";
 import { ancestorsOf } from "@/server/categories/tree";
 import { getRatingSummary } from "@/server/products/reviews";
 import { listActiveShippingZones } from "@/server/settings/shipping";
+import { resolveSizeGuide } from "@/server/size-guides";
 import { SITE_NAME, absoluteUrl, pageTitle, stripHtml, truncate } from "@/lib/seo";
 import { productJsonLd, breadcrumbJsonLd } from "@/lib/jsonld";
 import { renderMarkdown, markdownToPlainText } from "@/lib/markdown";
@@ -89,13 +90,23 @@ export default async function ProductPage({
   // are filtered inside trackFunnelEvent.
   trackFunnelEvent("PRODUCT_VIEW", { productId: product.id, dedupeSeconds: 86400 });
 
-  const [ratingSummary, relatedProducts, customer, allCats, shippingZones] = await Promise.all([
+  const [ratingSummary, relatedProducts, customer, allCats, shippingZones, sizeGuide] = await Promise.all([
     getRatingSummary(product.id),
     listRelatedProducts(product.id, product.categoryId),
     getCurrentCustomer(),
     listActiveCategories(),
     listActiveShippingZones(),
+    // Product override → nearest ancestor category's guide → none.
+    resolveSizeGuide(product.sizeGuideId, product.categoryId),
   ]);
+
+  // Sizing, resolved once here: the product's own label/chart win over the
+  // guide's, and the chart is rendered to HTML server-side so the markdown
+  // parser stays out of the client bundle and the table ships in the initial
+  // HTML where crawlers can read it.
+  const sizeLabel = product.sizeLabel?.trim() || sizeGuide?.sizeLabel || null;
+  const sizeChartMd = product.sizeChart?.trim() || sizeGuide?.chart || "";
+  const sizeChartHtml = sizeChartMd ? renderMarkdown(sizeChartMd) : null;
   const wishlisted = customer ? await isWishlisted(customer.customerId, product.id) : false;
 
   const primaryImage = primaryImageOf(product);
@@ -217,6 +228,9 @@ export default async function ProductPage({
                 imageUrl: v.imageUrl,
               }))}
               priceColor={product.priceColor}
+              sizeLabel={sizeLabel}
+              sizeOrder={sizeGuide?.values ?? []}
+              sizeChartHtml={sizeChartHtml}
             />
           </div>
 

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getProductById } from "@/server/products/admin";
 import { listAllCategories } from "@/server/categories/admin";
 import { listStockHistory } from "@/server/inventory";
+import { listActiveSizeGuides } from "@/server/size-guides";
 import ProductForm from "../../ProductForm";
 import StockPanel from "./StockPanel";
 
@@ -12,17 +13,28 @@ export default async function EditProductPage({
 }) {
   const { id } = await params;
   const productId = Number(id);
-  const [product, categories, history] = await Promise.all([
+  const [product, categories, history, sizeGuides] = await Promise.all([
     getProductById(productId),
     listAllCategories(),
     listStockHistory(productId),
+    listActiveSizeGuides(),
   ]);
   if (!product) notFound();
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
-      <ProductForm categories={categories} product={product} />
+      <ProductForm
+        categories={categories}
+        product={product}
+      sizeGuides={sizeGuides.map((g) => ({
+        id: g.id,
+        name: g.name,
+        sizeLabel: g.sizeLabel,
+        chart: g.chart,
+        values: g.values.map((v) => v.value),
+      }))}
+      />
 
       {/* Matches the form above, which is now full-bleed — a centred column here
           would sit oddly under a full-width form. */}

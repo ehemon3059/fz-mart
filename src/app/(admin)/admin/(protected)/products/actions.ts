@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import { takaToPaisa } from "@/lib/money";
 import { requirePermission } from "@/server/admin/guard";
 import {
@@ -135,6 +136,9 @@ function parseVariants(formData: FormData): ProductVariantInput[] {
           showStock: v?.showStock !== false,
           priceColor: parseHexColor(v?.priceColor ?? null),
           imageUrl: parseUploadedImage(v?.imageUrl ?? null),
+          // Generated from the product's baseSku, or typed. Kept verbatim
+          // (minus surrounding space) so a re-save round-trips it unchanged.
+          sku: typeof v?.sku === "string" && v.sku.trim() ? v.sku.trim().slice(0, 64) : null,
         };
       })
       .filter((v) => (v.size || v.colorName) && v.price > 0);
@@ -212,6 +216,13 @@ export async function saveProduct(
   const promoBadge = String(formData.get("promoBadge") ?? "").trim();
   const metaTitle = String(formData.get("metaTitle") ?? "").trim();
   const metaDescription = String(formData.get("metaDescription") ?? "").trim();
+  // Sizing: a guide id (blank = inherit the category's) plus optional one-off
+  // overrides of its label and chart.
+  const sizeGuideRaw = String(formData.get("sizeGuideId") ?? "").trim();
+  const sizeGuideId = sizeGuideRaw && Number.isFinite(Number(sizeGuideRaw)) ? Number(sizeGuideRaw) : null;
+  const sizeLabel = String(formData.get("sizeLabel") ?? "").trim() || null;
+  const sizeChart = String(formData.get("sizeChart") ?? "").trim() || null;
+  const baseSku = String(formData.get("baseSku") ?? "").trim().slice(0, 32) || null;
   const colors = parseColors(formData);
   const specifications = parseSpecifications(formData);
   const features = parseFeatures(formData);
@@ -260,6 +271,10 @@ export async function saveProduct(
     promoBadge: promoBadge || null,
     metaTitle: metaTitle || null,
     metaDescription: metaDescription || null,
+    sizeGuideId,
+    sizeLabel,
+    sizeChart,
+    baseSku,
     images,
     colors,
     specifications,
@@ -268,10 +283,22 @@ export async function saveProduct(
     variants,
   };
 
-  if (id) {
-    await updateProduct(id, input);
-  } else {
-    await createProduct(input);
+  try {
+    if (id) {
+      await updateProduct(id, input);
+    } else {
+      await createProduct(input);
+    }
+  } catch (err) {
+    // ProductVariant.sku is unique shop-wide: a clash means this SKU already
+    // belongs to another product, which is worth naming rather than throwing.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const target = String((err.meta as { target?: string } | undefined)?.target ?? "");
+      if (target.includes("sku")) {
+        return { fieldErrors: { variants: "One of these SKUs is already used by another product." } };
+      }
+    }
+    throw err;
   }
 
   revalidatePath("/admin/products");

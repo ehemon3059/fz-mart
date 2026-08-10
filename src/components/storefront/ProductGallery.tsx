@@ -23,8 +23,9 @@ interface Props {
 const PLACEHOLDER = "/placeholder.svg";
 
 export default function ProductGallery({ images, name, promoBadge, overlay }: Props) {
-  // Photo of the option the shopper picked in the buy box, if any.
-  const { url: variantUrl } = useVariantImage();
+  // Photo of the option the shopper picked in the buy box — or is hovering in
+  // the colour strip, which previews without committing.
+  const { url: variantUrl, committed, preview } = useVariantImage();
 
   // The variant's photo joins the gallery so it can be shown in the main view
   // and reached from the thumbnail strip. If it's already one of the product's
@@ -50,6 +51,29 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
   useEffect(() => {
     setActive((i) => Math.min(i, safeImages.length - 1));
   }, [safeImages.length]);
+
+  // A hover preview must be undone when the cursor leaves: remember what was on
+  // screen before it started and go back to exactly that.
+  //
+  // Unless the shopper CLICKED the tile they were hovering — then `committed`
+  // is the photo already on screen, `variantIdx` never changed, and the effect
+  // above will not fire to re-assert it. Restoring blindly would snap the
+  // gallery back to the cover while the buy box shows the chosen colour, so the
+  // committed photo wins here whenever there is one.
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const committedIdx = committed ? safeImages.findIndex((i) => i.url === committed) : -1;
+  const committedIdxRef = useRef(committedIdx);
+  committedIdxRef.current = committedIdx;
+  const beforePreview = useRef<number | null>(null);
+  useEffect(() => {
+    if (preview) {
+      if (beforePreview.current === null) beforePreview.current = activeRef.current;
+    } else if (beforePreview.current !== null) {
+      setActive(committedIdxRef.current >= 0 ? committedIdxRef.current : beforePreview.current);
+      beforePreview.current = null;
+    }
+  }, [preview]);
 
   const activeUrl = safeImages[active]?.url ?? PLACEHOLDER;
 

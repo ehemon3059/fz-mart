@@ -16,6 +16,8 @@ const NAV_SECTIONS: NavSection[] = [
     links: [
       { href: "/admin/products", label: "Products", icon: "box", area: "products" },
       { href: "/admin/categories", label: "Categories", icon: "tag", area: "categories" },
+      // Rides the "products" permission — a size guide is product-authoring.
+      { href: "/admin/size-guides", label: "Size Guides", icon: "specGrid", area: "products" },
       { href: "/admin/banners", label: "Banners", icon: "image", area: "banners" },
     ],
   },

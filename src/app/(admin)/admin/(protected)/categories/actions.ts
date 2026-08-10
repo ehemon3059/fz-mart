@@ -44,11 +44,26 @@ export async function saveCategory(
   const isActive = formData.get("isActive") === "on";
   const metaTitle = String(formData.get("metaTitle") ?? "").trim() || null;
   const metaDescription = String(formData.get("metaDescription") ?? "").trim() || null;
+  // Blank = inherit from an ancestor (or none) — see server/size-guides.
+  const sizeGuideRaw = String(formData.get("sizeGuideId") ?? "").trim();
+  const sizeGuideId = sizeGuideRaw ? Number(sizeGuideRaw) : null;
 
   if (!name) return { error: "Name is required." };
   if (parentId != null && Number.isNaN(parentId)) return { error: "Invalid parent category." };
+  if (sizeGuideId != null && Number.isNaN(sizeGuideId)) return { error: "Invalid size guide." };
 
-  const data = { name, parentId, imageUrl, iconKey, description, sortOrder, isActive, metaTitle, metaDescription };
+  const data = {
+    name,
+    parentId,
+    imageUrl,
+    iconKey,
+    description,
+    sortOrder,
+    isActive,
+    metaTitle,
+    metaDescription,
+    sizeGuideId,
+  };
   try {
     if (id) {
       await updateCategory(id, data);

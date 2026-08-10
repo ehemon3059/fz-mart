@@ -183,6 +183,67 @@ label {
   }
 }
 
+/* ── Size chart ──────────────────────────────────────────────────
+   The markdown table behind the product page's "Size Chart" link. Same
+   hairline family as .fz-specs above so a measurement table and a spec grid
+   read as one system. Scrolls itself: a six-column chart must never widen
+   the dialog. */
+.fz-chart table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fz-chart thead th {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #e7e5e1;
+  background: #fafaf9;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #94918b;
+  white-space: nowrap;
+}
+
+.fz-chart tbody td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #ececea;
+  color: #23211e;
+}
+
+.fz-chart tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.fz-chart tbody td strong {
+  font-weight: 700;
+}
+
+.fz-chart p {
+  margin: 0.6rem 0 0;
+  font-size: 12px;
+  color: #94918b;
+}
+
+.fz-chart ul,
+.fz-chart ol {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 12.5px;
+  color: #44413c;
+}
+
+.fz-chart h2,
+.fz-chart h3,
+.fz-chart h4 {
+  margin: 0.9rem 0 0.35rem;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #23211e;
+}
+
 /* ── Pages admin / storefront prose ──────────────────────────────
    Used by .prose-editor (RichTextEditor) and .prose-article (storefront
    page view). Kept separate from Tailwind Typography's `.prose` so the

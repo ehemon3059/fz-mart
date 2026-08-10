@@ -83,6 +83,8 @@ export interface ProductVariantInput {
   priceColor?: string | null;
   /** Uploaded photo for this option; null = none. */
   imageUrl?: string | null;
+  /** Stock-keeping unit for this exact option; unique shop-wide when set. */
+  sku?: string | null;
 }
 
 export interface ProductImageInput {
@@ -115,6 +117,13 @@ export interface ProductInput {
   /** Optional SEO overrides; null/undefined → storefront default. */
   metaTitle?: string | null;
   metaDescription?: string | null;
+  /** Size guide driving the chips/label/chart; null = inherit the category's. */
+  sizeGuideId?: number | null;
+  /** Per-product overrides of the resolved guide; null = use the guide's. */
+  sizeLabel?: string | null;
+  sizeChart?: string | null;
+  /** Root of the generated variant SKUs ("SAR" → "SAR-PUR-32"). */
+  baseSku?: string | null;
   /** Image URLs in display order; first is primary. */
   imageUrls?: string[];
   /**
@@ -162,6 +171,10 @@ export async function createProduct(input: ProductInput) {
       promoBadge: input.promoBadge ?? null,
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
+      sizeGuideId: input.sizeGuideId ?? null,
+      sizeLabel: input.sizeLabel ?? null,
+      sizeChart: input.sizeChart ?? null,
+      baseSku: input.baseSku ?? null,
       images: imageRows?.length
         ? {
             createMany: {
@@ -229,6 +242,7 @@ export async function createProduct(input: ProductInput) {
                 showStock: v.showStock ?? true,
                 priceColor: v.priceColor ?? null,
                 imageUrl: v.imageUrl ?? null,
+                sku: v.sku ?? null,
                 sortOrder: i,
               })),
             },
@@ -275,6 +289,10 @@ export async function updateProduct(id: number, input: ProductInput) {
         promoBadge: input.promoBadge ?? null,
         metaTitle: input.metaTitle ?? null,
         metaDescription: input.metaDescription ?? null,
+        sizeGuideId: input.sizeGuideId ?? null,
+        sizeLabel: input.sizeLabel ?? null,
+        sizeChart: input.sizeChart ?? null,
+        baseSku: input.baseSku ?? null,
       },
     });
 
@@ -367,6 +385,7 @@ export async function updateProduct(id: number, input: ProductInput) {
             showStock: v.showStock ?? true,
             priceColor: v.priceColor ?? null,
             imageUrl: v.imageUrl ?? null,
+            sku: v.sku ?? null,
             sortOrder: i,
           })),
         });

@@ -9,6 +9,8 @@ import { formatTaka, priceColorStyle } from "@/lib/money";
 import { Icon } from "@/components/icons";
 import { Banknote, ShoppingCart, Minus, Plus } from "lucide-react";
 import { useVariantImage } from "@/components/storefront/product/VariantImageContext";
+import ColorStrip from "@/components/storefront/product/ColorStrip";
+import SizeChartModal from "@/components/storefront/product/SizeChartModal";
 
 interface ColorOption {
   id: number;
@@ -45,6 +47,12 @@ interface Props {
   variants?: VariantOption[];
   /** Product-level price colour (#rrggbb); null = theme default. */
   priceColor?: string | null;
+  /** From the resolved size guide: "Bust Size" → "Select Bust Size:". */
+  sizeLabel?: string | null;
+  /** The guide's size order; sizes not in it keep their row order, after these. */
+  sizeOrder?: string[];
+  /** Size chart, pre-rendered to HTML on the server. Null = no chart link. */
+  sizeChartHtml?: string | null;
 }
 
 export default function AddToCartPanel({
@@ -57,6 +65,9 @@ export default function AddToCartPanel({
   colors = [],
   variants = [],
   priceColor,
+  sizeLabel,
+  sizeOrder = [],
+  sizeChartHtml,
 }: Props) {
   const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
@@ -74,6 +85,9 @@ export default function AddToCartPanel({
         colors={colors}
         variants={variants}
         priceColor={priceColor}
+        sizeLabel={sizeLabel}
+        sizeOrder={sizeOrder}
+        sizeChartHtml={sizeChartHtml}
         quantity={quantity}
         setQuantity={setQuantity}
         addItem={addItem}
@@ -192,6 +206,9 @@ function VariantPurchase({
   colors,
   variants,
   priceColor,
+  sizeLabel,
+  sizeOrder,
+  sizeChartHtml,
   quantity,
   setQuantity,
   addItem,
@@ -204,6 +221,9 @@ function VariantPurchase({
   colors: ColorOption[];
   variants: VariantOption[];
   priceColor?: string | null;
+  sizeLabel?: string | null;
+  sizeOrder: string[];
+  sizeChartHtml?: string | null;
   quantity: number;
   setQuantity: (n: number | ((q: number) => number)) => void;
   addItem: AddItem;
@@ -214,10 +234,14 @@ function VariantPurchase({
     () => [...new Set(variants.map((v) => v.colorName).filter((c): c is string => !!c))],
     [variants],
   );
-  const sizes = useMemo(
-    () => [...new Set(variants.map((v) => v.size).filter((s): s is string => !!s))],
-    [variants],
-  );
+  // Chip order comes from the size guide, not from the order the admin happened
+  // to enter rows in — that's what stops a product reading "XL, S, M, L".
+  // Sizes the guide doesn't know about keep their row order, after the rest.
+  const sizes = useMemo(() => {
+    const present = [...new Set(variants.map((v) => v.size).filter((s): s is string => !!s))];
+    const ranked = sizeOrder.filter((s) => present.includes(s));
+    return [...ranked, ...present.filter((s) => !sizeOrder.includes(s))];
+  }, [variants, sizeOrder]);
   const needColor = colorNames.length > 0;
   const needSize = sizes.length > 0;
 
@@ -240,6 +264,10 @@ function VariantPurchase({
       }),
     [colorNames, colors, variants],
   );
+
+  // The photo strip only replaces the chips when EVERY colour has a photo — a
+  // strip with one placeholder tile in it reads as broken.
+  const everyColorHasPhoto = colorOptions.length > 0 && colorOptions.every((c) => !!c.imageUrl);
 
   const [colorName, setColorName] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
@@ -338,8 +366,20 @@ function VariantPurchase({
 
   return (
     <div className="space-y-4">
-      {/* Color family */}
-      {needColor && (
+      {/* Colour: a strip of product shots when every colour has one (the photo
+          IS the choice), otherwise the hex chips older products rely on. */}
+      {needColor && everyColorHasPhoto && (
+        <ColorStrip
+          options={colorOptions.map((c) => ({
+            name: c.name,
+            imageUrl: c.imageUrl!,
+            soldOut: !colorHasStock(c.name),
+          }))}
+          selected={colorName}
+          onSelect={pickColor}
+        />
+      )}
+      {needColor && !everyColorHasPhoto && (
         <div>
           <p className="mb-1.5 text-sm font-medium text-gray-700">
             Color Family:
@@ -378,10 +418,13 @@ function VariantPurchase({
       {/* Size */}
       {needSize && (
         <div>
-          <p className="mb-1.5 text-sm font-medium text-gray-700">
-            Size:
-            {size && <span className="ml-1.5 font-semibold text-gray-900">{size}</span>}
-          </p>
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-sm font-medium text-gray-700">
+              Select {sizeLabel?.trim() || "Size"}:
+              {size && <span className="ml-1.5 font-semibold text-gray-900">{size}</span>}
+            </p>
+            {sizeChartHtml && <SizeChartModal html={sizeChartHtml} label={sizeLabel?.trim() || "Size"} />}
+          </div>
           <div className="flex flex-wrap gap-2">
             {sizes.map((sz) => {
               const selected = sz === size;
@@ -395,12 +438,14 @@ function VariantPurchase({
                   disabled={disabled}
                   onClick={() => pickSize(sz)}
                   className={[
-                    "min-w-[3rem] rounded-lg border px-4 py-2 text-sm font-semibold transition",
+                    // Rectangular, wrapping chips — a bust run of 14 sizes has
+                    // to read as a grid, not a sentence.
+                    "min-w-[3.25rem] rounded-md border px-3.5 py-2 text-center text-sm font-semibold transition",
                     disabled
                       ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-300" + (soldOut ? " line-through" : "")
                       : selected
-                        ? "border-brand-600 bg-brand-50 text-brand-700 ring-1 ring-brand-600"
-                        : "border-gray-300 text-gray-700 hover:border-gray-400",
+                        ? "border-brand-600 bg-white text-brand-700 ring-1 ring-brand-600"
+                        : "border-gray-200 bg-gray-50/70 text-gray-700 hover:border-gray-400 hover:bg-white",
                   ].join(" ")}
                 >
                   {sz}

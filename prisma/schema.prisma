@@ -49,11 +49,18 @@ model Category {
   metaDescription String?    @db.Text
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+  // Default size guide for everything in this branch of the tree. Resolution
+  // walks UPWARD: a product with no guide of its own uses the nearest ancestor
+  // category that has one, so setting "Apparel S–XXL" on "Men's & Boy's
+  // Fashion" covers every shirt below it. Null = inherit / none.
+  sizeGuideId     Int?
   parent          Category?  @relation("CatTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   children        Category[] @relation("CatTree")
   products        Product[]
   coupons         Coupon[]
+  sizeGuide       SizeGuide? @relation(fields: [sizeGuideId], references: [id], onDelete: SetNull)
 
+  @@index([sizeGuideId])
   @@index([parentId, isActive, sortOrder])
   // Ordering siblings within a parent (sortOrder, then name) — the isActive
   // column sits between parentId and sortOrder in the index above, so that one
@@ -62,12 +69,12 @@ model Category {
 }
 
 model Product {
-  id                 Int                    @id @default(autoincrement())
+  id                 Int                       @id @default(autoincrement())
   // Any node in the Category tree — a root, a mid-level, or a leaf.
   categoryId         Int
   name               String
-  slug               String                 @unique
-  description        String?                @db.Text
+  slug               String                    @unique
+  description        String?                   @db.Text
   // price and discountPrice are stored in the smallest currency unit (paisa)
   // as integers to avoid floating-point rounding on money.
   price              Int
@@ -75,31 +82,43 @@ model Product {
   // Current sourcing/purchase cost per unit (paisa) — what it costs the shop to
   // stock one unit. Feeds COGS: it is SNAPSHOTTED onto OrderItem at checkout so
   // later supplier-price changes never rewrite historical margins.
-  purchaseCost       Int                    @default(0)
-  stock              Int                    @default(0)
+  purchaseCost       Int                       @default(0)
+  stock              Int                       @default(0)
   // Low-stock alert threshold (Phase 5). When 0 < stock <= this, the product
   // surfaces in the admin low-stock alert + daily digest. 0 disables it.
-  lowStockThreshold  Int                    @default(0)
+  lowStockThreshold  Int                       @default(0)
   // Whether the "In stock (N available)" count is shown on the storefront for a
   // simple (variant-less) product. Availability (sold-out disabling) is
   // unaffected — this only hides the number. Mirrors ProductVariant.showStock.
-  showStock          Boolean                @default(true)
+  showStock          Boolean                   @default(true)
   // Optional storefront colour for this product's price text, as a #rrggbb hex
   // string. Null = use the theme default (near-black). Purely presentational:
   // it never affects the amount charged. A variant's own priceColor wins over
   // this one when a variant is selected.
   priceColor         String?
-  isFeatured         Boolean                @default(false)
-  status             ProductStatus          @default(ACTIVE)
+  // ── Sizing ──
+  // Which size guide drives this product's size chips, their label ("Bust
+  // Size") and the Size Chart link. Null = inherit the category's (see
+  // Category.sizeGuideId); the two fields below override the resolved guide
+  // for a one-off product that doesn't deserve a guide of its own.
+  sizeGuideId        Int?
+  sizeLabel          String?
+  sizeChart          String?                   @db.Text
+  // ── Inventory ──
+  // Root of the generated variant SKUs ("SAR" → "SAR-PUR-32"). Null = this
+  // product's variants carry whatever SKUs were typed, or none at all.
+  baseSku            String?
+  isFeatured         Boolean                   @default(false)
+  status             ProductStatus             @default(ACTIVE)
   promoBadge         String?
   // Optional SEO overrides (Phase 2); blank → default from name/description.
   metaTitle          String?
-  metaDescription    String?                @db.Text
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  metaDescription    String?                   @db.Text
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
   // Restrict: a category can't be deleted while products reference it (the
   // admin delete flow blocks this up front — see getCategoryDeleteImpact).
-  category           Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category           Category                  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   images             ProductImage[]
   orderItems         OrderItem[]
   flashSales         FlashSaleProduct[]
@@ -115,7 +134,11 @@ model Product {
   coupons            Coupon[]
   cartItems          CustomerCartItem[]
   cartEvents         CartEvent[]
+  sizeGuide          SizeGuide?                @relation(fields: [sizeGuideId], references: [id], onDelete: SetNull)
 
+  @@index([sizeGuideId])
+  // Looking a product up by the root of its SKUs.
+  @@index([baseSku])
   @@index([categoryId, status])
   @@index([isFeatured, status])
   // Full-text search over name + description. The default parser is
@@ -137,11 +160,57 @@ model Product {
 // When a product has any variants the customer MUST pick one; that variant's
 // own price and stock are authoritative (product price becomes a "from" only).
 // colorName links to a ProductColor by name, which supplies the swatch image.
+// A reusable set of sizes — the chips a shopper picks from, what to call them,
+// and the chart behind the "Size Chart" link. Attached to a Category (inherited
+// down the tree) and overridable per Product, so "Blouse / bust sizes" is typed
+// once and every blouse gets 32…52 in the right order with the right label.
+//
+// The guide is a TEMPLATE, not a stock record: a product's actual sellable
+// combinations still live in ProductVariant. Deleting a guide only unsets the
+// pointers (SetNull) — no product loses its variants.
+model SizeGuide {
+  id         Int              @id @default(autoincrement())
+  // Admin-facing name, e.g. "Blouse / bust sizes".
+  name       String
+  // Shopper-facing label: "Bust Size" renders as "Select Bust Size:".
+  // Null = the generic "Size".
+  sizeLabel  String?
+  // Markdown table shown behind the storefront's "Size Chart" link, rendered
+  // by lib/markdown.ts like every other admin-authored block.
+  chart      String?          @db.Text
+  isActive   Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  values     SizeGuideValue[]
+  categories Category[]
+  products   Product[]
+}
+
+// One chip in a guide. Ordering is explicit because size order is never
+// alphabetical or numeric — S/M/L/XL, and bust runs 38, 40, 42 after skipping
+// the odd numbers. Unique per guide so a duplicate chip can't be created.
+model SizeGuideValue {
+  id        Int       @id @default(autoincrement())
+  guideId   Int
+  value     String // "32", "M", "XXL"
+  sortOrder Int       @default(0)
+  guide     SizeGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@unique([guideId, value])
+  @@index([guideId, sortOrder])
+}
+
 model ProductVariant {
   id            Int         @id @default(autoincrement())
   productId     Int
   size          String? // "500 ml", "M", "XL"
   colorName     String? // matches a ProductColor.name for the swatch/image
+  // Stock-keeping unit for this exact option, usually generated from the
+  // product's baseSku ("SAR-PUR-32"). Unique shop-wide when set; null for the
+  // products and rows that don't use SKUs. NOTE: variants are wiped and
+  // recreated on every product save (see server/products/admin.ts), so the
+  // admin form must round-trip this value — it is not regenerated per save.
+  sku           String?     @unique
   price         Int // paisa — authoritative "regular" price for this option
   // Optional sale price (paisa). When set (and below price) it's the amount
   // actually charged; price shows struck-through. Null = no discount.
