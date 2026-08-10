@@ -91,17 +91,25 @@ Who it is for, the problem it solves, and what makes it different. Keep this to 
   },
   {
     label: "🏭 Manufacturing Details",
-    hint: "SKU, origin, contact",
+    hint: "Bulleted SKU, origin, contact",
     row: {
       title: "Manufacturing Details",
       icon: "🏭",
       isOpen: false,
-      content: `| Field | Detail |
-| --- | --- |
-| **SKU** | value |
-| **Marketed By** | value |
-| **Country Of Origin** | value |
-| **For Complaints** | phone · email |`,
+      // A `::facts` list rather than the two-up `::specs` grid: these values are
+      // long (addresses, contact lines) and read better one per row. Add or
+      // remove `Label: Value` lines freely — the layout follows.
+      content: `::facts
+SKU: F31570-912219B
+Quantity: 1N
+Marketed By: Aditya Birla Fashion and Retail Limited (TCNS Division) Delhi 110030
+Name of Manufacturer: Aditya Birla Fashion and Retail Limited (TCNS Division)
+Place of Manufacturer: Aditya Birla Fashion and Retail Limited (TCNS Division)
+Country Of Origin: India
+For Complaints: Customer Care No 7316830787, customercare.tcns@abfrl.adityabirla.com
+Registered Office Address: Piramal Agastya Corporate Park, Building 'A', 4th and 5th Floor, Mumbai - 400070
+Communication Address: 119, W House, New Manglapuri, New Delhi
+::`,
     },
   },
   {
@@ -229,13 +237,16 @@ Care: value
   },
   {
     label: "🏭 Manufacturing details",
-    hint: "SKU, origin, contact",
-    md: `| Field | Detail |
-| --- | --- |
-| **SKU** | value |
-| **Marketed By** | value |
-| **Country Of Origin** | value |
-| **For Complaints** | phone · email |`,
+    hint: "Bulleted label : value rows",
+    md: `::facts
+SKU: value
+Quantity: value
+Marketed By: value
+Name of Manufacturer: value
+Country Of Origin: value
+For Complaints: phone · email
+Registered Office Address: value
+::`,
   },
   {
     label: "❓ Question & answer",

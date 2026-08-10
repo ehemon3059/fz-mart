@@ -42,19 +42,27 @@ const isTableDivider = (l: string) => /^\s*\|[\s:|-]+\|\s*$/.test(l) && l.includ
 const splitCells = (l: string) =>
   l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
 
-/* ─────────── spec grid ─────────── */
+/* ─────────── label / value blocks ─────────── */
 /**
- * `::specs` … `::` — the marketplace-style "Product Details" block: label above
- * value, two per row, hairline separated. A pipe table gets heavy fast once a
- * garment carries twenty attributes, and its `Attribute | Detail` header adds
- * nothing the labels don't already say.
+ * Two fenced blocks share one body format — one `Label: Value` per line, closed
+ * by a bare `::` — and differ only in how they are laid out:
  *
- * Body lines are `Label: Value`. A block where no line has a colon is read as
- * alternating label / value lines instead, so an admin can paste a spec list
- * copied off a marketplace page straight in.
+ *   `::specs` … `::`  the marketplace "Product Details" grid — label above
+ *                     value, two per row, hairline separated. A pipe table gets
+ *                     heavy once a garment carries twenty attributes, and its
+ *                     `Attribute | Detail` header says nothing the labels don't.
+ *   `::facts` … `::`  the "Manufacturing Details" list — one bulleted row each,
+ *                     label and value in aligned columns split by a colon. Suits
+ *                     a handful of long values (addresses, contact lines) that
+ *                     would wrap badly in a two-up grid.
+ *
+ * A block where no line has a colon is read as alternating label / value lines
+ * instead, so an admin can paste a spec list copied off a marketplace page
+ * straight in.
  */
 const SPEC_OPEN_RE = /^\s*::+\s*(?:specs?|details|product[\s-]?details)\s*$/i;
-const SPEC_CLOSE_RE = /^\s*::+\s*$/;
+const FACTS_OPEN_RE = /^\s*::+\s*(?:facts?|fields?|info)\s*$/i;
+const BLOCK_CLOSE_RE = /^\s*::+\s*$/;
 
 /** Tolerate list markers and bold wrapping around a pasted label. */
 const cleanCell = (s: string) =>
@@ -114,26 +122,32 @@ export function renderMarkdown(src: string): string {
       continue;
     }
 
-    // Spec grid — `::specs` … `::`
-    if (SPEC_OPEN_RE.test(line)) {
+    // Label/value block — `::specs` (grid) or `::facts` (bulleted list)
+    const isSpecs = SPEC_OPEN_RE.test(line);
+    if (isSpecs || FACTS_OPEN_RE.test(line)) {
       i++;
       const body: string[] = [];
-      while (i < lines.length && !SPEC_CLOSE_RE.test(lines[i])) {
+      while (i < lines.length && !BLOCK_CLOSE_RE.test(lines[i])) {
         body.push(lines[i]);
         i++;
       }
       if (i < lines.length) i++; // consume the closing `::`
       const pairs = specPairs(body).filter(([label, value]) => label || value);
       if (pairs.length) {
+        // `not-prose` keeps Tailwind Typography's dl/dt/dd/ul rules off these —
+        // the storefront and the admin preview both render inside `.prose`.
         const items = pairs
-          .map(
-            ([label, value]) =>
-              `<div class="fz-spec"><dt>${inline(label)}</dt><dd>${inline(value) || "&mdash;"}</dd></div>`,
+          .map(([label, value]) =>
+            isSpecs
+              ? `<div class="fz-spec"><dt>${inline(label)}</dt><dd>${inline(value) || "&mdash;"}</dd></div>`
+              : `<li><span class="fz-fact-k">${inline(label)}</span><span class="fz-fact-c" aria-hidden="true">:</span><span class="fz-fact-v">${inline(value) || "&mdash;"}</span></li>`,
           )
           .join("");
-        // `not-prose` keeps Tailwind Typography's dl/dt/dd rules off the grid —
-        // the storefront and the admin preview both render it inside `.prose`.
-        out.push(`<dl class="fz-specs not-prose">${items}</dl>`);
+        out.push(
+          isSpecs
+            ? `<dl class="fz-specs not-prose">${items}</dl>`
+            : `<ul class="fz-facts not-prose">${items}</ul>`,
+        );
       }
       continue;
     }
@@ -197,7 +211,8 @@ export function renderMarkdown(src: string): string {
       !ordered.test(lines[i]) &&
       !BLOCKQUOTE_RE.test(lines[i]) &&
       !isTableRow(lines[i]) &&
-      !SPEC_OPEN_RE.test(lines[i])
+      !SPEC_OPEN_RE.test(lines[i]) &&
+      !FACTS_OPEN_RE.test(lines[i])
     ) {
       para.push(lines[i].trim());
       i++;
@@ -211,7 +226,7 @@ export function renderMarkdown(src: string): string {
 /** Markdown → plain text, for meta descriptions / JSON-LD / previews. */
 export function markdownToPlainText(src: string): string {
   return src
-    .replace(/^\s*::+\s*(?:specs?|details|product[\s-]?details)?\s*$/gim, "") // spec-grid fences
+    .replace(/^\s*::+\s*(?:specs?|details|product[\s-]?details|facts?|fields?|info)?\s*$/gim, "") // block fences
     .replace(/^\s*\|[\s:|-]+\|\s*$/gm, "") // table divider rows
     .replace(/^\s*(---+|\*\*\*+|___+)\s*$/gm, "") // section dividers
     .replace(/\|/g, " ")

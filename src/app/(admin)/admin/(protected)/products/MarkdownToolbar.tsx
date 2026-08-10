@@ -140,6 +140,9 @@ const SPEC_TABLE = "| Attribute | Detail |\n| --- | --- |\n| **Label** | Value |
 /** `::specs` block — label above value, two per row. One `Label: Value` per
  *  line, so an admin adds attributes by typing more lines. */
 const SPEC_GRID = "::specs\nLabel: Value\nLabel: Value\nLabel: Value\nLabel: Value\n::";
+/** `::facts` block — one bulleted `Label : Value` row each, for longer values
+ *  (addresses, contact lines) that read badly two-up. */
+const FACT_LIST = "::facts\nLabel: Value\nLabel: Value\nLabel: Value\nLabel: Value\n::";
 
 interface Props {
   actions: MarkdownActions;
@@ -228,6 +231,11 @@ export default function MarkdownToolbar({
         title="Product details grid (label above value)"
         icon="specGrid"
         onClick={() => insertBlock(SPEC_GRID)}
+      />
+      <TB
+        title="Bulleted details list (label : value)"
+        icon="factList"
+        onClick={() => insertBlock(FACT_LIST)}
       />
       <TB title="Divider" icon="minus" onClick={() => insertBlock("---")} />
       <TB

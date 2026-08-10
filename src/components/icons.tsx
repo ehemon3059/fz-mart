@@ -39,6 +39,8 @@ const PATHS: Record<string, string> = {
   minus: "M5 12h14",
   // Two columns of label-over-value pairs — the `::specs` product-detail grid.
   specGrid: "M3 5h5 M3 9h7 M14 5h5 M14 9h7 M3 15h5 M3 19h7 M14 15h5 M14 19h7",
+  // Bulleted label : value rows — the `::facts` manufacturing-detail list.
+  factList: "M3.5 6h.01 M7 6h5 M14 6h6 M3.5 12h.01 M7 12h5 M14 12h6 M3.5 18h.01 M7 18h5 M14 18h6",
   globe: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M2 12h20 M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10Z",
 };
 

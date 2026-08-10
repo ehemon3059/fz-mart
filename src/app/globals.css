@@ -124,6 +124,65 @@ label {
   text-decoration: underline;
 }
 
+/* `::facts` — the "Manufacturing Details" variant: one bulleted row per field,
+   label and value in columns split by a colon. The label column is a fixed
+   width so the colons line up down the block; below 640px the value drops to
+   its own line and the colon is dropped with it. */
+.fz-facts {
+  list-style: none;
+  margin: 0.25rem 0;
+  padding: 0;
+}
+
+.fz-facts li {
+  display: grid;
+  grid-template-columns: 0.9rem minmax(0, 13.5rem) 0.9rem minmax(0, 1fr);
+  align-items: baseline;
+  padding: 0.3rem 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.fz-facts li::before {
+  content: "•";
+  color: #57534e;
+  line-height: inherit;
+}
+
+.fz-facts .fz-fact-k {
+  min-width: 0;
+  color: #44413c;
+}
+
+.fz-facts .fz-fact-c {
+  color: #57534e;
+}
+
+.fz-facts .fz-fact-v {
+  min-width: 0;
+  font-weight: 600;
+  color: #23211e;
+  overflow-wrap: anywhere;
+}
+
+.fz-facts .fz-fact-v a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+@media (max-width: 639px) {
+  .fz-facts li {
+    grid-template-columns: 0.9rem minmax(0, 1fr);
+    row-gap: 0.1rem;
+  }
+  .fz-facts .fz-fact-c {
+    display: none;
+  }
+  .fz-facts .fz-fact-v {
+    grid-column: 2;
+  }
+}
+
 /* ── Pages admin / storefront prose ──────────────────────────────
    Used by .prose-editor (RichTextEditor) and .prose-article (storefront
    page view). Kept separate from Tailwind Typography's `.prose` so the
