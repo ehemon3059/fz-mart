@@ -25,7 +25,8 @@ interface Props {
 }
 
 /* ─────────── section snippets ─────────── */
-const SNIPPETS: MarkdownSnippet[] = [
+/** `md` is required here — FULL_LAYOUT below is stitched together from it. */
+const SNIPPETS: (MarkdownSnippet & { md: string })[] = [
   {
     label: "🛍️ Product intro",
     hint: "Headline + hook",
@@ -146,7 +147,7 @@ export default function DescriptionEditor({ value, onChange, maxLength = 8000 }:
         <>
           <MarkdownToolbar
             actions={actions}
-            snippets={SNIPPETS}
+            snippets={[{ items: SNIPPETS }]}
             fullLayout={{ label: "✨ Insert the full layout", md: FULL_LAYOUT }}
           />
 

@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import ImageCustomizer from "@/components/admin/ImageCustomizer";
-import DescriptionEditor from "./DescriptionEditor";
 import AccordionBuilder, { type AccordionSectionRow } from "./AccordionBuilder";
 import { saveProduct } from "./actions";
 import type { listAllCategories } from "@/server/categories/admin";
@@ -16,10 +15,6 @@ import { resolvePrimaryImage } from "@/lib/product-images";
    and product pages stay fast. Up to 10 per product; the first is the cover. */
 const PRODUCT_IMG = { width: 1000, height: 1000, maxBytes: 200 * 1024 };
 const MAX_IMAGES = 10;
-/* The description is now the whole product story (specs, features, shipping,
-   warranty) written in Markdown, so it needs far more room than a blurb.
-   Well under the TEXT column limit. */
-const DESCRIPTION_MAX = 8000;
 
 type Category = Awaited<ReturnType<typeof listAllCategories>>[number];
 type Product = NonNullable<Awaited<ReturnType<typeof getProductById>>>;
@@ -690,6 +685,9 @@ export default function ProductForm({ categories, product }: Props) {
       {/* hidden inputs for the server action — saveProduct expects taka, not paisa */}
       <input type="hidden" name="name" value={form.name} />
       <input type="hidden" name="categoryId" value={form.categoryId} />
+      {/* No longer editable — the accordion is the only body copy. Still
+          submitted so an existing product's description survives a save; it
+          continues to feed search, feeds and the meta-description fallback. */}
       <input type="hidden" name="description" value={form.description} />
       <input type="hidden" name="price" value={(() => { const p = submitPriceTaka(); return p === "" ? "" : String(p); })()} />
       <input type="hidden" name="discountPrice" value={isVariantMode ? "" : paisaToTakaStr(form.discountPrice)} />
@@ -752,8 +750,15 @@ export default function ProductForm({ categories, product }: Props) {
 
       <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:gap-8 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-6 min-w-0">
-          <Card icon="info" title="Basic info" hint="The essentials your customers will see.">
-            <div className="space-y-4">
+          {/* The product's name and its whole story in one card. The separate
+              "Basic info" card and its flat Description editor are gone — the
+              accordion panels are the only body copy the storefront shows. */}
+          <Card
+            icon="grid"
+            title="Product Information with Dynamic accordion"
+            hint="The name customers see, and the collapsible panels under “Features & Specs” on the product page."
+          >
+            <div className="space-y-5">
               <div>
                 <Label required>Product name</Label>
                 <FieldShell error={errors.name}>
@@ -767,41 +772,14 @@ export default function ProductForm({ categories, product }: Props) {
                 </FieldShell>
                 <ErrorText>{errors.name}</ErrorText>
               </div>
-              <div>
-                <Label
-                  hint={
-                    form.accordionSections.length > 0
-                      ? "still used for SEO & search — the accordion below replaces it on the product page"
-                      : "specs, features, shipping & warranty — all in one"
-                  }
-                >
-                  Description
-                </Label>
-                <DescriptionEditor
-                  value={form.description}
-                  onChange={(md) => set("description", md)}
-                  maxLength={DESCRIPTION_MAX}
+
+              <div className="border-t border-stone-100 pt-5">
+                <AccordionBuilder
+                  value={form.accordionSections}
+                  onChange={(rows) => set("accordionSections", rows)}
                 />
               </div>
             </div>
-          </Card>
-
-          {/* Collapsible panels for the storefront's "Features & Specs" tab.
-              Optional: with no sections the tab keeps rendering the flat
-              description above, so existing products are unaffected. */}
-          <Card
-            icon="grid"
-            title="Features & Specs accordion"
-            hint={
-              form.accordionSections.length > 0
-                ? "These panels replace the description under “Features & Specs” on the product page."
-                : "Optional — break the details into collapsible panels instead of one long description."
-            }
-          >
-            <AccordionBuilder
-              value={form.accordionSections}
-              onChange={(rows) => set("accordionSections", rows)}
-            />
           </Card>
 
           {/* Pricing mode selector — a product is priced by a single price/stock
@@ -1428,7 +1406,7 @@ export default function ProductForm({ categories, product }: Props) {
                 className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
               />
             </FieldShell>
-            <Label hint="optional · ~160 chars · defaults to the description">Meta description</Label>
+            <Label hint="optional · ~160 chars · worth writing">Meta description</Label>
             <FieldShell>
               <textarea
                 value={form.metaDescription}
@@ -1440,7 +1418,7 @@ export default function ProductForm({ categories, product }: Props) {
               />
             </FieldShell>
             <p className="mt-2 text-[12px] text-stone-400">
-              Leave blank to auto-generate from the product name and description.
+              Leave blank and Google falls back to a generic line built from the product name.
             </p>
           </Card>
         </div>

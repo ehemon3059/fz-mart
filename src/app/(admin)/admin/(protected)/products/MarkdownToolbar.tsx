@@ -16,8 +16,19 @@ import { Icon, type IconName } from "@/components/icons";
 
 export interface MarkdownSnippet {
   label: string;
-  hint: string;
-  md: string;
+  hint?: string;
+  /** Markdown dropped at the caret. Ignored when `onSelect` is given. */
+  md?: string;
+  /** Runs instead of inserting `md`, for entries that do something other than
+   *  write into the current document — adding a whole accordion panel, say. */
+  onSelect?: () => void;
+}
+
+/** A labelled run of entries in the insert menu. A group with no label just
+ *  renders its items, which is all a single-purpose menu needs. */
+export interface MarkdownSnippetGroup {
+  label?: string;
+  items: MarkdownSnippet[];
 }
 
 export interface EmojiBundle {
@@ -131,13 +142,13 @@ interface Props {
   actions: MarkdownActions;
   /** H2 belongs to the top-level description only; accordion panels start at H3. */
   showH2?: boolean;
-  /** Ready-made blocks for the insert menu. Omit to hide the menu entirely. */
-  snippets?: MarkdownSnippet[];
+  /** Ready-made entries for the insert menu. Omit to hide the menu entirely. */
+  snippets?: MarkdownSnippetGroup[];
   /** Label on the insert-menu button — "Add section" reads wrong where a
    *  "section" already means an accordion panel. */
   snippetLabel?: string;
-  /** Optional "insert everything" row at the bottom of the snippet menu. */
-  fullLayout?: { label: string; md: string };
+  /** Optional "insert everything" row pinned to the bottom of the menu. */
+  fullLayout?: MarkdownSnippet;
   emojiBundles?: EmojiBundle[];
 }
 
@@ -172,10 +183,13 @@ export default function MarkdownToolbar({
     };
   }, [menu]);
 
-  const insert = (md: string) => {
-    insertBlock(md);
+  const pick = (s: MarkdownSnippet) => {
+    if (s.onSelect) s.onSelect();
+    else if (s.md) insertBlock(s.md);
     setMenu(null);
   };
+
+  const hasSnippets = !!snippets?.some((g) => g.items.length > 0);
 
   const menuButton = (kind: "emoji" | "snippet", body: React.ReactNode) => (
     <button
@@ -225,8 +239,7 @@ export default function MarkdownToolbar({
         </>,
       )}
 
-      {snippets &&
-        snippets.length > 0 &&
+      {hasSnippets &&
         menuButton(
           "snippet",
           <>
@@ -273,28 +286,43 @@ export default function MarkdownToolbar({
       )}
 
       {menu === "snippet" && snippets && (
-        <div className="absolute left-2 top-full z-20 mt-1 max-h-[340px] w-[300px] overflow-y-auto rounded-xl border border-stone-200 bg-white p-1.5 shadow-pop">
-          {snippets.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => insert(s.md)}
-              className="flex w-full flex-col items-start rounded-lg px-2.5 py-2 text-left transition hover:bg-stone-50"
-            >
-              <span className="text-[13px] font-semibold text-stone-800">{s.label}</span>
-              <span className="text-[11.5px] text-stone-400">{s.hint}</span>
-            </button>
-          ))}
+        <div className="absolute left-2 top-full z-20 mt-1 max-h-[min(60vh,420px)] w-[300px] overflow-y-auto overscroll-contain rounded-xl border border-stone-200 bg-white p-1.5 shadow-pop">
+          {snippets.map((group, gi) =>
+            group.items.length === 0 ? null : (
+              <div key={group.label ?? gi} className={gi > 0 ? "mt-1 border-t border-stone-100 pt-1" : undefined}>
+                {group.label && (
+                  <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+                    {group.label}
+                  </p>
+                )}
+                {group.items.map((s) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pick(s)}
+                    className="flex w-full flex-col items-start rounded-lg px-2.5 py-2 text-left transition hover:bg-stone-50"
+                  >
+                    <span className="text-[13px] font-semibold text-stone-800">{s.label}</span>
+                    {s.hint && <span className="text-[11.5px] text-stone-400">{s.hint}</span>}
+                  </button>
+                ))}
+              </div>
+            ),
+          )}
           {fullLayout && (
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => insert(fullLayout.md)}
-              className="mt-1 w-full rounded-lg border border-dashed border-stone-300 bg-stone-50/60 px-2.5 py-2 text-[12.5px] font-semibold text-stone-600 transition hover:border-brand-300 hover:text-brand-600"
-            >
-              {fullLayout.label}
-            </button>
+            // Pinned: the menu scrolls, and the do-it-all action should not be
+            // the one thing the admin has to hunt for at the bottom.
+            <div className="sticky bottom-0 -mx-1.5 -mb-1.5 mt-1 border-t border-stone-100 bg-white p-1.5">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(fullLayout)}
+                className="w-full rounded-lg border border-dashed border-stone-300 bg-stone-50/60 px-2.5 py-2 text-[12.5px] font-semibold text-stone-600 transition hover:border-brand-300 hover:text-brand-600"
+              >
+                {fullLayout.label}
+              </button>
+            </div>
           )}
         </div>
       )}

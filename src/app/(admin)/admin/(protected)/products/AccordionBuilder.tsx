@@ -9,10 +9,12 @@
  * the selected section on the right, and a live accordion preview underneath
  * that renders exactly what the storefront will show.
  *
+ * These panels are the product's only body copy: the form has no flat
+ * Description field, so an empty set leaves "Features & Specs" blank.
+ *
  * Content is Markdown, rendered through the same `renderMarkdown` used by the
  * storefront, so tables/bullets/emoji look identical in preview and production.
- * The body editor uses the same ./MarkdownToolbar as the product description —
- * one set of buttons, emoji picker and insert menu across both surfaces.
+ * The body editor's toolbar lives in ./MarkdownToolbar.
  * State lives here and is lifted to ProductForm, which serialises it into the
  * hidden `accordionSections` input — one Save persists the whole set, and array
  * order IS display order (the server assigns sortOrder positionally).
@@ -221,7 +223,6 @@ export default function AccordionBuilder({ value, onChange }: Props) {
   const [selected, setSelected] = useState<number | null>(value.length ? 0 : null);
   const [tab, setTab] = useState<"write" | "preview">("write");
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [presetOpen, setPresetOpen] = useState(false);
   const [group, setGroup] = useState(0);
   // Which preview panels the admin has toggled open, so the preview behaves
   // like the real accordion instead of following isOpen only.
@@ -237,7 +238,36 @@ export default function AccordionBuilder({ value, onChange }: Props) {
     onChange([...value, row]);
     setSelected(value.length);
     setTab("write");
-    setPresetOpen(false);
+  };
+
+  /** A panel the admin has not written anything into yet. */
+  const isUntouched = (row: AccordionSectionRow | null) =>
+    !!row && !row.title.trim() && !row.content.trim() && !row.icon;
+
+  /**
+   * Ready-made panels are reached from the editor toolbar, which means there is
+   * always a panel open when one is picked. Filling that panel in place is what
+   * the admin means when they add a blank one and immediately reach for a
+   * preset; once they have written something, the preset becomes a new panel.
+   */
+  const applyPreset = (row: AccordionSectionRow) => {
+    if (selected != null && isUntouched(current)) {
+      setRow(selected, { ...row });
+      setTab("write");
+    } else {
+      addRow({ ...row });
+    }
+  };
+
+  /** The four-panel layout from the reference build, in one go. */
+  const applyPresetSet = () => {
+    const rows = PRESETS.slice(0, 4).map((p) => ({ ...p.row }));
+    // Drop the untouched panel it was triggered from — it would only be an
+    // empty panel sitting above the set.
+    const base = selected != null && isUntouched(current) ? value.filter((_, i) => i !== selected) : value;
+    onChange([...base, ...rows]);
+    setSelected(base.length);
+    setTab("write");
   };
 
   const removeRow = (idx: number) => {
@@ -286,9 +316,9 @@ export default function AccordionBuilder({ value, onChange }: Props) {
           <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50/60 px-4 py-6 text-center">
             <p className="text-[13px] font-semibold text-stone-600">No accordion sections yet</p>
             <p className="mx-auto mt-1 max-w-sm text-[12px] text-stone-400">
-              Add sections to replace the plain description with collapsible panels under{" "}
-              <strong className="font-semibold text-stone-500">Features &amp; Specs</strong>. Leave this empty to keep
-              showing the description.
+              These collapsible panels are the product&apos;s details under{" "}
+              <strong className="font-semibold text-stone-500">Features &amp; Specs</strong>. Leave this empty and that
+              tab has nothing to show.
             </p>
           </div>
         ) : (
@@ -363,56 +393,15 @@ export default function AccordionBuilder({ value, onChange }: Props) {
           </div>
         )}
 
-        {/* add buttons */}
-        <div className="relative mt-2 flex gap-2">
-          <button
-            type="button"
-            onClick={() => addRow(blankRow())}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 py-2 text-[13px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600"
-          >
-            <Icon name="plus" size={15} /> Blank section
-          </button>
-          <button
-            type="button"
-            onClick={() => setPresetOpen((o) => !o)}
-            className={[
-              "flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-[13px] font-semibold transition",
-              presetOpen
-                ? "border-brand-400 bg-brand-50/40 text-brand-600"
-                : "border-stone-300 bg-stone-50/60 text-stone-500 hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600",
-            ].join(" ")}
-          >
-            ✨ Ready-made <Icon name="chevronDown" size={13} />
-          </button>
-
-          {presetOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-[300px] overflow-hidden rounded-xl border border-stone-200 bg-white p-1.5 shadow-pop">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => addRow({ ...p.row })}
-                  className="flex w-full flex-col items-start rounded-lg px-2.5 py-2 text-left transition hover:bg-stone-50"
-                >
-                  <span className="text-[13px] font-semibold text-stone-800">{p.label}</span>
-                  <span className="text-[11.5px] text-stone-400">{p.hint}</span>
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  // The four-section layout from the reference build.
-                  onChange([...value, ...PRESETS.slice(0, 4).map((p) => ({ ...p.row }))]);
-                  setSelected(value.length);
-                  setPresetOpen(false);
-                }}
-                className="mt-1 w-full rounded-lg border border-dashed border-stone-300 bg-stone-50/60 px-2.5 py-2 text-[12.5px] font-semibold text-stone-600 transition hover:border-brand-300 hover:text-brand-600"
-              >
-                ✨ Insert all four sections
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Ready-made panels used to sit beside this button; they now live in
+            the editor's "Add block" menu, so adding a panel is one action. */}
+        <button
+          type="button"
+          onClick={() => addRow(blankRow())}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 bg-stone-50/60 py-2 text-[13px] font-semibold text-stone-500 transition hover:border-brand-300 hover:bg-brand-50/30 hover:text-brand-600"
+        >
+          <Icon name="plus" size={15} /> Blank section
+        </button>
       </div>
 
       {/* ── editor for the selected section ── */}
@@ -537,8 +526,21 @@ export default function AccordionBuilder({ value, onChange }: Props) {
                   <MarkdownToolbar
                     actions={actions}
                     showH2={false}
-                    snippets={CONTENT_BLOCKS}
                     snippetLabel="Add block"
+                    snippets={[
+                      // Ready-made first: it is the whole-section starting
+                      // point, and the content blocks are the finer tools.
+                      {
+                        label: "Ready-made sections",
+                        items: PRESETS.map((p) => ({
+                          label: p.label,
+                          hint: p.hint,
+                          onSelect: () => applyPreset(p.row),
+                        })),
+                      },
+                      { label: "Insert into this section", items: CONTENT_BLOCKS },
+                    ]}
+                    fullLayout={{ label: "✨ Insert all four sections", onSelect: applyPresetSet }}
                   />
                   <textarea
                     ref={ref}
