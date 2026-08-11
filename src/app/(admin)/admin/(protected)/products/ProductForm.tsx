@@ -17,6 +17,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { inheritedGuideId } from "@/lib/size-guide-inheritance";
+import { inheritedSellingType } from "@/lib/category-inheritance";
 import AccordionBuilder from "./AccordionBuilder";
 import { saveProduct } from "./actions";
 import { Card, ErrorText, FieldShell, Label, Toggle } from "./form/atoms";
@@ -38,6 +39,13 @@ import {
   type SellingType,
   type VariantRow,
 } from "./form/types";
+
+/** Prose names for the three selling types, for confirms and inline notes. */
+const SELLING_TYPE_NAMES: Record<SellingType, string> = {
+  single: "as a single item",
+  colors: "by colour",
+  sizes: "by size",
+};
 
 interface Props {
   categories: Category[];
@@ -92,17 +100,72 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
     ? (sizeGuides.find((g) => String(g.id) === form.sizeGuideId) ?? null)
     : inheritedGuide;
 
-  /** A category with a size guide is telling us this thing comes in sizes. */
-  const suggestion = useMemo(
-    () =>
-      !isEdit && inheritedGuide
-        ? {
-            type: "sizes" as SellingType,
-            reason: `This category uses the “${inheritedGuide.name}” size guide.`,
-          }
-        : null,
-    [isEdit, inheritedGuide],
+  /* ── selling type: the category decides, the admin may overrule ── */
+  // How the chosen category says its products are sold (its own setting, or the
+  // nearest ancestor's). Null only while no category is picked, or if the tree
+  // is half-configured.
+  const categoryType = useMemo(
+    () => inheritedSellingType(categories, form.categoryId ? Number(form.categoryId) : null, true),
+    [categories, form.categoryId],
   );
+  /** The category that actually supplied the type, for the "Set by …" line. */
+  const typeSource = useMemo(() => {
+    if (!form.categoryId) return null;
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    let cursor: number | null = Number(form.categoryId);
+    const seen = new Set<number>();
+    while (cursor != null && !seen.has(cursor)) {
+      seen.add(cursor);
+      const node = byId.get(cursor);
+      if (!node) return null;
+      if (node.defaultSellingType) return node.name;
+      cursor = node.parentId;
+    }
+    return null;
+  }, [categories, form.categoryId]);
+
+  // Deliberate deviation from the category's type. Editing starts overridden:
+  // a saved product's own shape always wins, so re-typing a category can never
+  // rewrite products that already exist.
+  const [typeOverridden, setTypeOverridden] = useState(isEdit);
+  // Locked only while the form genuinely matches what the category asked for.
+  // If auto-apply was skipped (rows already authored), the deviation note shows
+  // instead of a lock that contradicts what's on screen.
+  const typeLocked = !typeOverridden && categoryType != null && form.sellingType === categoryType;
+  const deviationNote =
+    categoryType && form.sellingType !== categoryType
+      ? `Unusual for this category — ${typeSource ?? "it"} normally sells ${SELLING_TYPE_NAMES[categoryType]}.`
+      : null;
+
+  // Everything downstream is shaped by the category, so a new product asks for
+  // it first and reveals the rest once it's answered. This also removes the old
+  // ordering hazard where a late category change could contradict — or discard
+  // — option rows already built. Editing is never gated; it has a category.
+  const ready = isEdit || !!form.categoryId;
+
+  /**
+   * Picking a category on a new product adopts its selling type. Skipped once
+   * the admin has overridden the type by hand, and skipped when option rows
+   * already exist — switching then would discard real work behind their back.
+   */
+  const changeCategory = (next: string) => {
+    setForm((f) => {
+      const resolved = inheritedSellingType(categories, next ? Number(next) : null, true);
+      const adopt =
+        !isEdit && !typeOverridden && resolved != null && f.variants.length === 0 && f.colors.length === 0;
+      return adopt ? { ...f, categoryId: next, sellingType: resolved } : { ...f, categoryId: next };
+    });
+  };
+
+  /** Reaching for another card while locked. Confirms once, then unlocks. */
+  const requestTypeChange = (next: SellingType) => {
+    const label = typeSource ?? "This category";
+    if (next !== form.sellingType && !window.confirm(`${label} sells ${SELLING_TYPE_NAMES[categoryType ?? next]}. Sell this product as ${SELLING_TYPE_NAMES[next]} instead?`)) {
+      return;
+    }
+    setTypeOverridden(true);
+    if (next !== form.sellingType) changeSellingType(next);
+  };
 
   const liveErrors = useMemo(() => {
     const e: Record<string, string> = {};
@@ -416,7 +479,7 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                 <Label required>Category</Label>
                 <CategorySelect
                   value={form.categoryId}
-                  onChange={(v) => set("categoryId", v)}
+                  onChange={changeCategory}
                   error={errors.categoryId}
                   categories={categories}
                 />
@@ -425,9 +488,38 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
             </div>
           </Card>
 
+          {!ready && (
+            <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50/60 px-5 py-10 text-center">
+              <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-stone-400 shadow-sm">
+                <Icon name="tag" size={18} />
+              </span>
+              <p className="mt-3 text-[14px] font-semibold text-stone-700">Pick a category to continue</p>
+              <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-stone-400">
+                The category decides how this product is sold — one price, colours, or sizes — and the rest of the
+                form follows from that.
+              </p>
+            </div>
+          )}
+
           {/* ── 2. How it's sold ────────────────────────────── */}
-          <Card icon="tag" title="2 · How is it sold?" hint="This decides what the pricing step below asks for.">
-            <SellingTypePicker value={form.sellingType} onChange={changeSellingType} suggestion={suggestion} />
+          {ready && (
+          <Card
+            icon="tag"
+            title="2 · How is it sold?"
+            hint={
+              typeLocked
+                ? "Taken from the category — change it here if this product is the exception."
+                : "This decides what the pricing step below asks for."
+            }
+          >
+            <SellingTypePicker
+              value={form.sellingType}
+              onChange={changeSellingType}
+              locked={typeLocked}
+              lockedBy={typeSource}
+              onRequestChange={requestTypeChange}
+              deviationNote={deviationNote}
+            />
             {stash && form.sellingType === "single" && (
               <p className="mt-2.5 text-[12px] text-stone-400">
                 {stash.variants.length} option{stash.variants.length === 1 ? "" : "s"} set aside — switch back before
@@ -435,7 +527,10 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
               </p>
             )}
           </Card>
+          )}
 
+          {ready && (
+          <>
           {/* ── 3. Photos ───────────────────────────────────── */}
           <Card
             icon="image"
@@ -691,10 +786,16 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
               onChange={(rows) => set("accordionSections", rows)}
             />
           </Card>
+          </>
+          )}
         </div>
 
         {/* ── right rail ── */}
+        {/* Gated with the steps on the left: these are product fields too, and
+            a live preview of a product with no category yet previews nothing. */}
         <div className="space-y-6 lg:sticky lg:top-6 self-start">
+          {ready && (
+          <>
           <Card icon="eye" title="Live preview" hint="How customers will see it.">
             <LivePreview
               form={form}
@@ -777,6 +878,8 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
               Leave blank and Google falls back to a generic line built from the product name.
             </p>
           </Card>
+          </>
+          )}
         </div>
       </div>
 

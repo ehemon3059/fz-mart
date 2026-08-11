@@ -6,11 +6,14 @@
  *
  * The walk goes UPWARD, nearest first: a guide set on "Men's & Boy's Fashion"
  * covers every shirt category beneath it without being re-attached per leaf.
+ * That walk is shared with the other inherited category setting
+ * (`defaultSellingType`) — see ./category-inheritance for the generic version
+ * this delegates to.
  */
 
-export interface GuideLinkedCategory {
-  id: number;
-  parentId: number | null;
+import { nearestInherited, type InheritableCategory } from "./category-inheritance";
+
+export interface GuideLinkedCategory extends InheritableCategory {
   sizeGuideId?: number | null;
 }
 
@@ -24,16 +27,5 @@ export function inheritedGuideId(
   startId: number | null,
   includeSelf = false,
 ): number | null {
-  if (startId == null) return null;
-  const byId = new Map(categories.map((c) => [c.id, c]));
-  const seen = new Set<number>();
-  let cursor: number | null = includeSelf ? startId : (byId.get(startId)?.parentId ?? null);
-  while (cursor != null && !seen.has(cursor)) {
-    seen.add(cursor);
-    const node = byId.get(cursor);
-    if (!node) break;
-    if (node.sizeGuideId != null) return node.sizeGuideId;
-    cursor = node.parentId;
-  }
-  return null;
+  return nearestInherited(categories, startId, (c) => c.sizeGuideId, includeSelf);
 }

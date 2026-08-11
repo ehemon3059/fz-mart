@@ -18,6 +18,19 @@ datasource db {
 // Catalog
 // ─────────────────────────────────────────────────────────────
 
+// How the products in a category branch are sold. Mirrors the three cards in
+// the product form's "How is it sold?" step (form/types.ts SellingType), which
+// is the lower-case client-side spelling of this same choice.
+//
+//   SINGLE  one price, one stock, gallery photos (a charger, a toy, groceries)
+//   COLORS  one row per colour, each with its own photo (a bag, a watch)
+//   SIZES   sizes, optionally crossed with colours (a dress, a panjabi)
+enum SellingType {
+  SINGLE
+  COLORS
+  SIZES
+}
+
 // Self-referencing category tree of arbitrary depth. A root has parentId=null;
 // any node can hold both children (sub-categories) AND products, so admins can
 // place a product at whatever level makes sense. The old two-model
@@ -54,6 +67,17 @@ model Category {
   // category that has one, so setting "Apparel S–XXL" on "Men's & Boy's
   // Fashion" covers every shirt below it. Null = inherit / none.
   sizeGuideId     Int?
+  // How products in this branch are sold. Resolution walks UPWARD exactly like
+  // sizeGuideId above: null = inherit the nearest ancestor's, so setting SIZES
+  // on "Men's & Boy's Fashion" covers every shirt category below it. Roots must
+  // set one — there is nothing above them to inherit from — which the category
+  // form enforces; the column stays nullable so children can mean "inherit".
+  //
+  // The product form opens locked in the resolved type and the admin must
+  // confirm to deviate (a ring in a COLORS "Jewelry", say). It is a default and
+  // an override prompt, never a constraint: a saved product's own shape always
+  // wins on edit, so re-typing a category can never rewrite existing products.
+  defaultSellingType SellingType?
   parent          Category?  @relation("CatTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   children        Category[] @relation("CatTree")
   products        Product[]

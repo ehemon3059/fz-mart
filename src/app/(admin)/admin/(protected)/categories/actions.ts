@@ -16,6 +16,10 @@ export interface ActionResult {
   error?: string;
 }
 
+/** Accepted `defaultSellingType` values — the client is never trusted to send a
+ *  valid enum member, so the raw field is matched against this list. */
+const SELLING_TYPES = ["SINGLE", "COLORS", "SIZES"] as const;
+
 /** Result of a delete attempt: succeeded, or blocked with the affected counts. */
 export type DeleteResult =
   | { ok: true }
@@ -47,10 +51,22 @@ export async function saveCategory(
   // Blank = inherit from an ancestor (or none) — see server/size-guides.
   const sizeGuideRaw = String(formData.get("sizeGuideId") ?? "").trim();
   const sizeGuideId = sizeGuideRaw ? Number(sizeGuideRaw) : null;
+  // Blank = inherit from an ancestor — see lib/category-inheritance.
+  const sellingTypeRaw = String(formData.get("defaultSellingType") ?? "").trim();
+  const defaultSellingType = sellingTypeRaw
+    ? SELLING_TYPES.find((t) => t === sellingTypeRaw) ?? null
+    : null;
 
   if (!name) return { error: "Name is required." };
   if (parentId != null && Number.isNaN(parentId)) return { error: "Invalid parent category." };
   if (sizeGuideId != null && Number.isNaN(sizeGuideId)) return { error: "Invalid size guide." };
+  if (sellingTypeRaw && !defaultSellingType) return { error: "Invalid selling type." };
+  // A root has nothing above it to inherit from, so "inherit" is not an answer
+  // there — every product in the branch would open with no type resolved.
+  // Children may leave it blank; that is what inheriting means.
+  if (parentId == null && !defaultSellingType) {
+    return { error: "Choose how products in this top-level category are sold." };
+  }
 
   const data = {
     name,
@@ -63,6 +79,7 @@ export async function saveCategory(
     metaTitle,
     metaDescription,
     sizeGuideId,
+    defaultSellingType,
   };
   try {
     if (id) {

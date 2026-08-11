@@ -1,0 +1,11 @@
+-- How products in a category branch are sold. Nullable on purpose: null means
+-- "inherit from the nearest ancestor that sets one", which is what lets a value
+-- on a root cover every child below it (see lib/category-inheritance.ts).
+-- Root categories are required to set one, but that is enforced in the admin
+-- form rather than the column, since the constraint is "null only when a parent
+-- supplies it" and no CHECK can see up the tree.
+--
+-- Written by hand rather than generated: `migrate diff` against this database
+-- also picks up pre-existing drift (TiDB case-folding on Product.showstock, the
+-- raw-SQL FULLTEXT indexes), none of which belongs in this migration.
+ALTER TABLE `Category` ADD COLUMN `defaultSellingType` ENUM('SINGLE', 'COLORS', 'SIZES') NULL;

@@ -8,6 +8,10 @@ import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
 import { saveCategory } from "./actions";
 import { buildTree, collectDescendantIds, type TreeNode } from "@/server/categories/tree";
 import { inheritedGuideId } from "@/lib/size-guide-inheritance";
+import { nearestInherited } from "@/lib/category-inheritance";
+
+/** Prisma's `SellingType` enum, as it crosses the form boundary. */
+type SellingTypeValue = "SINGLE" | "COLORS" | "SIZES";
 
 interface CatLite {
   id: number;
@@ -15,7 +19,44 @@ interface CatLite {
   parentId: number | null;
   /** Set here = this branch's default size guide; null = inherit from above. */
   sizeGuideId?: number | null;
+  /** Set here = how this branch's products are sold; null = inherit from above. */
+  defaultSellingType?: SellingTypeValue | null;
 }
+
+/** The three ways a product can be sold, in the order the product form shows
+ *  them. Copy is kept in step with form/SellingTypePicker so the choice reads
+ *  the same in both places. */
+const SELLING_TYPE_CARDS: {
+  value: SellingTypeValue;
+  title: string;
+  blurb: string;
+  examples: string;
+}[] = [
+  {
+    value: "SINGLE",
+    title: "Single item",
+    blurb: "One price, one stock, gallery photos.",
+    examples: "charger · toy · grocery",
+  },
+  {
+    value: "COLORS",
+    title: "Colours",
+    blurb: "Same item in several colours, one photo each.",
+    examples: "bag · watch · eyewear",
+  },
+  {
+    value: "SIZES",
+    title: "Sizes (+ colours)",
+    blurb: "Sizes, crossed with colours when it has both.",
+    examples: "dress · panjabi · shoes",
+  },
+];
+
+const SELLING_TYPE_LABEL: Record<SellingTypeValue, string> = {
+  SINGLE: "Single item",
+  COLORS: "Colours",
+  SIZES: "Sizes (+ colours)",
+};
 
 export interface SizeGuideOption {
   id: number;
@@ -37,6 +78,7 @@ interface Props {
     metaTitle: string | null;
     metaDescription: string | null;
     sizeGuideId?: number | null;
+    defaultSellingType?: SellingTypeValue | null;
   };
   /** All categories (flat) for the parent picker. */
   allCategories: CatLite[];
@@ -124,9 +166,33 @@ export default function CategoryForm({ category, allCategories, sizeGuides = [],
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  /* ── how products here are sold ── */
+  const [sellingType, setSellingType] = useState<string>(category?.defaultSellingType ?? "");
+  // A root has nothing above it, so "inherit" is not on offer there — the three
+  // cards become a required choice. Follows the parent picker live.
+  const isRoot = !parentId;
+  const inheritedSelling = useMemo(
+    () =>
+      parentId
+        ? nearestInherited(allCategories, Number(parentId), (c) => c.defaultSellingType, true)
+        : null,
+    [allCategories, parentId],
+  );
+  // What products in this category will actually open as: this node's own
+  // choice, else whatever it inherits.
+  const resolvedSelling = (sellingType || inheritedSelling || null) as SellingTypeValue | null;
+  // A branch that sells by size needs a guide to draw its size values from.
+  // Without one the product form offers no size list and admins free-type them,
+  // which is how a catalog ends up with "M", "SM" and "Mid" side by side.
+  const sizesNeedGuide = resolvedSelling === "SIZES" && !selectedGuide && !inheritedGuide;
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (isRoot && !sellingType) {
+      setError("Choose how products in this top-level category are sold.");
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
       const result = await saveCategory(category?.id ?? null, formData);
@@ -146,6 +212,7 @@ export default function CategoryForm({ category, allCategories, sizeGuides = [],
       <input type="hidden" name="description" value={description} />
       <input type="hidden" name="sortOrder" value={String(sortOrder)} />
       <input type="hidden" name="sizeGuideId" value={sizeGuideId} />
+      <input type="hidden" name="defaultSellingType" value={sellingType} />
       {isActive && <input type="hidden" name="isActive" value="on" />}
 
       {/* breadcrumb + header */}
@@ -271,6 +338,91 @@ export default function CategoryForm({ category, allCategories, sizeGuides = [],
           </div>
         </section>
 
+        {/* How products in this branch are sold. Inherits downward like the size
+            guide below, so setting it on a root covers every child that leaves
+            it blank. The product form opens locked in whatever this resolves
+            to — see form/SellingTypePicker. */}
+        <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-soft">
+          <header className="flex items-center gap-2.5 border-b border-stone-100 px-5 py-3.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-stone-100 text-stone-500">
+              <Icon name="tag" size={15} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="flex items-baseline gap-1.5 text-[14.5px] font-bold tracking-tight text-stone-800">
+                <span>How products here are sold</span>
+                {isRoot && <span className="text-red-500">*</span>}
+              </h2>
+              <p className="text-[12.5px] text-stone-400">
+                Products in this category open in this shape. The admin can still change it per product.
+              </p>
+            </div>
+          </header>
+          <div className="space-y-2.5 p-5">
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {SELLING_TYPE_CARDS.map((c) => {
+                const active = sellingType === c.value;
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setSellingType(active && !isRoot ? "" : c.value)}
+                    aria-pressed={active}
+                    className={[
+                      "flex flex-col items-start gap-1 rounded-xl border p-3.5 text-left transition",
+                      active
+                        ? "border-brand-500 bg-brand-50/40 shadow-sm ring-1 ring-brand-500"
+                        : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
+                    ].join(" ")}
+                  >
+                    <span className="text-[13.5px] font-bold text-stone-800">{c.title}</span>
+                    <span className="text-[12px] leading-snug text-stone-500">{c.blurb}</span>
+                    <span className="text-[11.5px] text-stone-400">{c.examples}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Children get a fourth option: leave it blank and follow the
+                parent. Roots have nothing to follow, so the cards above are a
+                required choice there. */}
+            {!isRoot && (
+              <button
+                type="button"
+                onClick={() => setSellingType("")}
+                aria-pressed={sellingType === ""}
+                className={[
+                  "flex w-full items-center gap-2 rounded-xl border px-3.5 py-2.5 text-left text-[13px] transition",
+                  sellingType === ""
+                    ? "border-brand-500 bg-brand-50/40 font-semibold text-stone-800 ring-1 ring-brand-500"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50/60",
+                ].join(" ")}
+              >
+                <Icon name="chevronRight" size={13} className="shrink-0 rotate-90 text-stone-400" />
+                {inheritedSelling ? (
+                  <span>
+                    Inherit from parent — <strong className="font-semibold">{SELLING_TYPE_LABEL[inheritedSelling]}</strong>
+                  </span>
+                ) : (
+                  <span>Inherit from parent — nothing set above yet</span>
+                )}
+              </button>
+            )}
+
+            {isRoot && !sellingType && (
+              <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-amber-600">
+                <Icon name="warn" size={13} />
+                Required — a top-level category has nothing above it to inherit from.
+              </p>
+            )}
+            {!isRoot && !sellingType && !inheritedSelling && (
+              <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-amber-600">
+                <Icon name="warn" size={13} />
+                No parent has set one, so products here will open with no shape chosen. Pick one above.
+              </p>
+            )}
+          </div>
+        </section>
+
         <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-soft">
           <header className="flex items-center gap-2.5 border-b border-stone-100 px-5 py-3.5">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-stone-100 text-stone-500">
@@ -351,6 +503,18 @@ export default function CategoryForm({ category, allCategories, sizeGuides = [],
                 "Nothing inherited — products here get plain sizes with no chart until you pick a guide."
               )}
             </p>
+            {/* Selling by size with no guide is a half-configured branch: the
+                Options builder has no size values to offer, so admins type
+                their own and the catalog drifts ("M" / "SM" / "Mid"). */}
+            {sizesNeedGuide && (
+              <p className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-700">
+                <Icon name="warn" size={14} className="mt-px shrink-0" />
+                <span>
+                  Products here are sold by size but no guide resolves, so the product form will offer no size list
+                  and sizes get typed by hand. Pick a guide above.
+                </span>
+              </p>
+            )}
           </div>
         </section>
 

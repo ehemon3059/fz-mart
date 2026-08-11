@@ -33,6 +33,11 @@ export interface CategoryInput {
   metaDescription?: string | null;
   /** Default size guide for this branch of the tree; null = inherit/none. */
   sizeGuideId?: number | null;
+  /**
+   * How products in this branch are sold; null = inherit from an ancestor.
+   * Roots are required to set one by the admin form — see saveCategory.
+   */
+  defaultSellingType?: "SINGLE" | "COLORS" | "SIZES" | null;
 }
 
 /** A slug guaranteed unique across the whole tree. Tries the plain slug, then
@@ -61,6 +66,7 @@ export async function createCategory(input: CategoryInput) {
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
       sizeGuideId: input.sizeGuideId ?? null,
+      defaultSellingType: input.defaultSellingType ?? null,
     },
   });
   await invalidateCategoryCaches(category.slug);
@@ -95,6 +101,7 @@ export async function updateCategory(id: number, input: CategoryInput) {
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
       sizeGuideId: input.sizeGuideId ?? null,
+      defaultSellingType: input.defaultSellingType ?? null,
     },
   });
   await invalidateCategoryCaches(category.slug);
