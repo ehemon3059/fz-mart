@@ -95,6 +95,10 @@ export function NewCategoryModal({
   // A root has nothing above it to inherit from, so one of the three is
   // required there; a sub-category may leave it blank and follow its parent.
   const isRoot = parentId == null;
+  // Creating a sub-category never asks for the type: it takes the parent's.
+  // Deviating is a deliberate act done afterwards on the Edit page, so a
+  // mis-click here can't quietly give a branch the wrong shape.
+  const forcedInherit = !isRoot;
   const inherited = useMemo(
     () => (parentId != null ? nearestInherited(categories, parentId, (c) => c.defaultSellingType, true) : null),
     [categories, parentId],
@@ -217,18 +221,24 @@ export function NewCategoryModal({
                     <label
                       key={t.value}
                       className={[
-                        "flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition",
-                        active
-                          ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500"
-                          : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
+                        "flex items-start gap-2.5 rounded-lg border p-2.5 transition",
+                        // A sub-category always takes its parent's type at
+                        // creation, so the three choices are shown greyed to
+                        // explain what it will be — not offered as a decision.
+                        forcedInherit
+                          ? "cursor-not-allowed border-stone-200 bg-stone-50/70 opacity-55"
+                          : active
+                            ? "cursor-pointer border-brand-500 bg-brand-50/40 ring-1 ring-brand-500"
+                            : "cursor-pointer border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
                       ].join(" ")}
                     >
                       <input
                         type="radio"
                         name="newCategorySellingType"
                         checked={active}
+                        disabled={forcedInherit}
                         onChange={() => setSellingType(t.value)}
-                        className="mt-0.5 h-4 w-4 shrink-0 border-stone-300 text-brand-600 focus:ring-brand-500"
+                        className="mt-0.5 h-4 w-4 shrink-0 border-stone-300 text-brand-600 focus:ring-brand-500 disabled:cursor-not-allowed"
                       />
                       <span className="min-w-0">
                         <span className="block text-[13px] font-semibold text-stone-800">{t.title}</span>
@@ -237,22 +247,11 @@ export function NewCategoryModal({
                     </label>
                   );
                 })}
-                {!isRoot && (
-                  <label
-                    className={[
-                      "flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition",
-                      sellingType === ""
-                        ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500"
-                        : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
-                    ].join(" ")}
-                  >
-                    <input
-                      type="radio"
-                      name="newCategorySellingType"
-                      checked={sellingType === ""}
-                      onChange={() => setSellingType("")}
-                      className="mt-0.5 h-4 w-4 shrink-0 border-stone-300 text-brand-600 focus:ring-brand-500"
-                    />
+                {forcedInherit && (
+                  <div className="flex items-start gap-2.5 rounded-lg border border-brand-500 bg-brand-50/40 p-2.5 ring-1 ring-brand-500">
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white">
+                      <Icon name="check" size={10} strokeWidth={3} />
+                    </span>
                     <span className="min-w-0 text-[13px] text-stone-700">
                       {inherited ? (
                         <>
@@ -263,9 +262,15 @@ export function NewCategoryModal({
                         <>Inherit from “{parentName}” — nothing set above yet</>
                       )}
                     </span>
-                  </label>
+                  </div>
                 )}
               </div>
+              {forcedInherit && (
+                <p className="mt-2 text-[12px] text-stone-400">
+                  A sub-category always follows its parent. For the rare case that differs — a sized range inside an
+                  otherwise single-item department — create it here, then change the type from its Edit page.
+                </p>
+              )}
             </div>
 
             <div>
