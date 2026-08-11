@@ -169,6 +169,7 @@ export function CategoriesClient({ initialCategories }: Props) {
         open={modalParent !== null}
         parentId={modalParent?.id ?? null}
         parentName={modalParent?.name ?? null}
+        categories={cats}
         onClose={() => setModalParent(null)}
         onCreated={() => {
           flash(modalParent?.name ? "Sub-category created" : "Category created");

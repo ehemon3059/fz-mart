@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Icon } from "@/components/icons";
 import { saveCategory } from "@/app/(admin)/admin/(protected)/categories/actions";
 import CategoryImagePicker from "@/components/admin/CategoryImagePicker";
+import { nearestInherited } from "@/lib/category-inheritance";
+
+/** Prisma's `SellingType` enum, as it crosses the form boundary. */
+type SellingTypeValue = "SINGLE" | "COLORS" | "SIZES";
+
+interface CatLite {
+  id: number;
+  parentId: number | null;
+  defaultSellingType?: SellingTypeValue | null;
+}
 
 interface Props {
   open: boolean;
@@ -14,7 +24,22 @@ interface Props {
   parentId?: number | null;
   /** Parent's name, shown in the dialog header for context. */
   parentName?: string | null;
+  /** The whole tree, so a sub-category can show what it would inherit. */
+  categories?: CatLite[];
 }
+
+/** Mirrors the cards on the full category form and the product form's step 1. */
+const SELLING_TYPES: { value: SellingTypeValue; title: string; blurb: string }[] = [
+  { value: "SINGLE", title: "Single item", blurb: "No colour or size" },
+  { value: "COLORS", title: "Colours", blurb: "Product comes in colours" },
+  { value: "SIZES", title: "Sizes (+ colours)", blurb: "Product has sizes, and colours if it has them" },
+];
+
+const SELLING_TYPE_LABEL: Record<SellingTypeValue, string> = {
+  SINGLE: "Single item",
+  COLORS: "Colours",
+  SIZES: "Sizes (+ colours)",
+};
 
 function Toggle({
   checked,
@@ -51,13 +76,29 @@ function Toggle({
   );
 }
 
-export function NewCategoryModal({ open, onClose, onCreated, parentId, parentName }: Props) {
+export function NewCategoryModal({
+  open,
+  onClose,
+  onCreated,
+  parentId,
+  parentName,
+  categories = [],
+}: Props) {
   const [name, setName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [sellingType, setSellingType] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // A root has nothing above it to inherit from, so one of the three is
+  // required there; a sub-category may leave it blank and follow its parent.
+  const isRoot = parentId == null;
+  const inherited = useMemo(
+    () => (parentId != null ? nearestInherited(categories, parentId, (c) => c.defaultSellingType, true) : null),
+    [categories, parentId],
+  );
 
   // Reset form state each time the modal is (re)opened.
   useEffect(() => {
@@ -66,6 +107,7 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
       setImageUrl("");
       setSortOrder(0);
       setIsActive(true);
+      setSellingType("");
       setError(null);
     }
   }, [open]);
@@ -85,10 +127,15 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (isRoot && !sellingType) {
+      setError("Choose how products in this top-level category are sold.");
+      return;
+    }
     const formData = new FormData();
     formData.set("name", name);
     formData.set("imageUrl", imageUrl);
     formData.set("sortOrder", String(sortOrder));
+    formData.set("defaultSellingType", sellingType);
     if (isActive) formData.set("isActive", "on");
     if (parentId != null) formData.set("parentId", String(parentId));
 
@@ -151,6 +198,73 @@ export function NewCategoryModal({ open, onClose, onCreated, parentId, parentNam
                   placeholder="e.g. Electronics"
                   className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
                 />
+              </div>
+            </div>
+
+            {/* How products in this branch are sold. Required on a root, since
+                there is nothing above it to inherit from; a sub-category may
+                follow its parent instead. Same choice as the full category
+                form — the two must stay in step. */}
+            <div>
+              <label className="mb-1.5 flex items-baseline gap-1.5 text-[13px] font-semibold text-stone-700">
+                <span>How products here are sold</span>
+                {isRoot && <span className="text-red-500">*</span>}
+              </label>
+              <div className="space-y-1.5">
+                {SELLING_TYPES.map((t) => {
+                  const active = sellingType === t.value;
+                  return (
+                    <label
+                      key={t.value}
+                      className={[
+                        "flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition",
+                        active
+                          ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500"
+                          : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
+                      ].join(" ")}
+                    >
+                      <input
+                        type="radio"
+                        name="newCategorySellingType"
+                        checked={active}
+                        onChange={() => setSellingType(t.value)}
+                        className="mt-0.5 h-4 w-4 shrink-0 border-stone-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold text-stone-800">{t.title}</span>
+                        <span className="block text-[12px] leading-snug text-stone-500">{t.blurb}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+                {!isRoot && (
+                  <label
+                    className={[
+                      "flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition",
+                      sellingType === ""
+                        ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500"
+                        : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="radio"
+                      name="newCategorySellingType"
+                      checked={sellingType === ""}
+                      onChange={() => setSellingType("")}
+                      className="mt-0.5 h-4 w-4 shrink-0 border-stone-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="min-w-0 text-[13px] text-stone-700">
+                      {inherited ? (
+                        <>
+                          Inherit from “{parentName}” —{" "}
+                          <strong className="font-semibold">{SELLING_TYPE_LABEL[inherited]}</strong>
+                        </>
+                      ) : (
+                        <>Inherit from “{parentName}” — nothing set above yet</>
+                      )}
+                    </span>
+                  </label>
+                )}
               </div>
             </div>
 
