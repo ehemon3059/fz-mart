@@ -21,7 +21,7 @@ import { inheritedSellingType } from "@/lib/category-inheritance";
 import AccordionBuilder from "./AccordionBuilder";
 import { saveProduct } from "./actions";
 import { Card, ErrorText, FieldShell, Label, Toggle } from "./form/atoms";
-import CategorySelect from "./form/CategorySelect";
+import CategoryPicker from "./form/CategoryPicker";
 import LivePreview from "./form/LivePreview";
 import OptionsBuilder from "./form/OptionsBuilder";
 import SellingTypePicker from "./form/SellingTypePicker";
@@ -128,6 +128,9 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
   // a saved product's own shape always wins, so re-typing a category can never
   // rewrite products that already exist.
   const [typeOverridden, setTypeOverridden] = useState(isEdit);
+  // Step 1's radio. On edit it starts on the saved shape so the category lists
+  // contain the product's own category.
+  const [sellingKind, setSellingKind] = useState<SellingType | "">(isEdit ? form.sellingType : "");
   // Locked only while the form genuinely matches what the category asked for.
   // If auto-apply was skipped (rows already authored), the deviation note shows
   // instead of a lock that contradicts what's on screen.
@@ -148,6 +151,25 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
    * the admin has overridden the type by hand, and skipped when option rows
    * already exist — switching then would discard real work behind their back.
    */
+  /**
+   * The radios in step 1: which kind of category to browse. Picking one also
+   * sets the selling type, since the category lists are filtered to match — so
+   * whatever is chosen next agrees with it by construction. Changing the radio
+   * clears the category, because the old one is no longer in the list.
+   */
+  const changeSellingKind = (next: SellingType) => {
+    if (next === sellingKind) return;
+    if (
+      (form.variants.length > 0 || form.colors.length > 0) &&
+      !window.confirm("Changing this clears the category and the options already built. Continue?")
+    ) {
+      return;
+    }
+    setSellingKind(next);
+    setTypeOverridden(false);
+    setForm((f) => ({ ...f, categoryId: "", sellingType: next, variants: [], colors: [] }));
+  };
+
   const changeCategory = (next: string) => {
     setForm((f) => {
       const resolved = inheritedSellingType(categories, next ? Number(next) : null, true);
@@ -459,7 +481,7 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
         <div className="space-y-6 min-w-0">
           {/* ── 1. What it is ───────────────────────────────── */}
           <Card icon="info" title="1 · What it is" hint="The name customers see, and where it sits in the catalog.">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-4">
               <div>
                 <Label required>Product name</Label>
                 <FieldShell error={errors.name}>
@@ -473,11 +495,13 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                 </FieldShell>
                 <ErrorText>{errors.name}</ErrorText>
               </div>
-              <div>
-                {/* Category leads everything downstream: it decides which size
-                    guide this product inherits. */}
-                <Label required>Category</Label>
-                <CategorySelect
+              {/* Shape first, then a category list filtered to it, then the
+                  sub-category. Category leads everything downstream: it decides
+                  which size guide this product inherits. */}
+              <div className="border-t border-stone-100 pt-4">
+                <CategoryPicker
+                  kind={sellingKind}
+                  onKindChange={changeSellingKind}
                   value={form.categoryId}
                   onChange={changeCategory}
                   error={errors.categoryId}
@@ -508,7 +532,7 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
             title="2 · How is it sold?"
             hint={
               typeLocked
-                ? "Taken from the category — change it here if this product is the exception."
+                ? "Confirmed from the category above — change it if this product is the exception."
                 : "This decides what the pricing step below asks for."
             }
           >

@@ -58,27 +58,51 @@ export default function SellingTypePicker({
   onRequestChange?: (next: SellingType) => void;
   deviationNote?: string | null;
 }) {
+  const current = CARDS.find((c) => c.key === value) ?? CARDS[0];
+
+  // Locked means step 1's radios already asked this question and the category
+  // agreed, so re-drawing three cards here would just ask it twice. Collapse to
+  // a confirmation line; "Change" expands the cards by unlocking.
+  if (locked) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-stone-200 bg-stone-50/60 p-3.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+          <Icon name={current.icon} size={16} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13.5px] font-bold text-stone-800">{current.title}</span>
+          <span className="block text-[12px] leading-snug text-stone-500">
+            {current.blurb}
+            {lockedBy && <> · set by <span className="font-semibold text-stone-600">{lockedBy}</span></>}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => onRequestChange?.(value)}
+          className="shrink-0 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-stone-600 transition hover:border-brand-300 hover:text-brand-600"
+        >
+          Change
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="grid gap-2.5 sm:grid-cols-3">
         {CARDS.map((c) => {
           const active = value === c.key;
-          // While locked the other two cards stay clickable but route through
-          // the confirm — a disabled card would leave no visible way out.
-          const dimmed = locked && !active;
           return (
             <button
               key={c.key}
               type="button"
-              onClick={() => (dimmed ? onRequestChange?.(c.key) : onChange(c.key))}
+              onClick={() => onChange(c.key)}
               aria-pressed={active}
               className={[
                 "flex flex-col items-start gap-1 rounded-xl border p-3.5 text-left transition",
                 active
                   ? "border-brand-500 bg-brand-50/40 shadow-sm ring-1 ring-brand-500"
-                  : dimmed
-                    ? "border-stone-200 bg-stone-50/60 opacity-55 hover:opacity-100"
-                    : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
+                  : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60",
               ].join(" ")}
             >
               <span
@@ -96,22 +120,7 @@ export default function SellingTypePicker({
           );
         })}
       </div>
-      {locked && (
-        <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] text-stone-400">
-          <Icon name="tag" size={12} className="text-stone-300" />
-          <span>
-            Set by {lockedBy ? <span className="font-semibold text-stone-500">{lockedBy}</span> : "the category"}.
-          </span>
-          <button
-            type="button"
-            onClick={() => onRequestChange?.(value)}
-            className="font-semibold text-brand-600 hover:underline"
-          >
-            Change
-          </button>
-        </p>
-      )}
-      {!locked && deviationNote && (
+      {deviationNote && (
         <p className="mt-2 flex items-start gap-1.5 text-[12px] font-medium text-amber-600">
           <Icon name="warn" size={13} className="mt-px shrink-0" />
           {deviationNote}
