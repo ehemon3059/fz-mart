@@ -36,6 +36,13 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
     return [{ id: -1, url: variantUrl }, ...base];
   }, [images, variantUrl]);
 
+  // The cover photo, identified by URL so it survives a variant photo being
+  // injected at the front of the list and shifting every index.
+  const coverUrl = useMemo(
+    () => images.find((i) => i.isPrimary)?.url ?? images[0]?.url ?? PLACEHOLDER,
+    [images],
+  );
+
   const primaryIdx = safeImages.findIndex((i) => i.isPrimary);
   const [active, setActive] = useState(primaryIdx >= 0 ? primaryIdx : 0);
   const [lightbox, setLightbox] = useState(false);
@@ -196,16 +203,41 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
         style={lens ? { cursor: "none" } : undefined}
         aria-label="View image full screen"
       >
-        <Image
-          key={activeUrl}
-          src={activeUrl}
-          alt={name}
-          fill
-          sizes="(max-width:768px) 100vw, 600px"
-          className="object-cover animate-fz-fade-img"
-          draggable={false}
-          priority
-        />
+        {/* Every gallery photo is mounted at once and cross-faded by opacity,
+            rather than one <Image> whose src is swapped.
+
+            Swapping the src meant the browser tore down the old bitmap before
+            the new one had decoded, so the grey box behind showed through for a
+            frame — a visible flash on every variant change, worst on the first
+            view of each photo when it was not yet in cache. Keeping them all
+            mounted means the outgoing and incoming photos overlap: the new one
+            is already decoded, so the change is a clean fade with nothing
+            showing through underneath.
+
+            The cost is one <img> per photo (capped by MAX_IMAGES = 10 in the
+            admin form). Only the active one is eagerly loaded; the rest load
+            lazily, so the initial page weight is unchanged. */}
+        {safeImages.map((img, idx) => (
+          <Image
+            key={img.url}
+            src={img.url}
+            alt={idx === active ? name : ""}
+            fill
+            sizes="(max-width:768px) 100vw, 600px"
+            className={[
+              "object-cover transition-opacity duration-300 ease-out",
+              idx === active ? "opacity-100" : "opacity-0",
+            ].join(" ")}
+            draggable={false}
+            // Keyed on URL, not on which photo is showing: `priority` toggling
+            // as the shopper clicks around would rewrite loading/fetchPriority
+            // on a live element and draw a Next.js warning. The cover is the
+            // one worth preloading; the others sit in the viewport at opacity 0
+            // and so are fetched by the browser anyway, well before any click.
+            priority={img.url === coverUrl}
+            aria-hidden={idx !== active}
+          />
+        ))}
 
         {/* Magnifier lens — circular zoom that tracks the cursor (desktop) */}
         {lens && (
