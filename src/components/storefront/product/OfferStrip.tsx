@@ -1,8 +1,9 @@
 import { Tag } from "lucide-react";
 
 /**
- * Gradient offer bar under the price ("Buy 1 Get 1 Free", "Eid Special — extra
- * ৳100 off"). The text is written by an admin per product.
+ * Gradient offer bar spanning the product page between the breadcrumb and the
+ * hero ("Buy 1 Get 1 Free", "Eid Special — extra ৳100 off"). The text is
+ * written by an admin per product.
  *
  * Deliberately tied to the discount: callers render this only when the product
  * is actually on sale, so an offer left in the field after a sale ends
@@ -17,7 +18,7 @@ export default function OfferStrip({
   className = "",
 }: {
   text: string;
-  /** Extra classes for the wrapper — used by the mobile bar to go edge-to-edge. */
+  /** Extra classes for the wrapper — the caller owns the surrounding spacing. */
   className?: string;
 }) {
   const label = text.trim();

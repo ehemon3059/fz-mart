@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Star, Check } from "lucide-react";
 import { formatTaka, priceColorStyle } from "@/lib/money";
-import OfferStrip from "@/components/storefront/product/OfferStrip";
 
 interface Props {
   name: string;
@@ -17,8 +16,6 @@ interface Props {
   isFromPrice?: boolean;
   /** Admin-chosen price colour (#rrggbb); null/undefined = theme default. */
   priceColor?: string | null;
-  /** Admin-written offer line; only rendered while the product is discounted. */
-  offerText?: string | null;
 }
 
 /** Half-star aware row of five. */
@@ -45,7 +42,6 @@ export default function BuyBoxHeader({
   inStock,
   isFromPrice = false,
   priceColor,
-  offerText,
 }: Props) {
   const saving = originalPrice != null && originalPrice > price ? originalPrice - price : 0;
   // Only the live price takes the colour; the struck-through original stays
@@ -93,10 +89,6 @@ export default function BuyBoxHeader({
           </>
         )}
       </div>
-
-      {/* Offer strip — sits directly under the price, and only while there IS a
-          discount, so it can never promise a deal the price no longer reflects. */}
-      {saving > 0 && offerText && <OfferStrip text={offerText} />}
 
       {/* Stock indicator — pulsing dot only when actually buyable. */}
       {inStock ? (

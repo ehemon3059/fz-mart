@@ -17,6 +17,7 @@ import ReviewsSection from "@/components/storefront/ReviewsSection";
 import Breadcrumb from "@/components/storefront/product/Breadcrumb";
 import GalleryBadges from "@/components/storefront/product/GalleryBadges";
 import BuyBoxHeader from "@/components/storefront/product/BuyBoxHeader";
+import OfferStrip from "@/components/storefront/product/OfferStrip";
 import TrustGrid from "@/components/storefront/product/TrustGrid";
 import PaymentBadges from "@/components/storefront/product/PaymentBadges";
 import ProductTabs from "@/components/storefront/product/ProductTabs";
@@ -176,6 +177,16 @@ export default async function ProductPage({
         ]}
       />
 
+      {/* Offer strip — full width between the breadcrumb and the hero, and only
+          while something on the page IS discounted, so it can never promise a
+          deal the price no longer reflects. With variants the discount may
+          apply to only some options, hence the .some() rather than the
+          product-level flag. */}
+      {product.offerText &&
+        (hasVariants
+          ? product.variants.some((v) => v.discountPrice != null && v.discountPrice < v.price)
+          : hasDiscount) && <OfferStrip text={product.offerText} className="mb-6" />}
+
       {/* ── hero: gallery + buy box ──
           Wrapped so picking an option in the buy box swaps the gallery photo. */}
       <VariantImageProvider>
@@ -199,7 +210,6 @@ export default async function ProductPage({
             inStock={inStock}
             isFromPrice={hasVariants}
             priceColor={headlinePriceColor}
-            offerText={product.offerText}
           />
 
           <div className="border-t border-slate-100 pt-5">
@@ -229,7 +239,6 @@ export default async function ProductPage({
                 imageUrl: v.imageUrl,
               }))}
               priceColor={product.priceColor}
-              offerText={product.offerText}
               sizeLabel={sizeLabel}
               sizeOrder={sizeGuide?.values ?? []}
               sizeChartHtml={sizeChartHtml}
