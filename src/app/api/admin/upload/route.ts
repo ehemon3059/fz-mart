@@ -9,8 +9,10 @@ import {
   StorageError,
   STORAGE_FOLDERS,
   MAX_UPLOAD_BYTES,
+  MAX_SVG_BYTES,
   type StorageFolder,
 } from "@/integrations/storage";
+import { sanitizeSvg } from "@/integrations/storage/svg";
 
 // Central admin image upload. In production, files go to object storage (R2)
 // so they survive redeploys onto an empty local filesystem. When R2 isn't
@@ -24,6 +26,7 @@ const DEV_EXT: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
   "image/avif": "avif",
+  "image/svg+xml": "svg",
 };
 
 export async function POST(req: NextRequest) {
@@ -75,9 +78,36 @@ export async function POST(req: NextRequest) {
   if (!ext) {
     return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
   }
+
+  // Files under public/ are served from our own origin, so an SVG here gets the
+  // same treatment as one bound for the bucket: only sanitized bytes are written.
+  let body = buffer;
+  if (ext === "svg") {
+    if (folder !== "categories") {
+      return NextResponse.json(
+        { error: "SVG can only be used for category images." },
+        { status: 400 },
+      );
+    }
+    if (buffer.byteLength > MAX_SVG_BYTES) {
+      return NextResponse.json(
+        { error: `SVG too large (max ${Math.round(MAX_SVG_BYTES / 1024)} KB).` },
+        { status: 400 },
+      );
+    }
+    const clean = sanitizeSvg(buffer.toString("utf8"));
+    if (!clean) {
+      return NextResponse.json(
+        { error: "Could not read that SVG — it may be corrupt." },
+        { status: 400 },
+      );
+    }
+    body = Buffer.from(clean, "utf8");
+  }
+
   const filename = `${Date.now()}-${randomUUID()}.${ext}`;
   const uploadDir = path.join(process.cwd(), "public", "uploads", folder);
   await mkdir(uploadDir, { recursive: true });
-  await writeFile(path.join(uploadDir, filename), buffer);
+  await writeFile(path.join(uploadDir, filename), body);
   return NextResponse.json({ url: `/uploads/${folder}/${filename}` });
 }

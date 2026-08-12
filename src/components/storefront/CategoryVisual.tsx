@@ -1,6 +1,7 @@
 import { CategoryIcon as KeywordIcon, categoryVisual } from "@/components/storefront/icons";
 import { CategoryIcon as PickedIcon, CATEGORY_ICONS } from "@/lib/category-icons";
 import { categoryArt } from "@/lib/category-art";
+import { isSvgUrl } from "@/lib/image-kind";
 
 /**
  * The single place that decides how a category is depicted, in precedence
@@ -32,6 +33,21 @@ export function CategoryVisual({
   iconSize?: number;
 }) {
   if (imageUrl) {
+    // An uploaded SVG is artwork, not a photo: render it exactly like the
+    // bundled illustrations below (contained in the icon slot) so a category
+    // looks the same whether its art shipped with the app or was uploaded.
+    if (isSvgUrl(imageUrl)) {
+      return (
+        <span className={iconClassName}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt=""
+            style={{ width: iconSize, height: iconSize, objectFit: "contain" }}
+          />
+        </span>
+      );
+    }
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={imageUrl} alt="" className={imgClassName} />;
   }

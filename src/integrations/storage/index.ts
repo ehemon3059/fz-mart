@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import sharp from "sharp";
+import { sanitizeSvg } from "./svg";
 
 // Object-storage adapter — Cloudflare R2 (S3-compatible, zero egress).
 //
@@ -112,13 +113,15 @@ function getClient(): { client: S3Client; config: StorageConfig } {
 
 // --- Upload validation ------------------------------------------------------
 
-/** Content types accepted for upload. SVG/GIF are intentionally excluded — SVG
- *  is a script-injection vector and next/image can't optimize either well. */
+/** Content types accepted for upload. GIF stays excluded (next/image can't
+ *  optimize it well). SVG is accepted only for the folders in SVG_FOLDERS, and
+ *  only after sanitizeSvg() rebuilds it from an allow-list — see uploadImage. */
 const ALLOWED_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "image/avif": "avif",
+  "image/svg+xml": "svg",
 };
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -126,6 +129,16 @@ export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 /** Whitelisted key prefixes — callers can only write inside these folders. */
 export const STORAGE_FOLDERS = ["products", "banners", "branding", "categories"] as const;
 export type StorageFolder = (typeof STORAGE_FOLDERS)[number];
+
+/** Folders that may hold vector artwork. Category tiles are line illustrations
+ *  that stay crisp at any size and weigh a few KB, so SVG is the right format
+ *  there; product/banner photos have no such use and keep the raster-only rule
+ *  so a stored file is always something sharp has re-encoded. */
+const SVG_FOLDERS: readonly StorageFolder[] = ["categories"];
+
+/** An SVG is text, and sanitizing scales with its length; exported artwork is a
+ *  few KB, so cap well below the 5 MB raster limit. */
+export const MAX_SVG_BYTES = 512 * 1024; // 512 KB
 
 /** Largest edge (px) an uploaded image is downscaled to before storing.
  *  next/image regenerates responsive variants at serve time, so we only need a
@@ -162,12 +175,26 @@ export async function uploadImage(input: UploadImageInput): Promise<string> {
     throw new StorageError("Invalid upload folder.");
   }
 
+  const isSvg = ext === "svg";
+  if (isSvg && !SVG_FOLDERS.includes(input.folder)) {
+    throw new StorageError(
+      "SVG can only be used for category images. Use JPEG, PNG, WebP, or AVIF here.",
+    );
+  }
+  if (isSvg && input.buffer.byteLength > MAX_SVG_BYTES) {
+    throw new StorageError(
+      `SVG too large (max ${Math.round(MAX_SVG_BYTES / 1024)} KB).`,
+    );
+  }
+
   const { client, config } = getClient();
 
-  // Downscale oversized images and re-encode; this also normalizes the bytes
-  // (strips EXIF, defends against decompression-bomb payloads that passed the
-  // byte check) and confirms the file is actually a decodable image.
-  const { body, outExt, outType } = await processImage(input.buffer, ext);
+  // Vectors are sanitized, not re-encoded — rasterizing would throw away the
+  // resolution independence that makes them worth uploading. Rasters go through
+  // sharp, which downscales, strips EXIF, and proves the bytes really decode.
+  const { body, outExt, outType } = isSvg
+    ? processSvg(input.buffer)
+    : await processImage(input.buffer, ext);
 
   // UUID key — the stored filename shares nothing with the uploaded name.
   const key = `${input.folder}/${randomUUID()}.${outExt}`;
@@ -220,6 +247,29 @@ export async function deleteImage(url: string): Promise<void> {
 }
 
 // --- Internal ---------------------------------------------------------------
+
+/**
+ * Rebuild an uploaded SVG from the sanitizer's allow-list. The stored bytes are
+ * the sanitized output, so what the bucket serves can never be the file that
+ * was uploaded — a script or external reference cannot survive this step.
+ */
+function processSvg(buffer: Buffer): {
+  body: Buffer;
+  outExt: string;
+  outType: string;
+} {
+  const clean = sanitizeSvg(buffer.toString("utf8"));
+  if (!clean) {
+    throw new StorageError(
+      "Could not read that SVG — it may be corrupt, or contain nothing we can safely display.",
+    );
+  }
+  return {
+    body: Buffer.from(clean, "utf8"),
+    outExt: "svg",
+    outType: "image/svg+xml",
+  };
+}
 
 async function processImage(
   buffer: Buffer,
