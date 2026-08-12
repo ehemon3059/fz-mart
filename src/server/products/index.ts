@@ -74,6 +74,33 @@ export async function listRelatedProducts(productId: number, categoryId: number,
   );
 }
 
+/**
+ * Fresh card data for a list of slugs, in the order given, skipping any that
+ * are gone or no longer ACTIVE.
+ *
+ * Powers "Recently viewed", which remembers slugs in the shopper's browser.
+ * That list can outlive the products in it by weeks, so it is never rendered
+ * from what the browser stored — a deleted product would show a dead card with
+ * a stale price and a link to a 404. Here the database has the final say.
+ *
+ * Uncached: it is keyed by whatever arbitrary slug set one browser happens to
+ * hold, so there is no shared entry worth storing, and it runs once per
+ * product-page view against an indexed unique column.
+ */
+export async function listProductCardsBySlugs(slugs: string[], limit = 12) {
+  const wanted = [...new Set(slugs.filter((s) => typeof s === "string" && s))].slice(0, limit);
+  if (wanted.length === 0) return [];
+  const found = await prisma.product.findMany({
+    where: { slug: { in: wanted }, status: "ACTIVE" },
+    include: productWithImages,
+  });
+  // Restore the caller's order — findMany returns rows in the database's order,
+  // but the browser's list is most-recently-viewed first and that is the order
+  // the shopper expects to see.
+  const bySlug = new Map(found.map((p) => [p.slug, p]));
+  return wanted.map((s) => bySlug.get(s)).filter((p): p is NonNullable<typeof p> => p != null);
+}
+
 export async function listFeaturedProducts(limit = 8) {
   return getOrSetCache(productCacheKeys.featured(), CATALOG_TTL_SECONDS, () =>
     prisma.product.findMany({
