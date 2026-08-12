@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test:e2e": "playwright test",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:test": "node scripts/test-db.mjs migrate deploy",
+    "db:reset:test": "node scripts/test-db.mjs migrate reset --force",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { prisma, E2E_PRODUCTS, E2E_ADMIN, createPendingOrder } from "./helpers/db";
+import { adminLogin } from "./helpers/admin";
 
 // Money-critical flow #4: admin login and the Pending → Confirmed status
 // transition, including the append-only status audit log.
@@ -11,11 +12,7 @@ test.afterAll(async () => {
 test("admin can log in and confirm a pending order", async ({ page }) => {
   const order = await createPendingOrder(E2E_PRODUCTS.checkout);
 
-  await page.goto("/admin/login");
-  await page.getByPlaceholder("admin").fill(E2E_ADMIN.username);
-  await page.getByPlaceholder("••••••••").fill(E2E_ADMIN.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/admin\/dashboard/);
+  await adminLogin(page);
 
   await page.goto(`/admin/orders/${order.id}`);
   await page.getByRole("button", { name: "Mark as Confirmed" }).click();

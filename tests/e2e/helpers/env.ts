@@ -4,15 +4,23 @@ import { resolve } from "node:path";
 /**
  * Minimal .env loader for the Playwright process. Next.js loads .env itself,
  * but the test runner (global setup, DB assertions) runs outside Next and
- * needs DATABASE_URL / REDIS_URL too. Existing process env always wins, so
- * CI can inject its own values.
+ * needs DATABASE_URL / REDIS_URL too.
+ *
+ * Precedence, highest first:
+ *   1. existing process env  — CI injects its own values
+ *   2. .env.test             — test-only overrides (throwaway DB)
+ *   3. .env                  — everything the tests don't need to override
+ *
+ * .env.test is loaded FIRST so its values win over .env, because each key is
+ * only ever written once (the `undefined` check below).
  */
-export function loadEnv(): void {
+
+function applyFile(path: string): void {
   let raw: string;
   try {
-    raw = readFileSync(resolve(process.cwd(), ".env"), "utf8");
+    raw = readFileSync(resolve(process.cwd(), path), "utf8");
   } catch {
-    return; // no .env (e.g. CI) — rely on process env
+    return; // file absent — fine, the next layer supplies the value
   }
   for (const line of raw.split("\n")) {
     const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
@@ -22,4 +30,9 @@ export function loadEnv(): void {
       process.env[key] = value.replace(/^["']|["']$/g, "");
     }
   }
+}
+
+export function loadEnv(): void {
+  applyFile(".env.test");
+  applyFile(".env");
 }

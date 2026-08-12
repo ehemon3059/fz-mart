@@ -1,10 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
 import { loadEnv } from "./tests/e2e/helpers/env";
+import { assertTestDatabase } from "./tests/e2e/helpers/guard";
 
-// E2E tests hit a real Next.js server backed by the real MySQL + Redis from
-// .env — the money-critical flows (checkout, stock decrement, admin status
-// changes) are exactly the code we must not fake.
+// E2E tests hit a real Next.js server backed by a real MySQL + Redis — the
+// money-critical flows (checkout, stock decrement, admin status changes) are
+// exactly the code we must not fake.
+//
+// That database MUST be a throwaway: .env.test overrides .env here, and the
+// guard aborts the run if DATABASE_URL still resolves to a hosted/production
+// host. The check runs at config load, before the web server is spawned, so
+// a misconfigured run dies before Next.js can open a connection.
 loadEnv();
+assertTestDatabase();
 
 const PORT = Number(process.env.E2E_PORT ?? 3000);
 const baseURL = `http://localhost:${PORT}`;

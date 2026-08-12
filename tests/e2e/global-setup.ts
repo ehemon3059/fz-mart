@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import Redis from "ioredis";
 import { loadEnv } from "./helpers/env";
+import { assertTestDatabase } from "./helpers/guard";
 import { prisma, E2E_PRODUCTS, E2E_ADMIN } from "./helpers/db";
 
 // Provisions everything the specs rely on, idempotently:
@@ -26,6 +27,11 @@ async function clearRateLimits(): Promise<void> {
 
 export default async function globalSetup(): Promise<void> {
   loadEnv();
+  // Re-checked here, not just in playwright.config.ts: this file performs the
+  // destructive writes (admin user, payments → MOCK, coupon), and it runs in
+  // its own process, so it must never depend on the config having vetted the
+  // connection string.
+  assertTestDatabase();
 
   const passwordHash = await bcrypt.hash(E2E_ADMIN.password, 12);
   await prisma.adminUser.upsert({
