@@ -214,6 +214,9 @@ export async function saveProduct(
   const isFeatured = formData.get("isFeatured") === "on";
   const status = formData.get("status") === "INACTIVE" ? "INACTIVE" : "ACTIVE";
   const promoBadge = String(formData.get("promoBadge") ?? "").trim();
+  // Offer strip copy. Capped so a runaway paste can't blow out the buy box; the
+  // storefront renders it as text, never as markup.
+  const offerText = String(formData.get("offerText") ?? "").trim().slice(0, 120);
   const metaTitle = String(formData.get("metaTitle") ?? "").trim();
   const metaDescription = String(formData.get("metaDescription") ?? "").trim();
   // Sizing: a guide id (blank = inherit the category's) plus optional one-off
@@ -269,6 +272,7 @@ export async function saveProduct(
     isFeatured,
     status: status as "ACTIVE" | "INACTIVE",
     promoBadge: promoBadge || null,
+    offerText: offerText || null,
     metaTitle: metaTitle || null,
     metaDescription: metaDescription || null,
     sizeGuideId,

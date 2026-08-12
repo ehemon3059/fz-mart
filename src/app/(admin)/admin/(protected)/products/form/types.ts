@@ -22,6 +22,7 @@
  *   priceColor          "#rrggbb" | ""
  *   status              "ACTIVE" | "INACTIVE"
  *   promoBadge          string
+ *   offerText           string      — offer strip copy; "" = no strip
  *   metaTitle           string
  *   metaDescription     string
  *   isFeatured          "on", and only present when true
@@ -127,6 +128,8 @@ export interface FormState {
   priceColor: string;
   status: "ACTIVE" | "INACTIVE";
   promoBadge: string;
+  /** Offer strip copy; only shown on the storefront while a discount is set. */
+  offerText: string;
   metaTitle: string;
   metaDescription: string;
   isFeatured: boolean;

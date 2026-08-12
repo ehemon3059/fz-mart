@@ -11,6 +11,7 @@ import { Banknote, ShoppingCart, Minus, Plus } from "lucide-react";
 import { useVariantImage } from "@/components/storefront/product/VariantImageContext";
 import ColorStrip from "@/components/storefront/product/ColorStrip";
 import SizeChartModal from "@/components/storefront/product/SizeChartModal";
+import OfferStrip from "@/components/storefront/product/OfferStrip";
 
 interface ColorOption {
   id: number;
@@ -47,6 +48,8 @@ interface Props {
   variants?: VariantOption[];
   /** Product-level price colour (#rrggbb); null = theme default. */
   priceColor?: string | null;
+  /** Admin-written offer line; shown only while the chosen option is discounted. */
+  offerText?: string | null;
   /** From the resolved size guide: "Bust Size" → "Select Bust Size:". */
   sizeLabel?: string | null;
   /** The guide's size order; sizes not in it keep their row order, after these. */
@@ -65,6 +68,7 @@ export default function AddToCartPanel({
   colors = [],
   variants = [],
   priceColor,
+  offerText,
   sizeLabel,
   sizeOrder = [],
   sizeChartHtml,
@@ -85,6 +89,7 @@ export default function AddToCartPanel({
         colors={colors}
         variants={variants}
         priceColor={priceColor}
+        offerText={offerText}
         sizeLabel={sizeLabel}
         sizeOrder={sizeOrder}
         sizeChartHtml={sizeChartHtml}
@@ -206,6 +211,7 @@ function VariantPurchase({
   colors,
   variants,
   priceColor,
+  offerText,
   sizeLabel,
   sizeOrder,
   sizeChartHtml,
@@ -221,6 +227,7 @@ function VariantPurchase({
   colors: ColorOption[];
   variants: VariantOption[];
   priceColor?: string | null;
+  offerText?: string | null;
   sizeLabel?: string | null;
   sizeOrder: string[];
   sizeChartHtml?: string | null;
@@ -489,6 +496,11 @@ function VariantPurchase({
           </span>
         )}
       </p>
+
+      {/* Offer strip follows the CHOSEN option: a product whose sizes are priced
+          differently may discount only some of them, so the banner appears with
+          the discount it refers to rather than for the product as a whole. */}
+      {selectedHasDiscount && offerText && <OfferStrip text={offerText} />}
 
       {error && <p className="text-xs font-medium text-red-600">Please choose all options above first.</p>}
 

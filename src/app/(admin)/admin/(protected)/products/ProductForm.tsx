@@ -203,6 +203,15 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
       ? Math.round((1 - Number(form.discountPrice) / Number(form.price)) * 100)
       : 0;
 
+  // Is anything actually discounted? The offer strip is gated on this, and an
+  // option product carries its discounts per row rather than on the product, so
+  // both shapes have to be checked to know whether the strip would ever show.
+  const hasAnyDiscount = hasOptions
+    ? form.variants.some(
+        (v) => v.discountPrice !== "" && Number(v.discountPrice) > 0 && Number(v.discountPrice) < Number(v.price),
+      )
+    : discountPct > 0;
+
   // Gross margin per unit: (selling − cost) / selling. Selling price is the
   // discount price when one is set, otherwise the regular price.
   const sellingPrice =
@@ -422,6 +431,7 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
       <input type="hidden" name="priceColor" value={form.priceColor} />
       <input type="hidden" name="status" value={form.status} />
       <input type="hidden" name="promoBadge" value={form.promoBadge} />
+      <input type="hidden" name="offerText" value={form.offerText} />
       <input type="hidden" name="metaTitle" value={form.metaTitle} />
       <input type="hidden" name="metaDescription" value={form.metaDescription} />
       {form.isFeatured && <input type="hidden" name="isFeatured" value="on" />}
@@ -734,6 +744,51 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                     </span>
                   </span>
                 </label>
+              </div>
+
+              {/* Offer strip shown under the price on the product page. Tied to
+                  the discount on purpose: it only renders while something IS
+                  discounted, so an offer left here after a sale ends stops
+                  showing instead of promising a price the shopper won't get. */}
+              <div className="mt-4 border-t border-stone-100 pt-4">
+                <Label hint="optional · max 120 chars">Offer banner</Label>
+                <FieldShell>
+                  <input
+                    type="text"
+                    value={form.offerText}
+                    onChange={(e) => set("offerText", e.target.value)}
+                    maxLength={120}
+                    placeholder='e.g. "Buy 1 Get 1 Free" or "Eid Special — extra ৳100 off"'
+                    className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+                  />
+                </FieldShell>
+
+                {form.offerText.trim() ? (
+                  <>
+                    <p className="mt-2 text-[12px] font-medium text-stone-500">
+                      {hasAnyDiscount ? "Shows on the product page as:" : "Preview:"}
+                    </p>
+                    {/* Same gradient the storefront renders, so what the admin
+                        approves here is what a shopper sees. */}
+                    <div className="mt-1.5 flex max-w-sm items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-500 px-3.5 py-2.5 text-[13.5px] font-bold leading-snug text-white shadow-sm">
+                      <Icon name="tag" size={15} />
+                      <span className="min-w-0 break-words">{form.offerText.trim()}</span>
+                    </div>
+                    {!hasAnyDiscount && (
+                      <p className="mt-1.5 flex items-start gap-1.5 text-[12px] text-amber-600">
+                        <Icon name="warn" size={13} className="mt-0.5 shrink-0" />
+                        {hasOptions
+                          ? "Hidden until at least one option has a discount price."
+                          : "Hidden until you set a discount price above."}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-1.5 text-[12px] text-stone-400">
+                    Adds a coloured banner under the price. Only shown while the
+                    product is discounted.
+                  </p>
+                )}
               </div>
 
               {/* Storefront price colour. Empty = the theme default (near-black),

@@ -199,6 +199,7 @@ export default async function ProductPage({
             inStock={inStock}
             isFromPrice={hasVariants}
             priceColor={headlinePriceColor}
+            offerText={product.offerText}
           />
 
           <div className="border-t border-slate-100 pt-5">
@@ -228,6 +229,7 @@ export default async function ProductPage({
                 imageUrl: v.imageUrl,
               }))}
               priceColor={product.priceColor}
+              offerText={product.offerText}
               sizeLabel={sizeLabel}
               sizeOrder={sizeGuide?.values ?? []}
               sizeChartHtml={sizeChartHtml}

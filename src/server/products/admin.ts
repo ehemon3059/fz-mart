@@ -114,6 +114,8 @@ export interface ProductInput {
   isFeatured?: boolean;
   status?: "ACTIVE" | "INACTIVE";
   promoBadge?: string | null;
+  /** Gradient offer strip copy; shown only while the product is discounted. */
+  offerText?: string | null;
   /** Optional SEO overrides; null/undefined → storefront default. */
   metaTitle?: string | null;
   metaDescription?: string | null;
@@ -169,6 +171,7 @@ export async function createProduct(input: ProductInput) {
       isFeatured: input.isFeatured ?? false,
       status: input.status ?? "ACTIVE",
       promoBadge: input.promoBadge ?? null,
+      offerText: input.offerText ?? null,
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
       sizeGuideId: input.sizeGuideId ?? null,
@@ -287,6 +290,7 @@ export async function updateProduct(id: number, input: ProductInput) {
         isFeatured: input.isFeatured ?? false,
         status: input.status ?? "ACTIVE",
         promoBadge: input.promoBadge ?? null,
+        offerText: input.offerText ?? null,
         metaTitle: input.metaTitle ?? null,
         metaDescription: input.metaDescription ?? null,
         sizeGuideId: input.sizeGuideId ?? null,

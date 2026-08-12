@@ -135,6 +135,11 @@ model Product {
   isFeatured         Boolean                   @default(false)
   status             ProductStatus             @default(ACTIVE)
   promoBadge         String?
+  // Gradient offer strip on the product page, under the price ("Buy 1 Get 1
+  // Free", "Eid Special — extra ৳100 off"). Admin-written free text, shown ONLY
+  // when the product is actually discounted, so a stale banner can't outlive the
+  // offer it advertises. Null/blank = no strip.
+  offerText          String?
   // Optional SEO overrides (Phase 2); blank → default from name/description.
   metaTitle          String?
   metaDescription    String?                   @db.Text
