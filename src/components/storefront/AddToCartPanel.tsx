@@ -183,13 +183,19 @@ function ActionButtons({
           <Banknote size={18} />
           Buy Now — Cash on Delivery
         </button>
+        {/* btn-sweep gives this the diagonal fill the home page category tiles
+            use on "Shop Now". The label has to live in its own <span> — the
+            sweeping panel sits behind the button at z-index:-1 and would cover
+            bare text nodes. */}
         <button
           onClick={onAdd}
           disabled={disabled}
-          className="btn-brand-outline flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-outline btn-sweep flex w-full items-center justify-center rounded-xl px-4 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <ShoppingCart size={17} />
-          Add to Cart
+          <span className="flex items-center gap-2">
+            <ShoppingCart size={17} />
+            Add to Cart
+          </span>
         </button>
       </div>
       {soldOut && <p className="text-sm font-medium text-red-600">Currently out of stock.</p>}

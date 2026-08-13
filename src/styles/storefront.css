@@ -699,6 +699,38 @@
 /* wishlist "saved" state: filled brand even at rest */
 .fz .btn-brand-outline.is-active{background:var(--btn-primary,var(--brand));color:#fff;}
 
+/* ---------- sweep fill (same animation as the home page "Shop Now" tile) ----
+   Opt-in with .btn-sweep beside .btn-brand-outline. The fill is a ::after panel
+   parked below-left and rotated 10deg, which un-rotates and slides home on
+   hover, so the colour wipes in diagonally instead of switching. The same three
+   details as .cat-cta are load-bearing here: the button's label must be wrapped
+   in a <span> (the panel sits at z-index:-1 and would paint over bare text),
+   `isolation:isolate` keeps that negative z-index from escaping the button, and
+   the panel is 120% wide because the rotation would otherwise expose a corner.
+
+   Gated to hover-capable pointers: on touch there is no hover to animate, and
+   the plain .btn-brand-outline fill below stays exactly as it is today. */
+@media (hover:hover){
+  .fz .btn-brand-outline.btn-sweep{position:relative;overflow:hidden;isolation:isolate;
+    transition:color .4s ease,border-color .15s,opacity .15s;}
+  .fz .btn-brand-outline.btn-sweep > span{position:relative;z-index:1;}
+  .fz .btn-brand-outline.btn-sweep::after{content:"";position:absolute;z-index:-1;inset:0;width:120%;height:100%;
+    background:var(--btn-primary,var(--brand));backface-visibility:hidden;will-change:transform;
+    transform:rotate3d(0,0,1,10deg) translate3d(-1.2em,110%,0);transform-origin:0% 100%;
+    transition:transform .45s ease;}
+  /* The wipe replaces the instant background swap, so keep the button itself
+     transparent on hover and let only the text colour flip. */
+  .fz .btn-brand-outline.btn-sweep:hover:not(:disabled){background:transparent;color:#fff;}
+  .fz .btn-brand-outline.btn-sweep:hover:not(:disabled)::after{transform:rotate3d(0,0,1,0deg) translate3d(0,0,0);}
+  /* Disabled buttons keep the panel parked off-screen. */
+  .fz .btn-brand-outline.btn-sweep:disabled::after{transform:rotate3d(0,0,1,10deg) translate3d(-1.2em,110%,0);}
+  /* Golden Elegance: the preset paints its gloss gradient on the button itself,
+     which would appear instantly. Move it onto the sweeping panel instead. */
+  .fz[data-brand-gloss="on"] .btn-brand-outline.btn-sweep:hover:not(:disabled){background:transparent;}
+  .fz[data-brand-gloss="on"] .btn-brand-outline.btn-sweep::after{
+    background:linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%);}
+}
+
 /* ---------- glossy golden fills (Golden Elegance preset only) ----------
    Opt-in via data-brand-gloss="on" on the .fz wrapper (set in the storefront
    layout when the saved palette matches a preset flagged `gloss`). The exact
