@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono, Manrope, Poppins, Spline_Sans_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import TopProgressBar from "@/components/TopProgressBar";
 import { isIpBlocked } from "@/lib/ip-block";
 import { getClientIp } from "@/lib/client-ip";
@@ -8,39 +8,69 @@ import { SITE_NAME, SITE_TAGLINE, siteUrl } from "@/lib/seo";
 import { primeSiteUrl } from "@/server/settings/site";
 import "./globals.css";
 
-const geistSans = Geist({
+/* ── Fonts ────────────────────────────────────────────────────────────────
+ * All five families are LOCAL files under ./fonts, not `next/font/google`.
+ *
+ * next/font/google downloads its files from fonts.googleapis.com at BUILD
+ * time, which made every production build depend on reaching Google. A flaky
+ * connection, a VPN or a rate-limited burst of builds aborted the whole build
+ * with "Failed to fetch `Geist` from Google Fonts" — nothing to do with the
+ * code being built. Vendoring the woff2 files removes that dependency: builds
+ * now work offline and can't be broken by someone else's network.
+ *
+ * Runtime behaviour is unchanged. next/font still self-hosted these files from
+ * our own origin before; only the point of ACQUISITION moved from build-time
+ * download to a checked-in file.
+ *
+ * These are the latin subsets. Adding another script (cyrillic, greek) means
+ * downloading that subset's woff2 and adding a second `src` entry.
+ */
+
+// Variable fonts — one file covers the whole 100–900 axis, so `weight` is a
+// range rather than a list.
+const geistSans = localFont({
+  src: "./fonts/geist-latin-variable.woff2",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  weight: "100 900",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: "./fonts/geist-mono-latin-variable.woff2",
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: "100 900",
+  display: "swap",
 });
 
 // Used only by the admin Pages screens (see tailwind.config.ts `font-sans`
 // override there) — kept separate from Geist so the rest of the site is
 // unaffected.
-const manrope = Manrope({
+const manrope = localFont({
+  src: "./fonts/manrope-latin-variable.woff2",
   variable: "--font-manrope",
-  subsets: ["latin"],
+  weight: "200 800",
+  display: "swap",
 });
 
-const splineSansMono = Spline_Sans_Mono({
+const splineSansMono = localFont({
+  src: "./fonts/spline-sans-mono-latin-variable.woff2",
   variable: "--font-spline-mono",
-  subsets: ["latin"],
+  weight: "300 700",
+  display: "swap",
 });
 
-// Poppins ships with the category-card design. Self-hosted through next/font
-// rather than the design's <link> to fonts.googleapis.com: that would add two
-// render-blocking round-trips to a third party on every page, and next/font
-// already inlines the @font-face with the file served from our own origin.
-// Weights are pinned to the four the design uses — a variable axis would ship
-// more than is needed here.
-const poppins = Poppins({
+// Poppins ships with the category-card design. Unlike the four above it has no
+// variable axis, so each weight is its own file. Pinned to the four weights the
+// design actually uses — the folder also holds 300/800 and italics, which are
+// left out rather than shipped unused.
+const poppins = localFont({
+  src: [
+    { path: "./fonts/poppins/poppins-v24-latin-regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/poppins/poppins-v24-latin-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/poppins/poppins-v24-latin-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/poppins/poppins-v24-latin-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 

@@ -29,6 +29,7 @@ import SizeGuidePanel, { type GuideOption } from "./form/SizeGuidePanel";
 import { GalleryGrid, useImageUpload } from "./form/ImageUploader";
 import { fmtTaka, fmtTakaInput, paisaToTakaStr, parseTaka } from "./form/helpers";
 import { initialFromProduct } from "./form/initialState";
+import { draftKey, useDraftAutosave } from "./form/useDraftAutosave";
 import { summarise } from "./form/variant-utils";
 import {
   MAX_IMAGES,
@@ -39,6 +40,17 @@ import {
   type SellingType,
   type VariantRow,
 } from "./form/types";
+
+/** "4 minutes ago" for the draft-rescue banner. */
+function relativeTime(ts: number) {
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return "a moment ago";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
 
 /** Prose names for the three selling types, for confirms and inline notes. */
 const SELLING_TYPE_NAMES: Record<SellingType, string> = {
@@ -56,9 +68,21 @@ interface Props {
 
 export default function ProductForm({ categories, sizeGuides = [], product }: Props) {
   const isEdit = !!product;
-  const [form, setForm] = useState<FormState>(() => initialFromProduct(product));
+  // The state this form opened with. Autosave compares against it so an
+  // untouched form never leaves a draft behind.
+  const baseline = useMemo(() => initialFromProduct(product), [product]);
+  const [form, setForm] = useState<FormState>(baseline);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, startSave] = useTransition();
+
+  // Crash protection: mirrors the form into localStorage as it's typed and
+  // offers it back after a reload, a closed tab or a browser crash.
+  const draft = useDraftAutosave<FormState>({
+    key: draftKey(product?.id ?? null),
+    state: form,
+    baseline,
+    onRestore: setForm,
+  });
   // Rows and colours discarded by a selling-type switch, kept until save so a
   // mis-click costs nothing.
   const [stash, setStash] = useState<{ variants: VariantRow[]; colors: ColorRow[] } | null>(null);
@@ -402,11 +426,22 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
     setErrors(clientErrors);
     if (Object.keys(clientErrors).length) return;
 
+    // Stop mirroring and drop the draft: a successful save redirects away, and
+    // a stale draft would then be offered back over the saved product.
+    draft.suspend();
     startSave(async () => {
       const result = await saveProduct(product?.id ?? null, fd);
-      if (result?.fieldErrors) setErrors(result.fieldErrors);
-      else if (result?.error) setErrors({ _form: result.error });
-      // success → redirect happens server-side
+      // Success redirects server-side, so reaching here at all means the save
+      // was rejected. Resume ONLY on an explicit error: resuming unconditionally
+      // would re-write the draft if a success ever returned normally, and that
+      // stale draft would then be offered on the next new-product form.
+      if (result?.fieldErrors) {
+        draft.resume();
+        setErrors(result.fieldErrors);
+      } else if (result?.error) {
+        draft.resume();
+        setErrors({ _form: result.error });
+      }
     });
   };
 
@@ -467,6 +502,14 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
           </p>
         </div>
         <div className="hidden items-center gap-2 lg:flex">
+          {/* Reassurance that the safety net is on — the admin can see the work
+              is held locally, so a crash is no longer a lost afternoon. */}
+          {draft.savedAt != null && !draft.offer && (
+            <span className="mr-1 flex items-center gap-1.5 text-[12.5px] text-stone-400">
+              <Icon name="check" size={13} className="text-brand-600" />
+              Draft saved on this computer
+            </span>
+          )}
           <Link
             href="/admin/products"
             className="rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-[13.5px] font-semibold text-stone-600 transition hover:bg-stone-50"
@@ -482,6 +525,34 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
           </button>
         </div>
       </div>
+
+      {/* Crash rescue. Offered, never applied on its own — on an edit form a
+          silent restore would hide what the product actually holds. */}
+      {draft.offer && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Icon name="info" size={16} className="shrink-0 text-amber-600" />
+          <p className="min-w-0 flex-1 text-[13px] text-amber-900">
+            <span className="font-semibold">Unsaved work found</span> — this form was left with unsaved changes{" "}
+            {relativeTime(draft.offer.savedAt)}. Restore them?
+          </p>
+          <span className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={draft.discard}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-amber-800 transition hover:bg-amber-100"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={draft.restore}
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-amber-700"
+            >
+              Restore
+            </button>
+          </span>
+        </div>
+      )}
 
       {errors._form && (
         <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">{errors._form}</p>
