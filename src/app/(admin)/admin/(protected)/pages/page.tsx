@@ -7,13 +7,20 @@ import {
 } from "@/server/pages/admin";
 import { PageStatsRow } from "@/components/admin/pages/PageStatsRow";
 import { CategorySection } from "@/components/admin/pages/CategorySection";
+import FooterShopLinks from "@/components/admin/pages/FooterShopLinks";
 import type { AdminPageRow } from "@/components/admin/pages/PageRow";
 import { Icon } from "@/components/icons";
+import { getShopLinksForAdmin, MAX_SHOP_LINKS } from "@/server/settings/footer-links";
+import { listActiveCategories } from "@/server/categories";
 
 export const metadata = { title: "Content Pages — FZ-Mart Admin" };
 
 export default async function AdminPagesPage() {
-  const pages = await listAllPages();
+  const [pages, shopLinks, categories] = await Promise.all([
+    listAllPages(),
+    getShopLinksForAdmin(),
+    listActiveCategories(),
+  ]);
   const bySlug = new Map(pages.map((p) => [p.slug, p]));
 
   const rows: AdminPageRow[] = PAGE_SLUGS.map((slug) => {
@@ -63,6 +70,17 @@ export default async function AdminPagesPage() {
             pages={rows.filter((p) => p.category === cat)}
           />
         ))}
+      </div>
+
+      {/* The footer's Shop column is a list of links, not a page, so it sits
+          below the page sections rather than inside one. */}
+      <div className="mt-9">
+        <FooterShopLinks
+          initialLinks={shopLinks.links}
+          configured={shopLinks.configured}
+          max={MAX_SHOP_LINKS}
+          categories={categories.map((c) => ({ name: c.name, slug: c.slug }))}
+        />
       </div>
     </div>
   );

@@ -2,20 +2,12 @@ import Link from "next/link";
 import { getDictionary } from "@/i18n/server";
 import { getCompanyInfo } from "@/server/settings/company";
 import { getLogoUrl } from "@/server/settings/branding";
+import { getShopLinks } from "@/server/settings/footer-links";
 import { LOGO_DISPLAY_WIDTH, LOGO_DISPLAY_HEIGHT, LOGO_MAX_DISPLAY_WIDTH } from "@/lib/logo-spec";
 import { FacebookIcon, InstagramIcon, YoutubeIcon, TwitterIcon, PinIcon, PhoneIcon, MailIcon } from "./icons";
 
+// The Shop column is admin-managed (/admin/pages); the rest are fixed routes.
 const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
-  {
-    heading: "Shop",
-    links: [
-      { label: "Electronics", href: "/category/electronics" },
-      { label: "Fashion", href: "/category/fashion" },
-      { label: "Home & Living", href: "/category/home-living" },
-      { label: "Grocery", href: "/category/grocery" },
-      { label: "Beauty", href: "/category/beauty" },
-    ],
-  },
   {
     heading: "Customer Care",
     links: [
@@ -47,11 +39,18 @@ const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
 ];
 
 export default async function Footer() {
-  const [dict, company, logoUrl] = await Promise.all([
+  const [dict, company, logoUrl, shopLinks] = await Promise.all([
     getDictionary(),
     getCompanyInfo(),
     getLogoUrl(),
+    getShopLinks(),
   ]);
+
+  // An admin who saves an empty list is choosing to hide the column, so it is
+  // dropped rather than rendered as a bare heading.
+  const columns = shopLinks.length
+    ? [{ heading: "Shop", links: shopLinks }, ...COLS]
+    : COLS;
 
   const socials = [
     { href: company.facebookUrl, label: "Facebook", Icon: FacebookIcon },
@@ -117,11 +116,11 @@ export default async function Footer() {
             </div>
           </div>
 
-          {COLS.map((col) => (
+          {columns.map((col) => (
             <div className="ft-col" key={col.heading}>
               <h4>{col.heading}</h4>
               {col.links.map((l) => (
-                <Link key={l.label} href={l.href}>{l.label}</Link>
+                <Link key={l.href} href={l.href}>{l.label}</Link>
               ))}
             </div>
           ))}
