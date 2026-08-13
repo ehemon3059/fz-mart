@@ -731,6 +731,38 @@
     background:linear-gradient(180deg,#f6e08d 0%,#ecc85f 38%,#d9a83f 58%,#b3842a 100%);}
 }
 
+/* ---------- attention shake ----------
+   Opt-in with .btn-shake. A 0.6s wiggle that repeats every 4s to pull the eye
+   back to the buy action.
+
+   Done as one looping animation rather than a JS interval that re-adds a class:
+   the shake occupies the first 15% of a 4s cycle (0.6s ÷ 4s) and the remaining
+   85% holds still, which is the same cadence with no timer, no forced reflow to
+   restart the animation, and nothing left running after the component unmounts.
+   The percentages below are the demo's 0–100% keyframes scaled by 0.15. */
+@keyframes fz-btn-shake{
+  0%,15%,100%{transform:translateX(0);}
+  1.5%{transform:translateX(-6px) rotate(-2deg);}
+  3%{transform:translateX(6px) rotate(2deg);}
+  4.5%{transform:translateX(-6px) rotate(-2deg);}
+  6%{transform:translateX(6px) rotate(2deg);}
+  7.5%{transform:translateX(-4px) rotate(-1deg);}
+  9%{transform:translateX(4px) rotate(1deg);}
+  10.5%{transform:translateX(-2px);}
+  12%{transform:translateX(2px);}
+  13.5%{transform:translateX(-1px);}
+}
+.fz .btn-shake{animation:fz-btn-shake 4s ease-in-out infinite;}
+/* Stop the moment the shopper engages — a button that jerks sideways under the
+   cursor is a misclick waiting to happen. `animation:none` (not paused) so the
+   button snaps back to rest instead of freezing mid-wiggle. */
+.fz .btn-shake:hover,.fz .btn-shake:focus-visible,.fz .btn-shake:active{animation:none;}
+/* Nothing to advertise when it can't be bought. */
+.fz .btn-shake:disabled{animation:none;}
+@media (prefers-reduced-motion:reduce){
+  .fz .btn-shake{animation:none;}
+}
+
 /* ---------- glossy golden fills (Golden Elegance preset only) ----------
    Opt-in via data-brand-gloss="on" on the .fz wrapper (set in the storefront
    layout when the saved palette matches a preset flagged `gloss`). The exact

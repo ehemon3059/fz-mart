@@ -177,11 +177,12 @@ function ActionButtons({
         {/* btn-sweep gives this the diagonal fill the home page category tiles
             use on "Shop Now". The label has to live in its own <span> — the
             sweeping panel sits behind the button at z-index:-1 and would cover
-            bare text nodes. */}
+            bare text nodes. btn-shake wiggles it every 4s to draw the eye back;
+            both are defined in storefront.css. */}
         <button
           onClick={onAdd}
           disabled={disabled}
-          className="btn-brand-outline btn-sweep flex w-full items-center justify-center rounded-xl px-4 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-outline btn-sweep btn-shake flex w-full items-center justify-center rounded-xl px-4 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
         >
           <span className="flex items-center gap-2">
             <ShoppingCart size={17} />
