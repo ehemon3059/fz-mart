@@ -72,10 +72,10 @@ export default function VariantMatrix({
                       className="h-7 w-7 shrink-0 rounded border border-stone-200 object-cover"
                     />
                   ) : c ? (
-                    <span
-                      className="h-7 w-7 shrink-0 rounded border border-stone-200"
-                      style={{ backgroundColor: c.hexCode || "#e7e5e1" }}
-                    />
+                    // No photo yet. A neutral placeholder, not the stored hex —
+                    // the swatch colour is no longer editable, so painting the
+                    // row with it would just show stale (usually black) data.
+                    <span className="h-7 w-7 shrink-0 rounded border border-dashed border-stone-300 bg-stone-100" />
                   ) : null}
                   <span className="truncate text-[13px] font-semibold text-stone-700">
                     {c?.name || (colors.length ? "Unnamed" : "All")}

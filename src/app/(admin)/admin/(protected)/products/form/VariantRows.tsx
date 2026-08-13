@@ -86,23 +86,17 @@ export default function VariantRows({
               return (
                 <div key={idx} className="rounded-lg border border-stone-200 bg-stone-50/60 p-2">
                   <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[140px_1fr_110px_110px_90px_36px]">
-                    {/* Colour is optional per row: a swatch colour + name. Only a
-                        named colour is saved and matched to its swatch/image. */}
-                    <div className="flex min-w-0 items-center overflow-hidden rounded-md border border-stone-200 bg-white">
-                      <input
-                        type="color"
-                        value={v.colorHex || "#000000"}
-                        onChange={(e) => onChange(idx, { colorHex: e.target.value })}
-                        title="Swatch colour"
-                        className="h-8 w-8 shrink-0 cursor-pointer border-r border-stone-200 bg-white p-0.5"
-                      />
-                      <input
-                        value={v.color}
-                        onChange={(e) => onChange(idx, { color: e.target.value })}
-                        placeholder="Colour"
-                        className="w-full min-w-0 bg-transparent px-2 py-2 text-[13.5px] text-stone-800 outline-none placeholder:text-stone-400"
-                      />
-                    </div>
+                    {/* Colour is optional per row: just a name, matched to its
+                        photo. There is no hex picker — shoppers choose from the
+                        product shots in the "More Colors" strip, never a chip,
+                        so the swatch colour was never seen. `colorHex` still
+                        rides along in state so saved values survive a re-save. */}
+                    <input
+                      value={v.color}
+                      onChange={(e) => onChange(idx, { color: e.target.value })}
+                      placeholder="Colour"
+                      className="min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500 placeholder:text-stone-400"
+                    />
                     <input
                       value={v.size}
                       onChange={(e) => onChange(idx, { size: e.target.value })}

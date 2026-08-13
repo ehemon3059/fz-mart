@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * The product's colours — photo, name, and a hex fallback, authored ONCE and
- * stamped onto every generated row of that colour. Without this a 7-colour ×
- * 14-size saree would mean uploading the same photo 98 times.
+ * The product's colours — photo and name, authored ONCE and stamped onto every
+ * generated row of that colour. Without this a 7-colour × 14-size saree would
+ * mean uploading the same photo 98 times.
  *
- * The photo is the real chooser on the storefront ("More Colors" is a strip of
- * product shots), so it leads the row; the hex sits behind an "advanced"
- * disclosure because it only matters for colours with no photo.
+ * The photo IS the chooser: the storefront's "More Colors" is a strip of product
+ * shots, so a colour is defined by its picture, not by a hex value. There is no
+ * swatch-colour picker here — `hexCode` survives in state only so values saved
+ * before it was removed are not wiped on the next save.
  */
 
-import { useState } from "react";
 import { Icon } from "@/components/icons";
 import type { ColorRow } from "./types";
 
@@ -34,23 +34,12 @@ export default function ColorList({
   onMove,
   onPickPhoto,
 }: Props) {
-  const [showHex, setShowHex] = useState(false);
-
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[12px] font-semibold uppercase tracking-wide text-stone-400">
           Colours{colors.length > 0 && ` · ${colors.length}`}
         </span>
-        {colors.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowHex((v) => !v)}
-            className="text-[11.5px] font-semibold text-stone-400 underline decoration-dotted hover:text-stone-600"
-          >
-            {showHex ? "Hide" : "Show"} swatch colours
-          </button>
-        )}
       </div>
 
       <div className="space-y-2">
@@ -84,19 +73,10 @@ export default function ColorList({
                 placeholder="Colour name — e.g. Purple"
                 className="w-full rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500"
               />
-              {showHex && (
-                <label className="mt-1.5 flex items-center gap-2 text-[11.5px] text-stone-500">
-                  <input
-                    type="color"
-                    value={c.hexCode || "#000000"}
-                    onChange={(e) => onChange(idx, { hexCode: e.target.value })}
-                    className="h-6 w-8 cursor-pointer rounded border border-stone-200 bg-white p-0.5"
-                  />
-                  Fallback chip — only used when this colour has no photo
-                </label>
-              )}
-              {!c.imageUrl && !showHex && (
-                <p className="mt-1 text-[11.5px] text-stone-400">No photo — shoppers see a colour chip instead.</p>
+              {!c.imageUrl && (
+                <p className="mt-1 text-[11.5px] text-amber-600">
+                  Add a photo — the colour strip only shows when every colour has one.
+                </p>
               )}
             </div>
 
