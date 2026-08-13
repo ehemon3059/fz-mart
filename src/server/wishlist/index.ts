@@ -39,10 +39,14 @@ export async function listWishlist(customerId: string) {
           priceColor: true,
           status: true,
           // Cheapest row backs the card's "from" price and its colour.
+          // imageUrl is here for the thumbnail, not for pricing: a product whose
+          // photos were all uploaded per-option has an empty gallery, and the
+          // card falls back to these (see resolvePrimaryImage).
           variants: {
             orderBy: { sortOrder: "asc" },
-            select: { price: true, discountPrice: true, priceColor: true },
+            select: { price: true, discountPrice: true, priceColor: true, imageUrl: true },
           },
+          colors: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
           images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
         },
       },

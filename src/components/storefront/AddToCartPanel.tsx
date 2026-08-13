@@ -170,19 +170,10 @@ function ActionButtons({
 }) {
   return (
     <>
-      {/* Buy Now is the primary path and gets the full width — COD is named on
-          it because "pay when it arrives" is the single biggest objection
-          remover in this market. btn-brand-* are themed via --brand in
-          storefront.css so both buttons track the admin brand palette. */}
+      {/* Both buttons are full width, Add to Cart on top and Buy Now beneath it.
+          btn-brand-* are themed via --brand in storefront.css so the pair tracks
+          the admin brand palette. */}
       <div className="flex flex-col gap-2.5">
-        <button
-          onClick={onBuy}
-          disabled={disabled}
-          className="btn-brand-solid flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Banknote size={18} />
-          Buy Now — Cash on Delivery
-        </button>
         {/* btn-sweep gives this the diagonal fill the home page category tiles
             use on "Shop Now". The label has to live in its own <span> — the
             sweeping panel sits behind the button at z-index:-1 and would cover
@@ -196,6 +187,14 @@ function ActionButtons({
             <ShoppingCart size={17} />
             Add to Cart
           </span>
+        </button>
+        <button
+          onClick={onBuy}
+          disabled={disabled}
+          className="btn-brand-solid flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Banknote size={18} />
+          Buy Now
         </button>
       </div>
       {soldOut && <p className="text-sm font-medium text-red-600">Currently out of stock.</p>}
