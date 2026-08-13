@@ -39,6 +39,19 @@ const BLOCKQUOTE_RE = /^\s*(?:&gt;|>)\s?/;
 
 const isTableRow = (l: string) => l.trim().startsWith("|") && l.trim().endsWith("|");
 const isTableDivider = (l: string) => /^\s*\|[\s:|-]+\|\s*$/.test(l) && l.includes("-");
+/**
+ * A table only STARTS where a row is followed by a |---|---| divider. Half a
+ * table — the header row of one still being typed, or a stray pipe line — is
+ * not a table and must fall through to the paragraph branch.
+ *
+ * This distinction is load-bearing: the paragraph loop below refuses to consume
+ * table rows, so treating a lone `| Age | Height |` as "a table row" left no
+ * branch willing to advance `i`, and the renderer spun forever on it. The admin
+ * live preview runs this on every keystroke, so that froze the whole tab as
+ * soon as someone typed the first line of a size chart by hand.
+ */
+const isTableStart = (lines: string[], i: number) =>
+  isTableRow(lines[i]) && i + 1 < lines.length && isTableDivider(lines[i + 1]);
 const splitCells = (l: string) =>
   l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
 
@@ -153,7 +166,7 @@ export function renderMarkdown(src: string): string {
     }
 
     // Table — a header row followed by a |---|---| divider
-    if (isTableRow(line) && i + 1 < lines.length && isTableDivider(lines[i + 1])) {
+    if (isTableStart(lines, i)) {
       const head = splitCells(line);
       i += 2;
       const body: string[][] = [];
@@ -210,7 +223,7 @@ export function renderMarkdown(src: string): string {
       !bullet.test(lines[i]) &&
       !ordered.test(lines[i]) &&
       !BLOCKQUOTE_RE.test(lines[i]) &&
-      !isTableRow(lines[i]) &&
+      !isTableStart(lines, i) &&
       !SPEC_OPEN_RE.test(lines[i]) &&
       !FACTS_OPEN_RE.test(lines[i])
     ) {
@@ -218,6 +231,11 @@ export function renderMarkdown(src: string): string {
       i++;
     }
     if (para.length) out.push(`<p>${inline(para.join("<br />"))}</p>`);
+    // Belt and braces: every branch above is meant to consume at least one
+    // line, but a future edit that adds a guard without a matching consumer
+    // would hang the renderer — and this runs on every keystroke in the admin
+    // preview, so a hang means a frozen tab and lost work, not a slow page.
+    else i++;
   }
 
   return out.join("\n");
