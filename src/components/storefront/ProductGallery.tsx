@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { Icon } from "@/components/icons";
 import { useVariantImage } from "@/components/storefront/product/VariantImageContext";
@@ -335,7 +336,16 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
   );
 }
 
-/* ─────────── full-screen zoom + pan viewer ─────────── */
+/* ─────────── full-screen zoom + pan viewer ───────────
+ *
+ * Rendered into <body> through a portal rather than in place. The gallery
+ * column is `lg:sticky`, and a sticky element ALWAYS opens a stacking context —
+ * so an in-place `fixed inset-0 z-[100]` is trapped inside that box and paints
+ * *below* the sticky header (z-50) and below any positioned sibling in the buy
+ * box (the "More Colors" tiles), which showed through the backdrop. Escaping to
+ * <body> puts the viewer in the root stacking context, where z-[100] finally
+ * means what it says.
+ */
 function Lightbox({
   images,
   index,
@@ -371,6 +381,16 @@ function Lightbox({
     reset();
   };
 
+  // Freeze the page behind the viewer, so a scroll gesture over the backdrop
+  // doesn't drag the product page around underneath it.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
   // Keyboard: Esc closes, +/- zoom, arrows switch images.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -405,7 +425,11 @@ function Lightbox({
 
   const url = images[index]?.url ?? PLACEHOLDER;
 
-  return (
+  // Never reached during SSR — `lightbox` starts false and only a click opens
+  // it — but the guard keeps `document` off the server path regardless.
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex flex-col bg-black/90" onMouseDown={onClose}>
       {/* toolbar */}
       <div
@@ -497,6 +521,7 @@ function Lightbox({
       <p className="pb-4 text-center text-[12px] text-white/50" onMouseDown={(e) => e.stopPropagation()}>
         Scroll or use +/− to zoom · drag to move · double-click to reset
       </p>
-    </div>
+    </div>,
+    document.body,
   );
 }
