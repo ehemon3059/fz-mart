@@ -171,7 +171,8 @@ function ActionButtons({
   return (
     <>
       {/* The two buttons sit side by side, sharing the row evenly (flex-1 with
-          a zero basis, so a longer label can't win more width than the other).
+          a zero basis, so a longer label can't win more width than the other),
+          with square corners (rounded-none) and compact padding.
           btn-brand-* are themed via --brand in storefront.css so the pair tracks
           the admin brand palette. */}
       <div className="flex items-stretch gap-2.5">
@@ -183,20 +184,24 @@ function ActionButtons({
         <button
           onClick={onAdd}
           disabled={disabled}
-          className="btn-brand-outline btn-sweep btn-shake flex min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-xl px-3 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
+          className="btn-brand-outline btn-sweep btn-shake flex min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-none px-3 py-2 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
         >
-          <span className="flex items-center gap-2 whitespace-nowrap">
-            <ShoppingCart size={17} />
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <ShoppingCart size={15} />
             Add to Cart
           </span>
         </button>
         <button
           onClick={onBuy}
           disabled={disabled}
-          className="btn-brand-solid flex min-w-0 flex-1 basis-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-3 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
+          className="btn-brand-solid btn-glow flex min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-none px-3 py-2 text-[13.5px] font-bold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
         >
-          <Banknote size={18} />
-          Buy Now
+          {/* btn-glow paints two panels at z-index:-1; a bare text node would
+              be painted over, so the label is wrapped like btn-sweep's. */}
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <Banknote size={16} />
+            Buy Now
+          </span>
         </button>
       </div>
       {soldOut && <p className="text-sm font-medium text-red-600">Currently out of stock.</p>}

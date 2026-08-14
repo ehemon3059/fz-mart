@@ -763,6 +763,49 @@
   .fz .btn-shake{animation:none;}
 }
 
+/* ---------- rainbow glow (opt-in with .btn-glow) ----------
+   A blurred rainbow gradient sits behind the button and fades in on hover. Two
+   pseudo-elements: ::before is the blurred gradient bleeding 2px past every
+   edge, ::after re-paints the button's own fill on top so the gradient only
+   ever shows as a halo, never behind the label.
+
+   Both sit at z-index:-1 with `isolation:isolate` on the button, matching
+   .btn-sweep above — that keeps the negative stacking contained instead of
+   letting the panels slide behind the card. The label still has to be a real
+   element above them, so .btn-glow > * is lifted to z-index:1 (covers both the
+   <span>-wrapped and bare-icon cases).
+
+   Adapted from the supplied snippet: border-radius follows the button
+   (inherit) rather than a hardcoded 10px, and the ::after fill uses the brand
+   token instead of a fixed hex so the halo tracks the admin palette.
+
+   Gated to hover-capable pointers — there is no hover on touch, and the
+   animation would otherwise run forever on a panel nobody can trigger. */
+@media (hover:hover){
+  .fz .btn-glow{position:relative;z-index:0;isolation:isolate;}
+  .fz .btn-glow > *{position:relative;z-index:1;}
+  .fz .btn-glow::before{content:"";position:absolute;z-index:-1;
+    top:-2px;left:-2px;width:calc(100% + 4px);height:calc(100% + 4px);
+    background:linear-gradient(45deg,#ff0000,#ff7300,#fffb00,#48ff00,#00ffd5,#002bff,#7a00ff,#ff00c8,#ff0000);
+    background-size:400%;filter:blur(5px);border-radius:inherit;
+    opacity:0;transition:opacity .3s ease-in-out;
+    animation:fz-btn-glow 20s linear infinite;}
+  .fz .btn-glow::after{content:"";position:absolute;z-index:-1;inset:0;
+    background:var(--btn-primary,var(--brand));border-radius:inherit;}
+  .fz .btn-glow:hover:not(:disabled)::before{opacity:1;}
+  /* Nothing to advertise when it can't be bought. */
+  .fz .btn-glow:disabled::before{opacity:0;}
+}
+@keyframes fz-btn-glow{
+  0%{background-position:0 0;}
+  50%{background-position:400% 0;}
+  100%{background-position:0 0;}
+}
+/* Keep the halo, drop the 20s cycle. */
+@media (prefers-reduced-motion:reduce){
+  .fz .btn-glow::before{animation:none;}
+}
+
 /* ---------- glossy golden fills (Golden Elegance preset only) ----------
    Opt-in via data-brand-gloss="on" on the .fz wrapper (set in the storefront
    layout when the saved palette matches a preset flagged `gloss`). The exact
