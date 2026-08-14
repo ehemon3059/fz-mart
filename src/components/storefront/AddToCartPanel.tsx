@@ -170,10 +170,11 @@ function ActionButtons({
 }) {
   return (
     <>
-      {/* Both buttons are full width, Add to Cart on top and Buy Now beneath it.
+      {/* The two buttons sit side by side, sharing the row evenly (flex-1 with
+          a zero basis, so a longer label can't win more width than the other).
           btn-brand-* are themed via --brand in storefront.css so the pair tracks
           the admin brand palette. */}
-      <div className="flex flex-col gap-2.5">
+      <div className="flex items-stretch gap-2.5">
         {/* btn-sweep gives this the diagonal fill the home page category tiles
             use on "Shop Now". The label has to live in its own <span> — the
             sweeping panel sits behind the button at z-index:-1 and would cover
@@ -182,9 +183,9 @@ function ActionButtons({
         <button
           onClick={onAdd}
           disabled={disabled}
-          className="btn-brand-outline btn-sweep btn-shake flex w-full items-center justify-center rounded-xl px-4 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-outline btn-sweep btn-shake flex min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap rounded-xl px-3 py-3 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
         >
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 whitespace-nowrap">
             <ShoppingCart size={17} />
             Add to Cart
           </span>
@@ -192,7 +193,7 @@ function ActionButtons({
         <button
           onClick={onBuy}
           disabled={disabled}
-          className="btn-brand-solid flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-solid flex min-w-0 flex-1 basis-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-3 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
         >
           <Banknote size={18} />
           Buy Now
