@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getOrSetCache } from "@/lib/cache";
 import { listActiveCategories } from "@/server/categories";
 import { collectDescendantIds } from "@/server/categories/tree";
+import { resolvePrimaryImage } from "@/lib/product-images";
 
 /**
  * Resolve a category slug to the set of category ids it covers — the node plus
@@ -344,7 +345,13 @@ export async function suggestProducts(keyword: string, limit = 6): Promise<Sugge
       slug: true,
       price: true,
       discountPrice: true,
-      images: { orderBy: { sortOrder: "asc" }, select: { url: true }, take: 1 },
+      // Not just the gallery: a product may have an empty gallery and keep all
+      // its photos on the variant/colour rows, so resolvePrimaryImage() needs
+      // those too — otherwise such rows show a blank thumbnail. No `take: 1`,
+      // since the first gallery row isn't necessarily the primary one.
+      images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
+      variants: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
+      colors: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
     },
   });
   const byId = new Map(products.map((p) => [p.id, p]));
@@ -356,6 +363,6 @@ export async function suggestProducts(keyword: string, limit = 6): Promise<Sugge
       slug: p.slug,
       price: p.price,
       discountPrice: p.discountPrice,
-      image: p.images[0]?.url ?? null,
+      image: resolvePrimaryImage(p),
     }));
 }
