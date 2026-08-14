@@ -68,7 +68,14 @@ export interface ProductSearchCard {
   stock: number;
   promoBadge: string | null;
   priceColor: string | null;
-  variants: { price: number; discountPrice: number | null; priceColor: string | null }[];
+  variants: {
+    price: number;
+    discountPrice: number | null;
+    priceColor: string | null;
+    /** Per-option photo — the thumbnail fallback for a gallery-less product. */
+    imageUrl: string | null;
+  }[];
+  colors: { imageUrl: string | null }[];
   images: { url: string; isPrimary: boolean }[];
 }
 
@@ -235,11 +242,16 @@ export async function searchProducts(q: SearchQuery): Promise<SearchResult> {
           stock: true,
           promoBadge: true,
           priceColor: true,
-          // Cheapest row backs the card's "from" price and its colour.
+          // Cheapest row backs the card's "from" price and its colour. imageUrl
+          // is selected too: a product may have an empty gallery and keep all
+          // its photos on the variant/colour rows, and resolvePrimaryImage()
+          // falls back to those — without them such cards show the placeholder.
           variants: {
             orderBy: { sortOrder: "asc" },
-            select: { price: true, discountPrice: true, priceColor: true },
+            select: { price: true, discountPrice: true, priceColor: true, imageUrl: true },
           },
+          // Second fallback for the thumbnail, after variant photos.
+          colors: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
           images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
         },
       })
