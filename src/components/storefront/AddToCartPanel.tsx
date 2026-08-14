@@ -173,9 +173,12 @@ function ActionButtons({
       {/* The two buttons sit side by side, sharing the row evenly (flex-1 with
           a zero basis, so a longer label can't win more width than the other),
           with square corners (rounded-none) and compact padding.
+          The row is capped at 75% so the pair is a quarter narrower than the
+          column it sits in — verified down to 320px, where the labels still fit
+          on one line.
           btn-brand-* are themed via --brand in storefront.css so the pair tracks
           the admin brand palette. */}
-      <div className="flex items-stretch gap-2.5">
+      <div className="flex w-3/4 items-stretch gap-2.5">
         {/* btn-sweep gives this the diagonal fill the home page category tiles
             use on "Shop Now". The label has to live in its own <span> — the
             sweeping panel sits behind the button at z-index:-1 and would cover
