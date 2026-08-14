@@ -15,13 +15,21 @@ async function categoryIdsForSlug(slug: string): Promise<number[]> {
   return node ? collectDescendantIds(node.id, cats) : [];
 }
 
-// Full-text product search built on the MySQL FULLTEXT index (see the
-// @@fulltext on Product in schema.prisma). We drop to $queryRaw here because
-// Prisma's query builder can't express MATCH … AGAINST relevance ranking or
-// combine it with the filter/sort matrix the search page needs.
+// Product search. This ran on the MySQL FULLTEXT index via MATCH … AGAINST
+// until TiDB Serverless turned out to parse but not execute it, failing with
+// `UnknownType: *ast.MatchAgainst` regardless of tidb_enable_fulltext_index.
+// Keyword matching is therefore LIKE-based (see buildConditions).
 //
-// The keyword is always a BOUND PARAMETER (never string-interpolated), so this
-// is injection-safe despite being raw SQL.
+// Trade-off: leading-wildcard LIKE can't use an index, so keyword search is a
+// table scan — fine at this catalogue's size, but if Product grows into the
+// high thousands this should move to a real search service rather than adding
+// more indexes, which cannot help a '%term%' pattern.
+//
+// We still drop to $queryRaw because Prisma's query builder can't express the
+// relevance ranking or combine it with the filter/sort matrix the page needs.
+//
+// Keywords are always BOUND PARAMETERS (never string-interpolated) and LIKE
+// metacharacters are escaped, so this is injection-safe despite being raw SQL.
 
 export type SearchSort = "relevance" | "newest" | "price_asc" | "price_desc" | "bestselling";
 
@@ -71,6 +79,21 @@ const EFFECTIVE_PRICE = Prisma.sql`
   (CASE WHEN p.discountPrice IS NOT NULL AND p.discountPrice < p.price
         THEN p.discountPrice ELSE p.price END)`;
 
+/**
+ * Escape the LIKE metacharacters so a shopper searching for "50%" or "a_b"
+ * matches those literal characters instead of them acting as wildcards.
+ * Paired with an explicit ESCAPE '!' on every LIKE below.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[!%_]/g, (c) => `!${c}`);
+}
+
+/** Split a query into distinct non-empty words, capped so a pathological
+ *  paste can't turn into hundreds of OR'd LIKE scans. */
+function tokenize(keyword: string): string[] {
+  return [...new Set(keyword.split(/\s+/).filter(Boolean))].slice(0, 8);
+}
+
 function buildConditions(
   q: SearchQuery,
   categoryIds: number[] | null,
@@ -79,15 +102,37 @@ function buildConditions(
   let relevance: Prisma.Sql | null = null;
 
   const keyword = q.keyword?.trim();
-  if (keyword) {
-    // NATURAL LANGUAGE MODE ranks by relevance; the same expression is
-    // selected (for ORDER BY) and used as a filter. TiDB only allows a single
-    // column per MATCH, so name and description are matched separately and
-    // their scores summed for a combined relevance ranking.
-    relevance = Prisma.sql`(
-      MATCH(p.name) AGAINST(${keyword} IN NATURAL LANGUAGE MODE)
-      + MATCH(p.description) AGAINST(${keyword} IN NATURAL LANGUAGE MODE))`;
-    conditions.push(Prisma.sql`${relevance} > 0`);
+  const words = keyword ? tokenize(keyword) : [];
+  if (words.length > 0) {
+    // Substring matching rather than MATCH … AGAINST: TiDB Serverless parses
+    // but cannot execute MATCH (`UnknownType: *ast.MatchAgainst`), even with
+    // tidb_enable_fulltext_index = ON and the FULLTEXT indexes present. LIKE
+    // also sidesteps the FULLTEXT minimum-token-length floor, so short terms
+    // and Bangla substrings match — neither worked reliably under AGAINST.
+    //
+    // Every word must appear (in name OR description), so extra words narrow
+    // the result set the way a shopper expects.
+    for (const w of words) {
+      const pat = `%${escapeLike(w)}%`;
+      conditions.push(
+        Prisma.sql`(p.name LIKE ${pat} ESCAPE '!' OR p.description LIKE ${pat} ESCAPE '!')`,
+      );
+    }
+
+    // FULLTEXT scoring is gone, so relevance is synthesised: a name hit beats
+    // a description-only hit, and an earlier position in the name beats a
+    // later one (prefix ≈ best). Summed over words, highest score wins.
+    relevance = Prisma.join(
+      words.map((w) => {
+        const pat = `%${escapeLike(w)}%`;
+        return Prisma.sql`(CASE
+          WHEN p.name LIKE ${pat} ESCAPE '!'
+            THEN 1000 - LEAST(INSTR(LOWER(p.name), LOWER(${w})), 100)
+          WHEN p.description LIKE ${pat} ESCAPE '!' THEN 1
+          ELSE 0 END)`;
+      }),
+      " + ",
+    );
   }
 
   if (q.categorySlug) {
@@ -252,43 +297,31 @@ export interface Suggestion {
 }
 
 /**
- * Typeahead suggestions for the header dropdown. Uses BOOLEAN MODE with a
- * trailing wildcard for prefix matching (what a typeahead wants), and falls
- * back to a LIKE prefix scan for terms shorter than the FULLTEXT minimum
- * token length, which AGAINST would otherwise ignore.
+ * Typeahead suggestions for the header dropdown. Matches on the name only —
+ * a dropdown row shows the name, so a description-only hit looks like a
+ * non-sequitur to the shopper. Name hits are ordered by match position, so
+ * prefix matches ("shir" → "Shirt") surface above mid-word ones.
+ *
+ * The former BOOLEAN MODE query was removed with the rest of the MATCH …
+ * AGAINST usage; see the note at the top of this file.
  */
 export async function suggestProducts(keyword: string, limit = 6): Promise<Suggestion[]> {
   const term = keyword.trim();
   if (term.length < 2) return [];
 
-  // Strip boolean-mode operators from user input, then require each word as a
-  // prefix (+word*). Guards against a stray "+"/"-"/"*" breaking the query.
-  const cleaned = term.replace(/[+\-><()~*"@]/g, " ").trim();
-  const booleanExpr = cleaned
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => `+${w}*`)
-    .join(" ");
+  const words = tokenize(term);
+  if (words.length === 0) return [];
 
-  const rows = booleanExpr
-    ? await prisma.$queryRaw<{ id: number }[]>(Prisma.sql`
-        SELECT p.id FROM Product p
-        WHERE p.status = 'ACTIVE'
-          AND (MATCH(p.name) AGAINST(${booleanExpr} IN BOOLEAN MODE)
-               OR MATCH(p.description) AGAINST(${booleanExpr} IN BOOLEAN MODE))
-        LIMIT ${limit}`)
-    : [];
+  const nameConditions = words.map(
+    (w) => Prisma.sql`p.name LIKE ${`%${escapeLike(w)}%`} ESCAPE '!'`,
+  );
+  const rows = await prisma.$queryRaw<{ id: number }[]>(Prisma.sql`
+    SELECT p.id FROM Product p
+    WHERE p.status = 'ACTIVE' AND ${Prisma.join(nameConditions, " AND ")}
+    ORDER BY INSTR(LOWER(p.name), LOWER(${words[0]})) ASC, p.name ASC
+    LIMIT ${limit}`);
 
-  let ids = rows.map((r) => r.id);
-  if (ids.length === 0) {
-    // Fallback: prefix/substring match on the name for short or unindexed terms.
-    const like = await prisma.product.findMany({
-      where: { status: "ACTIVE", name: { contains: term } },
-      select: { id: true },
-      take: limit,
-    });
-    ids = like.map((r) => r.id);
-  }
+  const ids = rows.map((r) => r.id);
   if (ids.length === 0) return [];
 
   const products = await prisma.product.findMany({

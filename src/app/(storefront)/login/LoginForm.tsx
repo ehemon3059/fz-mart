@@ -111,7 +111,7 @@ export default function LoginForm({ next }: { next: string }) {
               type="email"
               required
               autoFocus
-              placeholder="you@example.com"
+              placeholder="Enter your email"
               aria-label="Email address"
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "var(--brand)";
@@ -145,7 +145,7 @@ export default function LoginForm({ next }: { next: string }) {
                 Sending…
               </>
             ) : (
-              "Send sign-in link"
+              "Continue with email"
             )}
           </button>
         </form>
