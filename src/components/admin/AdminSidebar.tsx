@@ -95,6 +95,7 @@ export default function AdminSidebar({ username, role }: { username: string; rol
   // when that sibling also matches, so only one nav item lights up.
   const allHrefs = [
     "/admin/dashboard",
+    "/admin/guide",
     ...NAV_SECTIONS.flatMap((s) => s.links.map((l) => l.href)),
   ];
   const isActive = (href: string) => {
@@ -110,6 +111,8 @@ export default function AdminSidebar({ username, role }: { username: string; rol
 
   // Hide sections/links the current role can't reach. The pages themselves are
   // still guarded server-side (area layouts) — this just keeps the nav honest.
+  // The guide is deliberately absent from NAV_SECTIONS: it carries no area
+  // permission, so it sits beside Dashboard and stays visible to every role.
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
     links: section.links.filter((link) => hasPermission(role, link.area)),
@@ -180,6 +183,23 @@ export default function AdminSidebar({ username, role }: { username: string; rol
               )}
               <Icon name="home" size={18} className={isActive("/admin/dashboard") ? "text-brand-400" : "text-stone-400 group-hover:text-stone-200"} />
               <span className="truncate">Dashboard</span>
+            </Link>
+            {/* The operating guide — no permission gate, every role can read it. */}
+            <Link
+              href="/admin/guide"
+              onClick={() => setOpen(false)}
+              aria-current={isActive("/admin/guide") ? "page" : undefined}
+              className={`group relative flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                isActive("/admin/guide")
+                  ? "bg-brand-600/20 text-white font-medium"
+                  : "text-stone-300 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              {isActive("/admin/guide") && (
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-400" />
+              )}
+              <Icon name="info" size={18} className={isActive("/admin/guide") ? "text-brand-400" : "text-stone-400 group-hover:text-stone-200"} />
+              <span className="truncate">কর্মপদ্ধতি (Guide)</span>
             </Link>
           </div>
           {visibleSections.map((section, i) => (

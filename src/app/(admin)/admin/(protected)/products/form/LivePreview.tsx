@@ -37,8 +37,16 @@ export default function LivePreview({
     Number(form.discountPrice) < Number(basePricePaisa);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
-      <div className="relative aspect-[4/3] bg-stone-100">
+    // Capped at 240px and centred. The right rail is 360–420px wide, so an
+    // unconstrained card rendered far larger than the ~200px tile a shopper
+    // actually sees — which made photos look better-framed here than in the
+    // real catalog. Previewing at roughly true size is the whole point.
+    <div className="mx-auto max-w-[240px] overflow-hidden rounded-xl border border-stone-200 bg-white">
+      {/* Square, matching the real storefront card (.fz .card .c-img is
+          aspect-ratio 1/1). A 4/3 preview cropped differently from the live
+          card, so a photo that looked right here could be cut off in the
+          catalog — the preview has to lie about nothing. */}
+      <div className="relative aspect-square bg-stone-100">
         {firstImg ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={firstImg} alt="" className="h-full w-full object-cover" />
