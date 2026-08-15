@@ -13,6 +13,8 @@ import { getPathaoConfig } from "@/server/settings/courier-pathao";
 import { getRedxConfig } from "@/server/settings/courier-redx";
 import { getActiveProvider } from "@/server/settings/courier-active";
 import { formatTaka } from "@/lib/money";
+import { resolvePrimaryImage } from "@/lib/product-images";
+import { Thumb } from "@/components/admin/products/badges";
 import { nextStatuses } from "@/config/order-status";
 import StatusControls from "./StatusControls";
 import PaymentPanel from "./PaymentPanel";
@@ -142,14 +144,41 @@ export default async function AdminOrderDetailPage({
       <div className="border rounded-lg bg-white p-6">
         <h2 className="font-semibold mb-3">Items</h2>
         <div className="divide-y">
-          {order.items.map((item) => (
-            <div key={item.id} className="flex justify-between py-2 text-sm">
-              <span>
-                {item.productName} × {item.quantity}
-              </span>
-              <span>{formatTaka(item.unitPrice * item.quantity)}</span>
-            </div>
-          ))}
+          {order.items.map((item) => {
+            // The variant's own photo wins: this line names one specific option,
+            // so the generic product shot could picture something the customer
+            // didn't buy. Falls back to the product's resolved primary (gallery,
+            // then option photos), and to the placeholder when the product has
+            // been deleted since.
+            const thumbUrl =
+              item.variant?.imageUrl ??
+              (item.product ? resolvePrimaryImage(item.product) : null) ??
+              undefined;
+
+            return (
+              <div key={item.id} className="flex items-center gap-3 py-2.5 text-sm">
+                {item.productId ? (
+                  <Link href={`/admin/products/${item.productId}/edit`} className="shrink-0">
+                    <Thumb url={thumbUrl} />
+                  </Link>
+                ) : (
+                  <Thumb url={thumbUrl} />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-stone-800">{item.productName}</p>
+                  <p className="text-[12px] text-stone-400">
+                    {item.quantity} × {formatTaka(item.unitPrice)}
+                    {/* A deleted product still has its name snapshot, but no
+                        link and no photo — say so rather than leave a dead tile. */}
+                    {!item.productId && " · product deleted"}
+                  </p>
+                </div>
+                <span className="shrink-0 font-medium text-stone-900">
+                  {formatTaka(item.unitPrice * item.quantity)}
+                </span>
+              </div>
+            );
+          })}
         </div>
         <div className="border-t pt-3 mt-3 space-y-1 text-sm">
           <div className="flex justify-between">

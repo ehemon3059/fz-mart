@@ -197,7 +197,27 @@ export async function listCancelledOrders(
 export async function getOrderById(id: number) {
   return prisma.order.findUnique({
     where: { id },
-    include: { items: true, shippingZone: true, courierShipment: true },
+    include: {
+      items: {
+        include: {
+          // Thumbnails for the Items card. The VARIANT's own photo is preferred
+          // where it has one — the line names a specific option, so showing the
+          // generic product shot would picture something the customer didn't
+          // buy. Both are nullable: a deleted product/variant leaves the line
+          // intact (SetNull) with its name snapshot, and simply no image.
+          variant: { select: { imageUrl: true } },
+          product: {
+            select: {
+              images: { select: { id: true, url: true, isPrimary: true } },
+              variants: { select: { imageUrl: true } },
+              colors: { select: { imageUrl: true } },
+            },
+          },
+        },
+      },
+      shippingZone: true,
+      courierShipment: true,
+    },
   });
 }
 
