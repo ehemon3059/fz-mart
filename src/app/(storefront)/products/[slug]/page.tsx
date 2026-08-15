@@ -18,6 +18,7 @@ import Breadcrumb from "@/components/storefront/product/Breadcrumb";
 import GalleryBadges from "@/components/storefront/product/GalleryBadges";
 import BuyBoxHeader from "@/components/storefront/product/BuyBoxHeader";
 import OfferStrip from "@/components/storefront/product/OfferStrip";
+import { availableOf } from "@/server/inventory/reservations";
 import TrustGrid from "@/components/storefront/product/TrustGrid";
 import PaymentBadges from "@/components/storefront/product/PaymentBadges";
 import ProductTabs from "@/components/storefront/product/ProductTabs";
@@ -144,7 +145,12 @@ export default async function ProductPage({
   const category = product.category;
   // Full ancestor chain (root → … → parent) for the breadcrumb trail.
   const categoryTrail = [...ancestorsOf(category.id, allCats), category];
-  const inStock = hasVariants ? product.variants.some((v) => v.stock > 0) : product.stock > 0;
+  // Availability, not raw stock: units reserved by other live orders are on the
+  // shelf but not for sale.
+  const productAvailable = availableOf(product);
+  const inStock = hasVariants
+    ? product.variants.some((v) => availableOf(v) > 0)
+    : productAvailable > 0;
 
   const structuredData = [
     productJsonLd({
@@ -220,7 +226,7 @@ export default async function ProductPage({
               name={product.name}
               unitPrice={effectivePrice}
               imageUrl={primaryImage}
-              stock={product.stock}
+              stock={productAvailable}
               colors={product.colors.map((c) => ({
                 id: c.id,
                 name: c.name,
@@ -233,7 +239,7 @@ export default async function ProductPage({
                 colorName: v.colorName,
                 price: v.price,
                 discountPrice: v.discountPrice,
-                stock: v.stock,
+                stock: availableOf(v),
                 showStock: v.showStock,
                 priceColor: v.priceColor,
                 imageUrl: v.imageUrl,
@@ -303,7 +309,9 @@ export default async function ProductPage({
           name: product.name,
           price: product.price,
           discountPrice: product.discountPrice,
-          stock: hasVariants ? (inStock ? 1 : 0) : product.stock,
+          // Already availability-adjusted, so nothing is reserved on top of it.
+          stock: hasVariants ? (inStock ? 1 : 0) : productAvailable,
+          reserved: 0,
           promoBadge: product.promoBadge,
           priceColor: product.priceColor,
           variants: product.variants.map((v) => ({

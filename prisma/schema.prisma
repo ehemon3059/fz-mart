@@ -39,34 +39,34 @@ enum SellingType {
 // depth, so the app fetches all rows flat and assembles the tree in JS
 // (src/server/categories/tree.ts).
 model Category {
-  id              Int        @id @default(autoincrement())
+  id                 Int          @id @default(autoincrement())
   // null = root; otherwise the parent node. Restrict delete: a node with
   // children can't be removed until they're moved/deleted (enforced in
   // server/categories/admin.ts with a friendly error).
-  parentId        Int?
-  name            String
-  slug            String     @unique
+  parentId           Int?
+  name               String
+  slug               String       @unique
   // Optional hero image + short blurb shown on the storefront category pages.
-  imageUrl        String?
+  imageUrl           String?
   // Alternative to imageUrl: a key from CATEGORY_ICONS (lib/category-icons.tsx)
   // drawn as an inline SVG. A category shows its image when imageUrl is set,
   // otherwise this icon, otherwise a letter tile — see CategoryVisual. Both may
   // be stored; imageUrl wins, so switching back to the icon needs no re-upload.
-  iconKey         String?
-  description     String?    @db.Text
-  sortOrder       Int        @default(0)
-  isActive        Boolean    @default(true)
+  iconKey            String?
+  description        String?      @db.Text
+  sortOrder          Int          @default(0)
+  isActive           Boolean      @default(true)
   // Optional SEO overrides (Phase 2). When blank the storefront falls back to
   // a sensible default derived from the name — see lib/seo.ts.
-  metaTitle       String?
-  metaDescription String?    @db.Text
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  metaTitle          String?
+  metaDescription    String?      @db.Text
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
   // Default size guide for everything in this branch of the tree. Resolution
   // walks UPWARD: a product with no guide of its own uses the nearest ancestor
   // category that has one, so setting "Apparel S–XXL" on "Men's & Boy's
   // Fashion" covers every shirt below it. Null = inherit / none.
-  sizeGuideId     Int?
+  sizeGuideId        Int?
   // How products in this branch are sold. Resolution walks UPWARD exactly like
   // sizeGuideId above: null = inherit the nearest ancestor's, so setting SIZES
   // on "Men's & Boy's Fashion" covers every shirt category below it. Roots must
@@ -78,11 +78,11 @@ model Category {
   // an override prompt, never a constraint: a saved product's own shape always
   // wins on edit, so re-typing a category can never rewrite existing products.
   defaultSellingType SellingType?
-  parent          Category?  @relation("CatTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  children        Category[] @relation("CatTree")
-  products        Product[]
-  coupons         Coupon[]
-  sizeGuide       SizeGuide? @relation(fields: [sizeGuideId], references: [id], onDelete: SetNull)
+  parent             Category?    @relation("CatTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  children           Category[]   @relation("CatTree")
+  products           Product[]
+  coupons            Coupon[]
+  sizeGuide          SizeGuide?   @relation(fields: [sizeGuideId], references: [id], onDelete: SetNull)
 
   @@index([sizeGuideId])
   @@index([parentId, isActive, sortOrder])
@@ -107,7 +107,18 @@ model Product {
   // stock one unit. Feeds COGS: it is SNAPSHOTTED onto OrderItem at checkout so
   // later supplier-price changes never rewrite historical margins.
   purchaseCost       Int                       @default(0)
+  // ON HAND — units physically in the warehouse. Since Phase D this is NOT what
+  // the storefront sells against: an order reserves units without removing them
+  // from the shelf, and they leave `stock` only when the parcel actually ships.
   stock              Int                       @default(0)
+  // RESERVED — units promised to orders that have neither shipped nor died.
+  // Incremented at checkout, decremented when the order ships (the units then
+  // leave `stock` too) or when it is cancelled (they simply become free again).
+  //
+  // AVAILABLE = stock − reserved, and that is the number the storefront must
+  // sell against. Never negative: every path that raises it is a conditional
+  // update guarded on sufficient availability.
+  reserved           Int                       @default(0)
   // Low-stock alert threshold (Phase 5). When 0 < stock <= this, the product
   // surfaces in the admin low-stock alert + daily digest. 0 disables it.
   lowStockThreshold  Int                       @default(0)
@@ -160,6 +171,8 @@ model Product {
   wishlistItems      WishlistItem[]
   stockNotifications StockNotification[]
   stockAdjustments   StockAdjustment[]
+  stockMovements     StockMovement[]
+  purchaseOrderLines PurchaseOrderLine[]
   coupons            Coupon[]
   cartItems          CustomerCartItem[]
   cartEvents         CartEvent[]
@@ -230,37 +243,46 @@ model SizeGuideValue {
 }
 
 model ProductVariant {
-  id            Int         @id @default(autoincrement())
-  productId     Int
-  size          String? // "500 ml", "M", "XL"
-  colorName     String? // matches a ProductColor.name for the swatch/image
+  id                 Int                 @id @default(autoincrement())
+  productId          Int
+  size               String? // "500 ml", "M", "XL"
+  colorName          String? // matches a ProductColor.name for the swatch/image
   // Stock-keeping unit for this exact option, usually generated from the
   // product's baseSku ("SAR-PUR-32"). Unique shop-wide when set; null for the
   // products and rows that don't use SKUs. NOTE: variants are wiped and
   // recreated on every product save (see server/products/admin.ts), so the
   // admin form must round-trip this value — it is not regenerated per save.
-  sku           String?     @unique
-  price         Int // paisa — authoritative "regular" price for this option
+  sku                String?             @unique
+  price              Int // paisa — authoritative "regular" price for this option
   // Optional sale price (paisa). When set (and below price) it's the amount
   // actually charged; price shows struck-through. Null = no discount.
-  discountPrice Int?
+  discountPrice      Int?
   // Per-variant sourcing cost (paisa). 0 = "inherit the product's purchaseCost";
   // checkout falls back to Product.purchaseCost when this is 0.
-  purchaseCost  Int         @default(0)
-  stock         Int         @default(0)
+  purchaseCost       Int                 @default(0)
+  // On hand / reserved for this exact option — same meaning as on Product, and
+  // the authoritative pair for a sized product. AVAILABLE = stock − reserved.
+  stock              Int                 @default(0)
+  reserved           Int                 @default(0)
   // Whether the "X in stock" count is shown on the storefront for this variant.
   // Availability (sold-out disabling) is unaffected — this only hides the number.
-  showStock     Boolean     @default(true)
+  showStock          Boolean             @default(true)
   // Per-variant override for the storefront price colour (#rrggbb). Null =
   // inherit Product.priceColor, which itself falls back to the theme default.
-  priceColor    String?
+  priceColor         String?
   // Photo for this specific option, uploaded from the admin product form. Held
   // per-row rather than on ProductColor so two rows sharing a colour (Navy/M,
   // Navy/L) can differ and a size-only row can have one. Null = no photo.
-  imageUrl      String?
-  sortOrder     Int         @default(0)
-  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems    OrderItem[]
+  imageUrl           String?
+  sortOrder          Int                 @default(0)
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems         OrderItem[]
+  // SetNull on the far side: variants are wiped and recreated on every product
+  // save, so a movement outlives the variant row it named. It keeps productId,
+  // so per-product history stays complete either way.
+  stockMovements     StockMovement[]
+  // Same SetNull reasoning: a PO line outlives the variant row it named.
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@index([productId, sortOrder])
 }
@@ -528,6 +550,24 @@ model Order {
   returnShippingCost Int               @default(0)
   paymentGatewayFee  Int               @default(0)
   returnRestockable  Boolean           @default(true)
+  // ── Stock release (Step 0) ── when this order's reserved units were put back
+  // on the shelf. Set the first time the order reaches a stock-releasing state
+  // (any CANCELLED, or RETURNED while returnRestockable). Acts as the
+  // idempotency guard: restocking is attempted inside the status transaction
+  // only while this is null, so a re-entered transition, a retried job, or a
+  // bulk action replay can never double-credit stock. Null = units never
+  // returned (still held by a live order, or written off as damaged).
+  restockedAt        DateTime?
+  // ── Reservation lifecycle (Phase D) ── when this order's reservation was
+  // CONSUMED: the units left the shelf for good because the parcel shipped.
+  // Until then the units are reserved but still on hand, so a cancel simply
+  // frees them rather than returning them.
+  //
+  // Together with restockedAt this makes the reservation state machine explicit
+  // and idempotent — an order's units can be released (restockedAt) or shipped
+  // out (fulfilledAt), never both, and never twice. Null = the reservation is
+  // still open, or was released without ever shipping.
+  fulfilledAt        DateTime?
   // ── Payment (Phase 1) ──
   //   COD     — full cash on delivery (default, unchanged behaviour).
   //   ONLINE  — full amount paid through a gateway before confirmation.
@@ -574,6 +614,7 @@ model Order {
   payments           Payment[]
   returnRequests     ReturnRequest[]
   couponRedemption   CouponRedemption?
+  stockMovements     StockMovement[]
 
   @@index([status, createdAt])
   @@index([customerPhone])
@@ -1200,11 +1241,11 @@ model StockNotification {
   @@index([productId, notifiedAt])
 }
 
-// Audit log of MANUAL stock corrections by an admin (received a shipment,
-// damaged units, stock-take fix, etc.). Order-driven stock changes go through
-// checkout/restock, not here — this is only for hand corrections, so who/when/
-// why is recorded. delta is signed (+ added, − removed); newStock snapshots the
-// resulting level.
+// DEPRECATED (Phase A) — superseded by StockMovement, which records EVERY stock
+// change rather than only hand corrections. Rows were copied across by
+// migration 20260816120000_add_stock_movement_ledger; nothing writes here any
+// more. Kept read-only as a safety net so the copy can be verified against the
+// original before the table is finally dropped.
 model StockAdjustment {
   id        Int      @id @default(autoincrement())
   productId Int
@@ -1217,6 +1258,197 @@ model StockAdjustment {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Purchasing (Phase E)
+// ─────────────────────────────────────────────────────────────
+
+// Someone you buy stock from. Deliberately thin — a name and how to reach them
+// — because the point of this model is attribution ("who supplies this?") and a
+// lead time, not a CRM.
+model Supplier {
+  id             Int             @id @default(autoincrement())
+  name           String
+  phone          String?
+  email          String?
+  address        String?         @db.Text
+  note           String?         @db.Text
+  // Typical days from placing an order to receiving it. Feeds the reorder-point
+  // calculation, which until now used one global default for every product.
+  // Null = fall back to that global default.
+  leadTimeDays   Int?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+
+  @@index([isActive, name])
+}
+
+// Lifecycle of a purchase order.
+//
+//   DRAFT     being written; counts toward nothing
+//   ORDERED   placed with the supplier — its outstanding units are INCOMING
+//   RECEIVED  fully received; every line delivered
+//   CANCELLED abandoned; incoming units drop away
+//
+// PARTIAL is deliberately absent: "partially received" is derived from the
+// lines (some receivedQty > 0, but not all complete), so it can never disagree
+// with them the way a stored status could.
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+// An order placed WITH a supplier — the mirror of a customer Order. Its open
+// lines are what "Incoming" means on the stock overview.
+//
+// Receiving a line writes a PURCHASE movement through the same ledger as every
+// other stock change, so incoming goods are not a special case: they arrive,
+// stock rises, and the ledger says why.
+model PurchaseOrder {
+  id           Int                 @id @default(autoincrement())
+  // Short human reference for talking to the supplier ("PO-0042").
+  poNo         String              @unique
+  supplierId   Int
+  status       PurchaseOrderStatus @default(DRAFT)
+  // When the goods are expected. The single most useful field on this model:
+  // it turns "we ordered more" into "cover until the 20th".
+  expectedOn   DateTime?
+  // Costs that apply to the SHIPMENT rather than to any one line (freight,
+  // customs, clearing). Apportioned across lines by value when receiving, so
+  // landed cost reflects what the goods really cost to get here.
+  shippingCost Int                 @default(0)
+  customsCost  Int                 @default(0)
+  note         String?             @db.Text
+  // Set once the PO reaches a terminal state, for lead-time reporting.
+  orderedAt    DateTime?
+  receivedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines        PurchaseOrderLine[]
+
+  @@index([status, expectedOn])
+  @@index([supplierId])
+}
+
+// One product (or variant) on a purchase order.
+//
+// receivedQty tracks partial deliveries: a supplier who ships 60 of 100 leaves
+// 40 still incoming, and the line stays open until they arrive or the PO is
+// closed. Receiving is additive and idempotent per receipt, never a toggle.
+model PurchaseOrderLine {
+  id              Int             @id @default(autoincrement())
+  purchaseOrderId Int
+  productId       Int
+  // The exact option ordered, when the product is sized. SetNull because
+  // variants are wiped and recreated on every product save.
+  variantId       Int?
+  // SNAPSHOT of what this product was called when the PO was written, so a
+  // later rename doesn't rewrite the paperwork you sent the supplier.
+  productName     String
+  variantLabel    String?
+  quantity        Int
+  // Received so far. 0 ≤ receivedQty ≤ quantity; the difference is INCOMING.
+  receivedQty     Int             @default(0)
+  // Agreed per-unit price from the supplier, in paisa. This is the invoice
+  // price — freight and customs are added at receipt to give landed cost.
+  unitCost        Int
+  purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant         ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+// Why a stock level changed. The ledger is append-only, so these are facts
+// about the past — never re-interpret an existing row's type.
+//
+//   SALE            an order SHIPPED, so the units left the shelf (negative).
+//                   Since Phase D this is fulfilment, not checkout — an order
+//                   that never ships only ever held a reservation.
+//   CANCEL_RESTOCK  a dead order gave its units back (positive)
+//   RETURN          delivered goods came back resellable (positive)
+//   DAMAGE          units written off — breakage, or a return too damaged to
+//                   resell (negative). Distinct from ADJUSTMENT because it is a
+//                   real loss with a cost, not a counting correction.
+//   PURCHASE        stock received from a supplier (positive)
+//   ADJUSTMENT      a stock-take correction — the count was simply wrong
+//                   (either sign). Carries no cost implication of its own.
+enum StockMovementType {
+  SALE
+  CANCEL_RESTOCK
+  RETURN
+  DAMAGE
+  PURCHASE
+  ADJUSTMENT
+}
+
+// THE inventory ledger: one row for every change to a stock level, from any
+// source. Append-only — rows are never updated or deleted, so the history of a
+// SKU can always be replayed.
+//
+// Product.stock / ProductVariant.stock remain the fast path the storefront and
+// checkout read, but they are a CACHE of this ledger's sum. When the two
+// disagree the ledger is right and the cache has drifted (see
+// scripts/stock-ledger-verify.ts).
+//
+// Every write must happen inside the same transaction as the stock update it
+// describes, so a movement can never be orphaned from its effect, nor an effect
+// go unrecorded.
+model StockMovement {
+  id        Int               @id @default(autoincrement())
+  productId Int
+  // Which stock row actually moved: the variant's when set, else the product's.
+  // Mirrors how checkout decrements — a sized product holds stock per variant.
+  variantId Int?
+  type      StockMovementType
+  // Signed change (+ added, − removed). Never zero.
+  delta     Int
+  // The level before and after this movement, on the row identified above.
+  // Stored rather than derived so a replay can pinpoint exactly where a
+  // discrepancy entered, instead of only showing that one exists.
+  beforeQty Int
+  afterQty  Int
+  // Per-unit sourcing cost in paisa at the time of the movement, SNAPSHOTTED
+  // like OrderItem.purchaseCost — inventory valuation and write-off cost must
+  // use the cost that applied then, not today's supplier price. Null when not
+  // meaningful (a stock-take correction has no cost basis).
+  unitCost  Int?
+  // The order that caused this, for SALE / CANCEL_RESTOCK / RETURN. Null for
+  // PURCHASE / DAMAGE / ADJUSTMENT. SetNull rather than Cascade: deleting an
+  // order must never erase the fact that stock moved.
+  orderId   Int?
+  // Free text for the movements a human initiates (ADJUSTMENT, DAMAGE,
+  // PURCHASE). Null for system-generated rows, which explain themselves via
+  // type + orderId.
+  //
+  // A PURCHASE receipt puts its PO number here ("PO-0042") rather than carrying
+  // a third nullable FK: the ledger is the hottest table in the inventory
+  // system, and the reference is for a human reading a row, not for joining.
+  reason    String?
+  // Who caused it: an admin username, "customer" for self-service, or "system"
+  // for job- and webhook-driven changes.
+  actorName String
+  createdAt DateTime          @default(now())
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  order     Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // The ledger view for one product, newest first.
+  @@index([productId, createdAt])
+  // Per-variant history, and the replay in stock-ledger-verify.
+  @@index([variantId, createdAt])
+  // "What did this order do to stock?" on the order detail page.
+  @@index([orderId])
+  // Velocity and dead-stock reports scan by type over a date range.
+  @@index([type, createdAt])
 }
 
 // Newsletter signups from the storefront footer box ("Get ৳150 off…"). Email is

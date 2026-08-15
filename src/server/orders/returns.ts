@@ -25,10 +25,17 @@ export async function listReturnRequests(status?: "PENDING" | "APPROVED" | "REJE
  * machine (which validates the transition and writes the audit log), then
  * marks the request APPROVED. If the order can't legally move to RETURNED, the
  * request is left untouched and the reason surfaced.
+ *
+ * `restockable` is REQUIRED, not defaulted: whether the goods can be resold is
+ * the single most consequential thing about a return — it decides whether the
+ * units go back on the shelf or become a costed write-off — and it is knowledge
+ * only the person holding the parcel has. Defaulting it would quietly guess,
+ * and guessing "resellable" inflates inventory with goods that don't exist.
  */
 export async function approveReturn(
   requestId: number,
   adminUsername: string,
+  restockable: boolean,
   adminNote?: string,
 ): Promise<void> {
   const req = await prisma.returnRequest.findUnique({ where: { id: requestId } });
@@ -36,7 +43,7 @@ export async function approveReturn(
   if (req.status !== "PENDING") throw new ReturnAdminError("This request has already been handled.");
 
   try {
-    await updateOrderStatus(req.orderId, "RETURNED", adminUsername);
+    await updateOrderStatus(req.orderId, "RETURNED", adminUsername, restockable);
   } catch (err) {
     if (err instanceof InvalidTransitionError) {
       throw new ReturnAdminError(`Can't return this order: ${err.message}`);

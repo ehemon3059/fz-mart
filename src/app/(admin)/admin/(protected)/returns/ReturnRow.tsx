@@ -28,6 +28,10 @@ export default function ReturnRow(props: Props) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Deliberately starts unset: approving decides whether these units go back on
+  // the shelf or are written off, and that is the admin's call to make, not a
+  // default to accept. Approve stays disabled until one is chosen.
+  const [restockable, setRestockable] = useState<boolean | null>(null);
 
   function act(fn: () => Promise<{ error?: string }>) {
     setError(null);
@@ -67,7 +71,56 @@ export default function ReturnRow(props: Props) {
       )}
 
       {props.status === "PENDING" && (
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-3">
+          {/* The condition of the goods, asked BEFORE approval — it decides
+              whether stock is credited back or written off, and it cannot be
+              changed after the fact. */}
+          <fieldset>
+            <legend className="mb-1.5 text-[12px] font-semibold text-stone-600">
+              What condition did the goods come back in?
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label
+                className={`cursor-pointer rounded-lg border px-3 py-2.5 text-[13px] transition-colors ${
+                  restockable === true
+                    ? "border-stone-900 bg-stone-50"
+                    : "border-stone-300 hover:border-stone-400"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`condition-${props.id}`}
+                  className="sr-only"
+                  checked={restockable === true}
+                  onChange={() => setRestockable(true)}
+                />
+                <span className="block font-semibold text-stone-800">Resellable</span>
+                <span className="block text-[11.5px] text-stone-500">
+                  Goes back on the shelf — stock goes up.
+                </span>
+              </label>
+              <label
+                className={`cursor-pointer rounded-lg border px-3 py-2.5 text-[13px] transition-colors ${
+                  restockable === false
+                    ? "border-stone-900 bg-stone-50"
+                    : "border-stone-300 hover:border-stone-400"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`condition-${props.id}`}
+                  className="sr-only"
+                  checked={restockable === false}
+                  onChange={() => setRestockable(false)}
+                />
+                <span className="block font-semibold text-stone-800">Damaged</span>
+                <span className="block text-[11.5px] text-stone-500">
+                  Written off — counts as a loss, stock unchanged.
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -75,11 +128,13 @@ export default function ReturnRow(props: Props) {
             className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-900"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={pending}
-              onClick={() => act(() => approveReturnAction(props.id, note))}
+              disabled={pending || restockable === null}
+              onClick={() =>
+                act(() => approveReturnAction(props.id, note, restockable as boolean))
+              }
               className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               Approve &amp; mark returned
@@ -92,6 +147,9 @@ export default function ReturnRow(props: Props) {
             >
               Reject
             </button>
+            {restockable === null && (
+              <span className="text-[12px] text-stone-400">Choose a condition to approve.</span>
+            )}
           </div>
         </div>
       )}

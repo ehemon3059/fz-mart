@@ -7,13 +7,28 @@ interface HistoryRow {
   id: number;
   delta: number;
   newStock: number;
-  reason: string;
-  adminName: string;
+  /** Why stock moved — SALE, RETURN, ADJUSTMENT, … (StockMovementType). */
+  type: string;
+  /** Free text on hand-made movements; system rows explain themselves via type. */
+  reason: string | null;
+  actorName: string;
   createdAt: string;
 }
 
-// Manual stock corrections + audit history for a product. Product-level stock
-// only (variant corrections can be added later); every change is logged.
+/** Ledger types, in the admin's words. */
+const TYPE_LABELS: Record<string, string> = {
+  SALE: "Sale",
+  CANCEL_RESTOCK: "Order cancelled",
+  RETURN: "Returned",
+  DAMAGE: "Damaged",
+  PURCHASE: "Received",
+  ADJUSTMENT: "Correction",
+};
+
+// Manual stock corrections + the full movement history for a product. The
+// history now shows EVERY change (sales and restocks included), not just hand
+// corrections — so a number that moved on its own can still be explained.
+// Product-level stock only; variant corrections can be added later.
 export default function StockPanel({
   productId,
   currentStock,
@@ -72,19 +87,24 @@ export default function StockPanel({
 
       {history.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-stone-500">History</h3>
+          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-stone-500">
+            Movement history
+          </h3>
           <div className="mt-2 divide-y divide-stone-100 text-sm">
             {history.map((h) => (
-              <div key={h.id} className="flex items-center justify-between py-2">
-                <div>
+              <div key={h.id} className="flex items-center justify-between gap-3 py-2">
+                <div className="min-w-0">
                   <span className={h.delta >= 0 ? "font-semibold text-emerald-600" : "font-semibold text-red-600"}>
                     {h.delta >= 0 ? `+${h.delta}` : h.delta}
                   </span>{" "}
                   <span className="text-stone-500">→ {h.newStock}</span>
-                  <span className="text-stone-400"> · {h.reason}</span>
+                  <span className="text-stone-400">
+                    {" "}· {TYPE_LABELS[h.type] ?? h.type}
+                    {h.reason ? ` · ${h.reason}` : ""}
+                  </span>
                 </div>
-                <div className="text-[12px] text-stone-400">
-                  {h.adminName} · {h.createdAt}
+                <div className="shrink-0 text-[12px] text-stone-400">
+                  {h.actorName} · {h.createdAt}
                 </div>
               </div>
             ))}

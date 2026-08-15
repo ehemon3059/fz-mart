@@ -52,3 +52,57 @@ export function nextStatuses(current: OrderStatus): OrderStatus[] {
   const exits = current === "DELIVERED" ? ["RETURNED" as OrderStatus] : ORDER_TERMINAL;
   return [...forward, ...exits];
 }
+
+/**
+ * Statuses in which an order holds an OPEN RESERVATION: units are promised to
+ * it and sitting on the shelf, neither shipped out nor freed.
+ *
+ * SHIPPED and DELIVERED are absent on purpose — shipping consumes the
+ * reservation (see fulfilsReservation below), after which the units are gone
+ * from stock entirely and there is no reservation left to release.
+ */
+export const RESERVATION_OPEN: OrderStatus[] = ["PENDING_PAYMENT", "PENDING", "CONFIRMED"];
+
+/**
+ * Whether moving `from` → `to` SHIPS the goods, converting the reservation into
+ * an actual stock decrease. This is the moment a sale becomes real on the shelf.
+ */
+export function fulfilsReservation(from: OrderStatus, to: OrderStatus): boolean {
+  return RESERVATION_OPEN.includes(from) && to === "SHIPPED";
+}
+
+/**
+ * Whether moving `from` → `to` frees an OPEN reservation without shipping it —
+ * the order died before the parcel left. The units were never taken off the
+ * shelf, so nothing is "returned"; they simply become available again and no
+ * ledger movement is written.
+ */
+export function releasesReservation(from: OrderStatus, to: OrderStatus): boolean {
+  return RESERVATION_OPEN.includes(from) && to === "CANCELLED";
+}
+
+/**
+ * Whether moving `from` → `to` brings ALREADY-SHIPPED goods back onto the shelf.
+ *
+ * Only reachable from a state whose reservation was already consumed, so this
+ * is a genuine stock increase and does get a ledger movement.
+ *
+ *   RETURNED   — the parcel came back; credited only if the goods are resellable.
+ *                A damaged return is a write-off (recorded as RETURN + DAMAGE),
+ *                handled by the caller, not counted here.
+ *   CANCELLED  — a courier can cancel an already-shipped parcel; the goods come
+ *                back the same way.
+ *
+ * The caller still owns idempotency (Order.restockedAt); this answers only
+ * "should it?", never "has it already?".
+ */
+export function returnsFulfilledStock(
+  from: OrderStatus,
+  to: OrderStatus,
+  returnRestockable: boolean,
+): boolean {
+  if (from !== "SHIPPED" && from !== "DELIVERED") return false;
+  if (to === "CANCELLED") return true;
+  if (to === "RETURNED") return returnRestockable;
+  return false;
+}

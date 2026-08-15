@@ -217,6 +217,13 @@ async function reconcileOrderStatus(orderId: number, courierStatus: CourierStatu
     if (!next) return; // target not reachable from here — leave as-is
 
     try {
+      // No `restockable` argument on purpose. A courier RETURNED callback means
+      // the parcel is back with the courier — nobody has opened it yet, so the
+      // condition of the goods is genuinely unknown here. The order keeps its
+      // existing flag (default true) and the units go back on the shelf; if the
+      // goods turn out to be damaged, that is corrected with a stock adjustment
+      // once someone actually inspects them. Guessing "damaged" would be just
+      // as wrong, and would understate stock instead.
       await updateOrderStatus(orderId, next, "courier");
     } catch {
       // Transition became invalid (concurrent change) — stop, don't loop.

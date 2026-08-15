@@ -22,6 +22,7 @@ export type Permission =
   | "pages"
   | "faq"
   | "reports"
+  | "inventory"
   | "expenses"
   | "settings"
   | "admins";
@@ -39,6 +40,10 @@ const MANAGER: Permission[] = [
   "pages",
   "faq",
   "reports",
+  // Stock work is warehouse work, not owner work: whoever counts the shirts
+  // needs to correct the count. Deliberately NOT under "settings", which gates
+  // payment and courier credentials.
+  "inventory",
 ];
 
 const OWNER: Permission[] = [...MANAGER, "expenses", "settings", "admins"];

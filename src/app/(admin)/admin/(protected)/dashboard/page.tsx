@@ -80,6 +80,12 @@ export default async function AdminDashboardPage() {
             <h2 className="text-sm font-semibold text-warning-fg">
               {lowStock.length} product{lowStock.length === 1 ? "" : "s"} low on stock
             </h2>
+            <Link
+              href="/admin/inventory?filter=reorder"
+              className="ml-auto text-[13px] text-warning-fg underline-offset-2 hover:underline"
+            >
+              Stock overview
+            </Link>
           </div>
           <div className="mt-2.5 flex flex-wrap gap-2">
             {lowStock.slice(0, 12).map((p) => (

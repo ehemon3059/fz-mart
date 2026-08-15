@@ -17,6 +17,12 @@ export interface ProductCardData {
   price: number;
   discountPrice: number | null;
   stock: number;
+  /**
+   * Units promised to unshipped orders. Optional so leaner sources (search,
+   * wishlist) that don't select it still compile — they simply treat nothing as
+   * reserved, which is the pre-Phase-D behaviour.
+   */
+  reserved?: number;
   promoBadge: string | null;
   images: { url: string; isPrimary: boolean }[];
   /**
@@ -82,7 +88,10 @@ export default function ProductCard({
     : 0;
   // The cheapest variant's colour wins for a "from" price; else the product's.
   const priceStyle = priceColorStyle(cheapestVariant?.priceColor, product.priceColor);
-  const outOfStock = product.stock <= 0;
+  // Availability, not raw stock: units reserved by live orders are on the shelf
+  // but already spoken for. Computed here rather than at each call site so no
+  // listing can accidentally advertise reserved units as buyable.
+  const outOfStock = product.stock - (product.reserved ?? 0) <= 0;
   // A required size/color/variant choice can't be made from a card, so those
   // products link to the detail page instead of quick-adding.
   const needsChoice =

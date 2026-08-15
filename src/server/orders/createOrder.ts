@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateOrderNo } from "./orderNo";
 import { redeemCoupon, type CouponCartLine } from "@/server/coupons";
 import { lineageIds } from "@/server/categories/tree";
+import { reserveUnits } from "@/server/inventory/reservations";
 
 // Checkout is the riskiest code in the app. Everything the browser sends
 // (price, product name, displayed totals) is for UI only — this function
@@ -102,9 +103,12 @@ export async function createOrder(input: CreateOrderInput) {
         const variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ");
         const labelSuffix = variantLabel ? ` (${variantLabel})` : "";
 
-        if (variant.stock < item.quantity) {
+        // Availability, not raw stock: units promised to other unshipped orders
+        // are on the shelf but not sellable.
+        const variantAvailable = variant.stock - variant.reserved;
+        if (variantAvailable < item.quantity) {
           throw new CheckoutError(
-            `${product.name}${labelSuffix} only has ${variant.stock} unit(s) left in stock.`,
+            `${product.name}${labelSuffix} only has ${Math.max(0, variantAvailable)} unit(s) left in stock.`,
           );
         }
 
@@ -134,13 +138,17 @@ export async function createOrder(input: CreateOrderInput) {
           quantity: item.quantity,
         });
 
-        // Atomic conditional decrement on the VARIANT row — same anti-oversell
-        // guard as products, scoped to the chosen option.
-        const decremented = await tx.productVariant.updateMany({
-          where: { id: variant.id, stock: { gte: item.quantity } },
-          data: { stock: { decrement: item.quantity } },
+        // Atomic conditional RESERVATION on the variant row. The units stay on
+        // the shelf — they leave only when the parcel ships — but no other
+        // shopper can claim them. Same anti-oversell guarantee as the old
+        // decrement: the predicate is evaluated at write time, so of two racing
+        // checkouts for the last unit exactly one succeeds.
+        const reserved = await reserveUnits(tx, {
+          productId: product.id,
+          variantId: variant.id,
+          quantity: item.quantity,
         });
-        if (decremented.count === 0) {
+        if (!reserved) {
           throw new CheckoutError(
             `${product.name}${labelSuffix} just sold out. Please update your cart.`,
           );
@@ -149,9 +157,10 @@ export async function createOrder(input: CreateOrderInput) {
       }
 
       // Unsized product: original product-level price + stock path.
-      if (product.stock < item.quantity) {
+      const available = product.stock - product.reserved;
+      if (available < item.quantity) {
         throw new CheckoutError(
-          `${product.name} only has ${product.stock} unit(s) left in stock.`,
+          `${product.name} only has ${Math.max(0, available)} unit(s) left in stock.`,
         );
       }
 
@@ -178,14 +187,14 @@ export async function createOrder(input: CreateOrderInput) {
         quantity: item.quantity,
       });
 
-      // Atomic, conditional decrement: fails (0 rows) if stock dropped below
-      // the requested quantity between the read above and this write, which
-      // is exactly the race that causes overselling on the last unit.
-      const decremented = await tx.product.updateMany({
-        where: { id: product.id, stock: { gte: item.quantity } },
-        data: { stock: { decrement: item.quantity } },
+      // Atomic, conditional reservation: fails if availability dropped below
+      // the requested quantity between the read above and this write, which is
+      // exactly the race that causes overselling on the last unit.
+      const reserved = await reserveUnits(tx, {
+        productId: product.id,
+        quantity: item.quantity,
       });
-      if (decremented.count === 0) {
+      if (!reserved) {
         throw new CheckoutError(
           `${product.name} just sold out. Please update your cart.`,
         );
@@ -265,6 +274,11 @@ export async function createOrder(input: CreateOrderInput) {
         include: { items: true },
       });
     }
+
+    // No ledger row here. Checkout RESERVES units; it does not move them off
+    // the shelf, and the ledger records stock changes only. The SALE is written
+    // when the order ships (see inventory/reservations.ts → fulfilOrder), which
+    // is the moment `stock` actually falls.
 
     return created;
   });

@@ -263,6 +263,18 @@ export async function createProduct(input: ProductInput) {
   return product;
 }
 
+/**
+ * KNOWN LEDGER GAP (Phase A): the product form writes `stock` directly, so an
+ * admin retyping the number here changes it WITHOUT a StockMovement. The stock
+ * ledger will then disagree with the cached level, and
+ * scripts/stock-ledger-verify.ts reports it as post-cutover drift.
+ *
+ * Left as-is deliberately for now — routing this through recordMovement() means
+ * reworking the form so stock is edited only via the adjustment panel (which is
+ * audited), not typed in the middle of a product save. That is a UI decision,
+ * so it belongs in Phase B alongside the rest of the inventory screens.
+ * Until then, prefer the Stock panel's adjustment box over editing the number.
+ */
 export async function updateProduct(id: number, input: ProductInput) {
   const before = await prisma.product.findUnique({
     where: { id },

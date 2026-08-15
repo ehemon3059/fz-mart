@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { enqueueMailJob, enqueueSmsJob } from "@/jobs/enqueue";
 import { absoluteUrl } from "@/lib/seo";
 import { primeSiteUrl } from "@/server/settings/site";
+import { availableOf } from "@/server/inventory/reservations";
 
 // "Notify me when back in stock" subscriptions + the restock fan-out.
 
@@ -52,14 +53,24 @@ export async function subscribeStockNotification(params: {
   });
 }
 
-/** True when a product has any sellable stock (product-level or any variant). */
+/**
+ * True when a product has any AVAILABLE stock (product-level or any variant).
+ *
+ * Availability rather than raw on-hand: units reserved by live orders can't be
+ * sold, so alerting "back in stock" on them would send shoppers to a product
+ * they still can't buy.
+ */
 export async function productInStock(productId: number): Promise<boolean> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { stock: true, variants: { select: { stock: true } } },
+    select: {
+      stock: true,
+      reserved: true,
+      variants: { select: { stock: true, reserved: true } },
+    },
   });
   if (!product) return false;
-  return product.stock > 0 || product.variants.some((v) => v.stock > 0);
+  return availableOf(product) > 0 || product.variants.some((v) => availableOf(v) > 0);
 }
 
 /**

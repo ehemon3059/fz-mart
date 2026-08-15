@@ -8,15 +8,18 @@ import {
 } from "@/server/settings/payments";
 import { enqueueMailJob, enqueuePaymentJob } from "@/jobs/enqueue";
 import { primeSiteUrl } from "@/server/settings/site";
+import { releaseOrder } from "@/server/inventory/reservations";
 
 // Service layer for online payments. All state transitions are transactional
 // and idempotent — gateways retry IPNs, customers refresh callback pages, and
 // the expiry job can race a slow IPN; every path must converge on one
 // consistent outcome.
 //
-// Stock model: an online order RESERVES stock at creation (the same atomic
-// decrement COD uses). Payment success keeps the reservation; failure,
-// abandonment, or admin cancel of a PENDING_PAYMENT order releases it.
+// Stock model: an online order RESERVES units at creation (the same atomic
+// reservation COD uses) — they stay on the shelf but nobody else can buy them.
+// Payment success keeps the reservation; failure, abandonment, or admin cancel
+// of a PENDING_PAYMENT order releases it. The units only leave `stock` when the
+// parcel ships. See server/inventory/reservations.ts.
 
 /** How long a customer gets to finish paying before the order auto-cancels. */
 export const PAYMENT_EXPIRY_MS = 30 * 60 * 1000;
@@ -30,23 +33,23 @@ export class PaymentFlowError extends Error {
 
 type TxClient = Prisma.TransactionClient;
 
-/** Put reserved units back on the shelf for every line of an order. */
-export async function restockOrderItems(tx: TxClient, orderId: number): Promise<void> {
-  const items = await tx.orderItem.findMany({ where: { orderId } });
-  for (const item of items) {
-    if (item.variantId != null) {
-      await tx.productVariant.update({
-        where: { id: item.variantId },
-        data: { stock: { increment: item.quantity } },
-      });
-    } else if (item.productId != null) {
-      await tx.product.update({
-        where: { id: item.productId },
-        data: { stock: { increment: item.quantity } },
-      });
-    }
-    // productId null = product was deleted since; nothing to restock.
-  }
+/**
+ * Free the reservation held by an unpaid order — at most once, ever.
+ *
+ * Since Phase D an unshipped order's units never left the shelf: checkout only
+ * RESERVED them. So there is nothing to "put back", and no ledger movement is
+ * written — releasing simply makes the units available again.
+ *
+ * Several paths can settle the same order and they race: the expiry job, a
+ * gateway failure IPN, and an admin cancel may all fire for one
+ * PENDING_PAYMENT order. releaseOrder claims Order.restockedAt with a
+ * conditional update (never a read-then-write, which TiDB's REPEATABLE READ
+ * would let two transactions both pass), so exactly one caller wins.
+ *
+ * Returns true if this call is the one that released it.
+ */
+export async function restockOrderItems(tx: TxClient, orderId: number): Promise<boolean> {
+  return releaseOrder(tx, orderId);
 }
 
 /**

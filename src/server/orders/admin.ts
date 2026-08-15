@@ -1,7 +1,17 @@
 import type { OrderStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { nextStatuses } from "@/config/order-status";
-import { restockOrderItems } from "@/server/payments";
+import {
+  nextStatuses,
+  fulfilsReservation,
+  releasesReservation,
+  returnsFulfilledStock,
+} from "@/config/order-status";
+import { recordDamagedReturn } from "@/server/inventory/ledger";
+import {
+  fulfilOrder,
+  releaseOrder,
+  returnFulfilledOrder,
+} from "@/server/inventory/reservations";
 import { sendPurchaseConfirmed } from "@/server/facebook/capi";
 
 export const ORDERS_PAGE_SIZE = 20;
@@ -237,11 +247,23 @@ export class InvalidTransitionError extends Error {
  * The update and its audit-log entry are written in a single transaction so
  * the status and its history can never drift apart. `changedBy` is the admin
  * username (null for system-originated changes).
+ *
+ * Stock: a transition into CANCELLED (or a resellable RETURNED) releases the
+ * units this order has been holding since checkout — see releasesStock().
+ *
+ * `restockable` makes the resellable-vs-damaged decision part of the RETURNED
+ * transition itself, rather than a flag edited separately afterwards. It is
+ * applied inside the same transaction, BEFORE the stock decision is taken, so
+ * the units can never be credited on a stale default and then found to be
+ * damaged. Ignored for every other transition. Omitted = use whatever the order
+ * already carries (defaults true), which is how the plain status dropdown on the
+ * order detail page still behaves.
  */
 export async function updateOrderStatus(
   orderId: number,
   newStatus: OrderStatus,
   changedBy?: string | null,
+  restockable?: boolean,
 ) {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) {
@@ -258,7 +280,15 @@ export async function updateOrderStatus(
   return prisma.$transaction(async (tx) => {
     const updated = await tx.order.update({
       where: { id: orderId },
-      data: { status: newStatus },
+      data: {
+        status: newStatus,
+        // Settle resellable-vs-damaged as part of the move into RETURNED, so
+        // the stock decision below reads the admin's actual answer rather than
+        // a default that may be corrected minutes too late.
+        ...(newStatus === "RETURNED" && restockable !== undefined
+          ? { returnRestockable: restockable }
+          : {}),
+      },
     });
     await tx.orderStatusLog.create({
       data: {
@@ -268,10 +298,36 @@ export async function updateOrderStatus(
         changedBy: changedBy ?? null,
       },
     });
-    // A PENDING_PAYMENT order holds a stock reservation that was never sold —
-    // cancelling it (the only manual transition allowed) releases the units.
-    if (order.status === "PENDING_PAYMENT" && newStatus === "CANCELLED") {
-      await restockOrderItems(tx, orderId);
+
+    // ── Reservation lifecycle (Phase D) ────────────────────────────────────
+    // Units are RESERVED at checkout and stay on the shelf. Exactly one of the
+    // branches below applies, and each is idempotent on its own Order marker,
+    // so a retried job or re-entered transition can never double-apply.
+    const actor = changedBy ?? "system";
+
+    if (fulfilsReservation(order.status, newStatus)) {
+      // Parcel shipped: the reservation becomes a real stock decrease, and the
+      // SALE is written to the ledger now rather than at checkout.
+      await fulfilOrder(tx, orderId, actor);
+    } else if (releasesReservation(order.status, newStatus)) {
+      // Order died before shipping. The units never left the shelf, so this
+      // frees the reservation and writes NO ledger movement — nothing moved.
+      await releaseOrder(tx, orderId);
+    } else if (returnsFulfilledStock(order.status, newStatus, updated.returnRestockable)) {
+      // Shipped goods coming back intact — a genuine stock increase.
+      await returnFulfilledOrder(tx, orderId, actor);
+    } else if (
+      newStatus === "RETURNED" &&
+      !updated.returnRestockable &&
+      (order.status === "SHIPPED" || order.status === "DELIVERED")
+    ) {
+      // Damaged return of shipped goods. Net stock is unchanged — the units
+      // left when the parcel shipped and are not sellable now — but recording
+      // nothing would leave the write-off invisible, indistinguishable from
+      // goods that simply stayed sold. So the ledger tells what physically
+      // happened: the parcel came back (RETURN +N) and was written off
+      // (DAMAGE −N).
+      await recordDamagedReturn(tx, orderId, actor);
     }
     return updated;
   }).then((updated) => {

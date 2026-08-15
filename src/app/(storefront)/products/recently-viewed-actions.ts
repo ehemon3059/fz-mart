@@ -25,6 +25,7 @@ export async function resolveRecentlyViewed(slugs: string[]): Promise<ProductCar
     price: p.price,
     discountPrice: p.discountPrice,
     stock: p.stock,
+    reserved: p.reserved,
     promoBadge: p.promoBadge,
     priceColor: p.priceColor,
     images: p.images.map((img) => ({ url: img.url, isPrimary: img.isPrimary })),

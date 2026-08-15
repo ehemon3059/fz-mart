@@ -2,6 +2,10 @@ import { getSettingGroup, setSetting } from "@/lib/settings";
 
 // Inventory settings (Phase 5): currently just the optional daily low-stock
 // email digest toggle. Stored in the "inventory" group.
+//
+// Edited from the Stock Overview screen (admin/inventory), not a settings page —
+// the Settings → Inventory page held only this one toggle and was removed.
+// Read by the nightly digest job (jobs/maintenance.worker.ts).
 
 const GROUP = "inventory";
 

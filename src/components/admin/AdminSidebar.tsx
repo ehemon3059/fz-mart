@@ -22,6 +22,15 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: "Inventory",
+    links: [
+      { href: "/admin/inventory", label: "Stock Overview", icon: "grid", area: "inventory" },
+      { href: "/admin/inventory/movements", label: "Stock Movements", icon: "file", area: "inventory" },
+      { href: "/admin/inventory/purchase-orders", label: "Purchase Orders", icon: "box", area: "inventory" },
+      { href: "/admin/inventory/suppliers", label: "Suppliers", icon: "users", area: "inventory" },
+    ],
+  },
+  {
     heading: "Sales",
     links: [
       { href: "/admin/flash-sales", label: "Flash Sales", icon: "warn", area: "flash-sales" },
@@ -43,7 +52,6 @@ const NAV_SECTIONS: NavSection[] = [
     heading: "Reports",
     links: [
       { href: "/admin/reports/finance", label: "Profit & Loss", icon: "tag", area: "reports" },
-      { href: "/admin/reports/stock", label: "Stock Report", icon: "grid", area: "reports" },
       { href: "/admin/reports/orders", label: "Order Reports", icon: "grid", area: "reports" },
       { href: "/admin/reports/delivery", label: "Delivery", icon: "box", area: "reports" },
       { href: "/admin/reports/abandoned-carts", label: "Abandoned Carts", icon: "cart", area: "reports" },
@@ -62,7 +70,6 @@ const NAV_SECTIONS: NavSection[] = [
     links: [
       { href: "/admin/settings/appearance", label: "Appearance", icon: "image", area: "settings" },
       { href: "/admin/settings/localization", label: "Localization", icon: "settings", area: "settings" },
-      { href: "/admin/settings/inventory", label: "Inventory", icon: "settings", area: "settings" },
       { href: "/admin/settings/shipping", label: "Shipping Zones", icon: "settings", area: "settings" },
       { href: "/admin/settings/conversion", label: "Conversion", icon: "settings", area: "settings" },
       { href: "/admin/settings/payments", label: "Payments", icon: "settings", area: "settings" },

@@ -176,6 +176,7 @@ export default async function AdminOrderDetailPage({
           returnShippingCost={order.returnShippingCost}
           paymentGatewayFee={order.paymentGatewayFee}
           returnRestockable={order.returnRestockable}
+          stockSettled={order.restockedAt != null}
         />
       </div>
 

@@ -45,9 +45,10 @@ export default async function EditProductPage({
           history={history.map((h) => ({
             id: h.id,
             delta: h.delta,
-            newStock: h.newStock,
+            newStock: h.afterQty,
+            type: h.type,
             reason: h.reason,
-            adminName: h.adminName,
+            actorName: h.actorName,
             createdAt: h.createdAt.toLocaleString("en-BD"),
           }))}
         />

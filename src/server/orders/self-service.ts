@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { restockOrderItems } from "@/server/payments";
+import { releaseOrder } from "@/server/inventory/reservations";
 import { getConversionConfig } from "@/server/settings/conversion";
 
 // Customer self-service on their own orders. Authorization is knowledge-based
@@ -56,7 +56,9 @@ export async function cancelOwnOrder(
         note: cleanReason,
       },
     });
-    await restockOrderItems(tx, order.id);
+    // The order never shipped, so its units are still on the shelf — this only
+    // frees the reservation. No ledger movement: nothing moved.
+    await releaseOrder(tx, order.id);
   });
 }
 

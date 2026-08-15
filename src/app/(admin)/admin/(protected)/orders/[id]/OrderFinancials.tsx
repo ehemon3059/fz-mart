@@ -12,6 +12,13 @@ interface Props {
   returnShippingCost: number;
   paymentGatewayFee: number;
   returnRestockable: boolean;
+  /**
+   * True once this order's stock outcome has been applied (Order.restockedAt is
+   * set). After that the resellable choice is HISTORY: the units have already
+   * gone back on the shelf or been written off, and flipping the checkbox would
+   * only desynchronise the P&L from the stock ledger.
+   */
+  stockSettled: boolean;
 }
 
 const toTaka = (paisa: number) => (paisa ? String(paisa / 100) : "");
@@ -23,6 +30,7 @@ export default function OrderFinancials({
   returnShippingCost,
   paymentGatewayFee,
   returnRestockable,
+  stockSettled,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -104,23 +112,42 @@ export default function OrderFinancials({
         </div>
 
         <div className="flex items-start">
-          <label className="mt-6 flex cursor-pointer items-center gap-2.5 text-sm font-medium text-gray-700">
+          <label
+            className={`mt-6 flex items-center gap-2.5 text-sm font-medium text-gray-700 ${
+              stockSettled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            }`}
+          >
             <input
               name="returnRestockable"
               type="checkbox"
               defaultChecked={returnRestockable}
+              disabled={stockSettled}
               className="h-4 w-4 rounded border-gray-300"
             />
             Returned goods are resellable
           </label>
+          {/* Disabled inputs submit nothing, which would silently flip the flag
+              to false on every save. Carry the settled value explicitly. */}
+          {stockSettled && returnRestockable && (
+            <input type="hidden" name="returnRestockable" value="on" />
+          )}
         </div>
       </div>
 
-      {isReturned && (
+      {isReturned && !stockSettled && (
         <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           This order is <b>returned</b>. If the goods are damaged, untick
           &ldquo;resellable&rdquo; — their sourcing cost is then booked as an
           Inventory Loss in the P&amp;L instead of returning to stock.
+        </p>
+      )}
+
+      {stockSettled && (
+        <p className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          The stock outcome for this order is already settled — the units were{" "}
+          {returnRestockable ? "put back on the shelf" : "written off as damaged"}. Changing it
+          here would no longer match the stock ledger, so it is locked. Use a stock adjustment on
+          the product if a correction is needed.
         </p>
       )}
 
