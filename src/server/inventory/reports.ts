@@ -385,6 +385,8 @@ export interface MovementRow {
   productId: number;
   productName: string;
   option: string | null;
+  /** The moved variant's SKU, when it has one. */
+  sku: string | null;
   orderId: number | null;
   orderNo: string | null;
   /** True for rows synthesised by the Phase A backfill, whose levels are unknown. */
@@ -428,8 +430,8 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
         reason: true,
         actorName: true,
         productId: true,
-        product: { select: { name: true } },
-        variant: { select: { size: true, colorName: true } },
+        product: { select: { name: true, baseSku: true } },
+        variant: { select: { size: true, colorName: true, sku: true } },
         orderId: true,
         order: { select: { orderNo: true } },
       },
@@ -453,6 +455,9 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
       option: m.variant
         ? [m.variant.colorName, m.variant.size].filter(Boolean).join(" / ") || null
         : null,
+      // The variant's own SKU, falling back to the product's root — a movement
+      // on a deleted variant keeps the product line readable.
+      sku: m.variant?.sku ?? m.product.baseSku ?? null,
       orderId: m.orderId,
       orderNo: m.order?.orderNo ?? null,
       // The backfill could not know historical levels and wrote 0/0 with an

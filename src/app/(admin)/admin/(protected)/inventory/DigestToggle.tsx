@@ -9,7 +9,14 @@ import { setDigestEnabled, sendDigestNow } from "./actions";
  * reverts if the server rejects it, so a slow round-trip never leaves the UI
  * looking stuck.
  */
-export default function DigestToggle({ enabled }: { enabled: boolean }) {
+export default function DigestToggle({
+  enabled,
+  labels,
+}: {
+  enabled: boolean;
+  /** Translated copy, passed down so the toggle follows the page's language. */
+  labels: { title: string; sub: string; send: string };
+}) {
   const [on, setOn] = useState(enabled);
   const [note, setNote] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -36,12 +43,12 @@ export default function DigestToggle({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <div className="rounded-lg border border-stone-200 bg-white px-4 py-3 shadow-card">
+    <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
       <div className="flex items-center gap-3">
-        <Toggle checked={on} onChange={toggle} disabled={pending} label="Daily low-stock digest" />
+        <Toggle checked={on} onChange={toggle} disabled={pending} label={labels.title} />
         <div className="text-[13px]">
-          <p className="font-medium text-stone-800">Daily low-stock email</p>
-          <p className="text-[11.5px] text-stone-500">Sent to every owner and manager.</p>
+          <p className="font-medium text-stone-800">{labels.title}</p>
+          <p className="text-[11.5px] text-stone-500">{labels.sub}</p>
         </div>
         <button
           type="button"
@@ -49,7 +56,7 @@ export default function DigestToggle({ enabled }: { enabled: boolean }) {
           disabled={pending || !on}
           className="ml-2 rounded-md border border-stone-300 px-2.5 py-1 text-[12px] font-medium text-stone-600 transition-colors hover:border-stone-400 disabled:opacity-40"
         >
-          Send now
+          {labels.send}
         </button>
       </div>
       {note && <p className="mt-2 text-[12px] text-stone-500">{note}</p>}
