@@ -12,6 +12,20 @@ import {
 
 export const metadata = { title: "কর্মপদ্ধতি — FZ-Mart Admin" };
 
+// Bangla text must never ride the panel's latin-only faces. Geist, Manrope and
+// Spline Sans Mono are all latin subsets (see the font block in app/layout.tsx),
+// so a Bengali string set in `font-mono` or the Arial body stack falls through
+// to whatever the OS happens to have — which renders as tofu, or as a face with
+// no real weight range, and reads as "invisible text" on some machines.
+//
+// `bn` puts a Bengali stack in front for prose, and `bnLabel` is the version
+// for the small uppercase labels that were previously font-mono. Latin-only
+// content (route paths, ledger type names, figures) keeps font-mono, which is
+// exactly what that face is good at.
+const bn =
+  "[font-family:'Noto_Sans_Bengali','Nirmala_UI','SolaimanLipi','Kalpurush',system-ui,sans-serif]";
+const bnLabel = `${bn} tracking-normal`;
+
 // The Bangla operating guide: how the shop's money moves, from buying stock to
 // the monthly P&L. Deliberately NOT permission-gated beyond the base admin
 // check — a staff member who only touches orders still benefits from knowing
@@ -35,7 +49,10 @@ const SIGN_TONE = {
 
 function Cell({ cell, align }: { cell: GuideCell; align: "left" | "right" }) {
   const classes = [
-    "px-4 py-2.5 align-top text-[13.5px] text-stone-600 border-b border-stone-100",
+    "px-4 py-2.5 align-top text-[14px] leading-relaxed text-stone-700 border-b border-stone-100",
+    // Latin content (figures, ledger types) keeps the mono face; Bangla prose
+    // gets the Bengali stack so it never falls back to a latin-only subset.
+    cell.mono ? "" : bn,
     align === "right" ? "text-right tabular-nums whitespace-nowrap" : "",
     cell.mono ? "font-mono text-[12.5px] text-stone-900 whitespace-nowrap" : "",
     cell.bold ? "font-semibold text-stone-900" : "",
@@ -65,7 +82,9 @@ function GuideTableBlock({ table }: { table: GuideTable }) {
     <div className="mt-5 overflow-x-auto rounded-lg border border-stone-200 bg-white">
       <table className="w-full border-collapse">
         {table.caption && (
-          <caption className="border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-left text-[12.5px] text-stone-500">
+          <caption
+            className={`border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-left text-[13px] text-stone-600 ${bn}`}
+          >
             {table.caption}
           </caption>
         )}
@@ -74,7 +93,7 @@ function GuideTableBlock({ table }: { table: GuideTable }) {
             {table.head.map((h, i) => (
               <th
                 key={h}
-                className={`whitespace-nowrap border-b border-stone-200 px-4 py-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400 ${
+                className={`whitespace-nowrap border-b border-stone-200 px-4 py-2.5 text-[12px] font-semibold text-stone-600 ${bnLabel} ${
                   align[i] === "right" ? "text-right" : "text-left"
                 }`}
               >
@@ -102,10 +121,10 @@ function RouteChip({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 rounded-md border border-accent/30 bg-accent-soft px-2.5 py-1 text-[12px] font-medium text-accent transition-colors hover:bg-accent hover:text-white"
+      className="inline-flex items-center gap-2 rounded-md border border-accent/40 bg-accent-soft px-2.5 py-1.5 text-[13px] font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
     >
-      {label}
-      <span className="font-mono text-[11px] opacity-70">{href}</span>
+      <span className={bn}>{label}</span>
+      <span className="font-mono text-[11px] opacity-80">{href}</span>
     </Link>
   );
 }
@@ -115,24 +134,26 @@ export default function AdminGuidePage() {
     <div className="space-y-6 px-4 py-8 sm:px-7">
       {/* Masthead */}
       <div className="border-b-2 border-stone-900 pb-6">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-stone-400">
+        <p className={`text-[12px] font-semibold tracking-wide text-stone-500 ${bn}`}>
           FZ-Mart · কর্মপদ্ধতি
         </p>
-        <h1 className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight text-stone-900 sm:text-[32px]">
+        <h1
+          className={`mt-2 text-[26px] font-extrabold leading-tight text-stone-900 sm:text-[32px] ${bn}`}
+        >
           সাপ্লায়ার থেকে লাভ পর্যন্ত
         </h1>
-        <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-stone-500">
+        <p className={`mt-2 max-w-[62ch] text-[15px] leading-relaxed text-stone-600 ${bn}`}>
           পণ্য কেনা, স্টকে রাখা, বিক্রি করা এবং মাস শেষে লাভ-লোকসান বের করা — পুরো কাজটা ৫টি
           ধাপে। প্রতিটি ধাপে প্যানেলের সংশ্লিষ্ট পাতার লিংক দেওয়া আছে।
         </p>
-        <p className="mt-3 text-[12.5px] text-stone-400">
+        <p className={`mt-3 text-[13px] text-stone-500 ${bn}`}>
           ফর্মের ফিল্ড ও বাটনের নাম ইংরেজিতেই রাখা হয়েছে, যেভাবে সেগুলো পর্দায় দেখা যায়।
         </p>
       </div>
 
       {/* The loop */}
       <div>
-        <p className="text-[13.5px] text-stone-500">
+        <p className={`text-[14px] text-stone-600 ${bn}`}>
           টাকার চক্র — আপনার পুঁজি চারবার রূপ বদলায়, তারপর বেড়ে অথবা কমে ফিরে আসে।
         </p>
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
@@ -141,9 +162,9 @@ export default function AdminGuidePage() {
               key={n.k}
               className="rounded-lg border border-stone-200 border-t-[3px] border-t-accent bg-white px-4 py-3 shadow-card"
             >
-              <p className="font-mono text-[10.5px] tracking-wider text-stone-400">{n.k}</p>
-              <p className="mt-0.5 text-[16px] font-bold text-stone-900">{n.t}</p>
-              <p className="mt-1 text-[12.5px] leading-snug text-stone-500">{n.s}</p>
+              <p className="font-mono text-[10.5px] tracking-wider text-stone-500">{n.k}</p>
+              <p className={`mt-0.5 text-[16px] font-bold text-stone-900 ${bn}`}>{n.t}</p>
+              <p className={`mt-1 text-[13px] leading-snug text-stone-600 ${bn}`}>{n.s}</p>
             </div>
           ))}
         </div>
@@ -159,8 +180,10 @@ export default function AdminGuidePage() {
         >
           {/* Rail */}
           <div className="flex items-baseline gap-4 md:block">
-            <p className="font-mono text-[38px] leading-none text-stone-200">{stage.numeral}</p>
-            <p className="text-[12.5px] leading-tight text-stone-400 md:mt-2">
+            <p className={`text-[36px] font-bold leading-none text-stone-300 ${bn}`}>
+              {stage.numeral}
+            </p>
+            <p className={`text-[13px] leading-tight text-stone-500 md:mt-2 ${bn}`}>
               {stage.railTop}
               <br className="hidden md:inline" />
               <span className="md:hidden"> · </span>
@@ -170,10 +193,8 @@ export default function AdminGuidePage() {
 
           {/* Body */}
           <div className="min-w-0">
-            <h2 className="text-[22px] font-bold tracking-tight text-stone-900">
-              {stage.heading}
-            </h2>
-            <p className="mt-2 max-w-[68ch] text-[15px] leading-relaxed text-stone-600">
+            <h2 className={`text-[22px] font-bold text-stone-900 ${bn}`}>{stage.heading}</h2>
+            <p className={`mt-2 max-w-[68ch] text-[15px] leading-relaxed text-stone-700 ${bn}`}>
               {stage.lede}
             </p>
 
@@ -198,9 +219,9 @@ export default function AdminGuidePage() {
                     <span className="absolute -left-3 top-0 grid h-6 w-6 place-items-center rounded-full bg-accent font-mono text-[11px] text-white">
                       {i + 1}
                     </span>
-                    <p className="font-semibold text-stone-900">{step.title}</p>
+                    <p className={`text-[15px] font-bold text-stone-900 ${bn}`}>{step.title}</p>
                     {step.detail && (
-                      <p className="mt-1 max-w-[66ch] text-[13.5px] leading-relaxed text-stone-600">
+                      <p className={`mt-1 max-w-[66ch] text-[14px] leading-relaxed text-stone-700 ${bn}`}>
                         {step.detail}
                       </p>
                     )}
@@ -217,9 +238,9 @@ export default function AdminGuidePage() {
                       </p>
                     )}
                     {step.action && (
-                      <p className="mt-2 text-[13px] text-stone-500">
+                      <p className={`mt-2 text-[14px] text-stone-600 ${bn}`}>
                         শেষে{" "}
-                        <span className="rounded bg-stone-900 px-2 py-0.5 text-[12px] font-semibold text-white">
+                        <span className="rounded bg-stone-900 px-2 py-0.5 font-mono text-[12px] font-semibold text-white">
                           {step.action}
                         </span>{" "}
                         বাটনে চাপ দিন।
@@ -241,10 +262,10 @@ export default function AdminGuidePage() {
             {stage.formula && (
               <div className="mt-5 overflow-x-auto rounded-lg border border-stone-200 border-l-[3px] border-l-accent bg-white px-5 py-4">
                 {stage.formula.map((f) => (
-                  <p key={f.label} className="py-1 text-[14px] leading-relaxed">
-                    <span className="text-stone-400">{f.label}</span>{" "}
-                    <span className="font-mono font-bold text-stone-900">=</span>{" "}
-                    <span className="text-stone-700">{f.body}</span>
+                  <p key={f.label} className={`py-1 text-[15px] leading-relaxed ${bn}`}>
+                    <span className="text-stone-500">{f.label}</span>{" "}
+                    <span className="font-mono font-bold text-accent">=</span>{" "}
+                    <span className="font-medium text-stone-800">{f.body}</span>
                   </p>
                 ))}
               </div>
@@ -257,18 +278,26 @@ export default function AdminGuidePage() {
               <>
                 <div className="mt-5 overflow-x-auto rounded-lg border border-stone-200 bg-white">
                   <table className="w-full border-collapse">
-                    <caption className="border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-left text-[12.5px] text-stone-500">
+                    <caption
+                      className={`border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-left text-[13px] text-stone-600 ${bn}`}
+                    >
                       স্টক বদলানোর ৬টি কারণ · স্টক লেজারে যা লেখা হয়
                     </caption>
                     <thead>
                       <tr>
-                        <th className="border-b border-stone-200 px-4 py-2.5 text-left font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400">
+                        <th
+                          className={`border-b border-stone-200 px-4 py-2.5 text-left text-[12px] font-semibold text-stone-600 ${bnLabel}`}
+                        >
                           ধরন
                         </th>
-                        <th className="border-b border-stone-200 px-4 py-2.5 text-right font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400">
+                        <th
+                          className={`border-b border-stone-200 px-4 py-2.5 text-right text-[12px] font-semibold text-stone-600 ${bnLabel}`}
+                        >
                           চিহ্ন
                         </th>
-                        <th className="border-b border-stone-200 px-4 py-2.5 text-left font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400">
+                        <th
+                          className={`border-b border-stone-200 px-4 py-2.5 text-left text-[12px] font-semibold text-stone-600 ${bnLabel}`}
+                        >
                           কখন লেখা হয়
                         </th>
                       </tr>
@@ -284,7 +313,9 @@ export default function AdminGuidePage() {
                           >
                             {r.sign}
                           </td>
-                          <td className="border-b border-stone-100 px-4 py-2.5 text-[13.5px] text-stone-600">
+                          <td
+                            className={`border-b border-stone-100 px-4 py-2.5 text-[14px] text-stone-700 ${bn}`}
+                          >
                             {r.when}
                           </td>
                         </tr>
@@ -293,7 +324,7 @@ export default function AdminGuidePage() {
                   </table>
                 </div>
 
-                <p className="mt-5 max-w-[68ch] text-[14px] leading-relaxed text-stone-600">
+                <p className={`mt-5 max-w-[68ch] text-[14px] leading-relaxed text-stone-700 ${bn}`}>
                   হাতে স্টক ঠিক করতে পণ্যের এডিট পাতায় যান — সেখানে{" "}
                   <span className="rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 font-mono text-[11.5px] text-stone-700">
                     Direction
@@ -319,7 +350,9 @@ export default function AdminGuidePage() {
             {stage.numeral === "০৫" && (
               <div className="mt-5 overflow-x-auto rounded-lg border border-stone-200 bg-white">
                 <table className="w-full border-collapse">
-                  <caption className="border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-left text-[12.5px] text-stone-500">
+                  <caption
+                    className={`border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-left text-[13px] text-stone-600 ${bn}`}
+                  >
                     উদাহরণ · আগস্ট ২০২৬ · ২১৪টি ডেলিভারি, ৯টি ফেরত
                   </caption>
                   <tbody>
@@ -329,7 +362,7 @@ export default function AdminGuidePage() {
                           <tr key={r.label}>
                             <td
                               colSpan={2}
-                              className="px-4 pb-1 pt-5 font-mono text-[10.5px] uppercase tracking-wider text-stone-400"
+                              className={`px-4 pb-1 pt-5 text-[12px] font-semibold text-stone-600 ${bnLabel}`}
                             >
                               {r.label}
                             </td>
@@ -350,8 +383,8 @@ export default function AdminGuidePage() {
                           }
                         >
                           <td
-                            className={`px-4 py-2 text-[13.5px] ${
-                              r.kind === "sub" ? "pl-9 text-stone-600" : "text-stone-900"
+                            className={`px-4 py-2 text-[14px] ${bn} ${
+                              r.kind === "sub" ? "pl-9 text-stone-700" : "text-stone-900"
                             } ${isFinal ? "text-[16px] font-bold" : ""} ${
                               isSubtotal ? "font-semibold" : ""
                             }`}
@@ -380,7 +413,10 @@ export default function AdminGuidePage() {
             )}
 
             {stage.notes?.map((n) => (
-              <p key={n} className="mt-5 max-w-[68ch] text-[14px] leading-relaxed text-stone-600">
+              <p
+                key={n}
+                className={`mt-5 max-w-[68ch] text-[14px] leading-relaxed text-stone-700 ${bn}`}
+              >
                 {n}
               </p>
             ))}
@@ -389,24 +425,30 @@ export default function AdminGuidePage() {
             {stage.doPanel && (
               <div className="mt-5 grid overflow-hidden rounded-lg border border-stone-200 md:grid-cols-2">
                 <div className="bg-white p-5">
-                  <p className="mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400">
+                  <p className={`mb-3 text-[12px] font-bold text-stone-500 ${bnLabel}`}>
                     {stage.numeral === "০৫" ? "যা আপনাকে হাতে লিখতে হবে" : "আপনি যা করবেন"}
                   </p>
                   <ul className="list-disc space-y-2 pl-5">
                     {stage.doPanel.you.map((li) => (
-                      <li key={li} className="text-[13.5px] leading-relaxed text-stone-600">
+                      <li
+                        key={li}
+                        className={`text-[14px] leading-relaxed text-stone-700 ${bn}`}
+                      >
                         {li}
                       </li>
                     ))}
                   </ul>
                 </div>
                 <div className="border-t border-stone-200 bg-stone-50 p-5 md:border-l md:border-t-0">
-                  <p className="mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400">
+                  <p className={`mb-3 text-[12px] font-bold text-stone-500 ${bnLabel}`}>
                     {stage.numeral === "০৫" ? "যা নিজে থেকেই আসে" : "প্যানেল যা করবে"}
                   </p>
                   <ul className="list-disc space-y-2 pl-5">
                     {stage.doPanel.panel.map((li) => (
-                      <li key={li} className="text-[13.5px] leading-relaxed text-stone-600">
+                      <li
+                        key={li}
+                        className={`text-[14px] leading-relaxed text-stone-700 ${bn}`}
+                      >
                         {li}
                       </li>
                     ))}
@@ -416,7 +458,9 @@ export default function AdminGuidePage() {
             )}
 
             {stage.callout && (
-              <p className="mt-5 max-w-[68ch] rounded-lg border border-stone-200 border-l-[3px] border-l-warning bg-warning-soft px-5 py-4 text-[14px] leading-relaxed text-stone-700">
+              <p
+                className={`mt-5 max-w-[68ch] rounded-lg border border-warning/30 border-l-[3px] border-l-warning bg-warning-soft px-5 py-4 text-[14px] leading-relaxed text-stone-800 ${bn}`}
+              >
                 {stage.callout}
               </p>
             )}
@@ -426,20 +470,24 @@ export default function AdminGuidePage() {
 
       {/* Quick reference */}
       <section className="border-t-2 border-stone-900 pt-8">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-stone-400">
+        <p className={`text-[12px] font-semibold tracking-wide text-stone-500 ${bn}`}>
           দ্রুত রেফারেন্স
         </p>
-        <h2 className="mt-2 text-[21px] font-bold tracking-tight text-stone-900">
+        <h2 className={`mt-2 text-[21px] font-bold text-stone-900 ${bn}`}>
           সব পাতার ঠিকানা এক জায়গায়
         </h2>
         <div className="mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th className="border-b border-stone-200 px-4 py-2.5 text-left font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400">
+                <th
+                  className={`border-b border-stone-200 px-4 py-2.5 text-left text-[12px] font-semibold text-stone-600 ${bnLabel}`}
+                >
                   কাজ
                 </th>
-                <th className="border-b border-stone-200 px-4 py-2.5 text-left font-mono text-[10.5px] font-semibold uppercase tracking-wider text-stone-400">
+                <th
+                  className={`border-b border-stone-200 px-4 py-2.5 text-left text-[12px] font-semibold text-stone-600 ${bnLabel}`}
+                >
                   ঠিকানা
                 </th>
               </tr>
@@ -447,7 +495,9 @@ export default function AdminGuidePage() {
             <tbody>
               {ROUTE_INDEX.map((r) => (
                 <tr key={r.href}>
-                  <td className="border-b border-stone-100 px-4 py-2.5 text-[13.5px] text-stone-600">
+                  <td
+                    className={`border-b border-stone-100 px-4 py-2.5 text-[14px] text-stone-700 ${bn}`}
+                  >
                     {r.label}
                   </td>
                   <td className="border-b border-stone-100 px-4 py-2.5">
@@ -464,14 +514,14 @@ export default function AdminGuidePage() {
           </table>
         </div>
 
-        <h2 className="mt-10 text-[21px] font-bold tracking-tight text-stone-900">
+        <h2 className={`mt-10 text-[21px] font-bold text-stone-900 ${bn}`}>
           চারটি অভ্যাস যা হিসাব সঠিক রাখে
         </h2>
         <div className="mt-4 grid gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-2 lg:grid-cols-4">
           {HABITS.map((h) => (
             <div key={h.title} className="bg-white p-5">
-              <h3 className="text-[15px] font-bold text-stone-900">{h.title}</h3>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-stone-600">{h.body}</p>
+              <h3 className={`text-[15px] font-bold text-stone-900 ${bn}`}>{h.title}</h3>
+              <p className={`mt-1.5 text-[14px] leading-relaxed text-stone-700 ${bn}`}>{h.body}</p>
             </div>
           ))}
         </div>
