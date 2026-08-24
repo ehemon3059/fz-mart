@@ -4,7 +4,6 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
-import sharp from "sharp";
 import { sanitizeSvg } from "./svg";
 
 // Object-storage adapter — Cloudflare R2 (S3-compatible, zero egress).
@@ -275,6 +274,13 @@ async function processImage(
   buffer: Buffer,
   ext: string,
 ): Promise<{ body: Buffer; outExt: string; outType: string }> {
+  // Loaded lazily, NOT at module top level. deleteImage() is imported by
+  // server/products/admin and server/banners/admin, which the admin *list*
+  // pages pull in just to read rows — a top-level `import sharp` therefore
+  // dragged sharp's native binary into those render paths and 500'd the whole
+  // page when the platform's libvips didn't match. Only uploads need it.
+  const { default: sharp } = await import("sharp");
+
   try {
     const pipeline = sharp(buffer, { failOn: "error" }).rotate(); // apply EXIF orientation
     const meta = await pipeline.metadata();
