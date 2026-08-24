@@ -332,7 +332,7 @@ export default async function ProductPage({
         inStock={inStock}
         isFromPrice={hasVariants}
         priceColor={headlinePriceColor}
-        revealAfterId="buy-box"
+        buyBoxId="buy-box"
       />
     </div>
   );

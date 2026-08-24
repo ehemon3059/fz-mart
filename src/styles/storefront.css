@@ -1120,14 +1120,14 @@
   .fz .promo-col{flex-direction:column;}
   /* Keep the floating chat buttons clear of the fixed bottom bar. */
   .fz .chat-fab{bottom:calc(var(--mtab-h) + env(safe-area-inset-bottom) + 20px);}
-  /* On a product page the sticky buy bar stacks on top of the mobile tab bar.
-     While it is showing, lift both FABs above it so neither covers the CTA.
+  /* On a product page the sticky buy bar stacks on top of the mobile tab bar
+     and stays put for the whole page, so lift both FABs above it permanently.
      Driven by the bar's own data attribute, so other pages are unaffected.
      --buybar-h is published by MobileBuyBar from its own measured height, so
      this keeps working when the bar wraps to two lines (long price + "From"). */
-  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .chat-fab{
+  .fz:has([data-mobile-buy-bar]) .chat-fab{
     bottom:calc(var(--mtab-h) + var(--buybar-h, 76px) + env(safe-area-inset-bottom) + 20px);}
-  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .scroll-top-fab{
+  .fz:has([data-mobile-buy-bar]) .scroll-top-fab{
     bottom:calc(var(--mtab-h) + var(--buybar-h, 76px) + env(safe-area-inset-bottom) + 24px);}
   /* Room at the bottom so the fixed bar never covers page content/footer. */
   .fz{padding-bottom:calc(var(--mtab-h) + env(safe-area-inset-bottom) + 6px);}
