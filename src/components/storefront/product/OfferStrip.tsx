@@ -26,7 +26,7 @@ export default function OfferStrip({
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-500 px-3.5 py-2.5 text-[13.5px] font-bold leading-snug text-white shadow-sm ${className}`}
+      className={`flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-500 px-3.5 py-2.5 text-center text-[13.5px] font-bold leading-snug text-white shadow-sm ${className}`}
     >
       <Tag size={15} className="shrink-0" aria-hidden />
       {/* Long offers wrap instead of overflowing the buy box. */}

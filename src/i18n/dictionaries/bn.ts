@@ -67,6 +67,7 @@ export const bn = {
   },
   footer: {
     tagline: "অনলাইনে অর্ডার করুন, ডেলিভারিতে পরিশোধ করুন।",
+    weAccept: "আমরা গ্রহণ করি",
     allRightsReserved: "সর্বস্বত্ব সংরক্ষিত।",
   },
 } satisfies Dictionary;

@@ -926,10 +926,42 @@
 .fz .ft-contact-row svg{flex-shrink:0;margin-top:2px;color:var(--footer-soft,var(--ink-soft));}
 .fz .ft-contact-row a{color:inherit;transition:color .15s;}
 .fz .ft-contact-row a:hover{color:var(--footer-ink,var(--brand-dark));}
-.fz .ft-pay{display:flex;gap:8px;flex-wrap:wrap;}
-.fz .ft-pay .pay{height:30px;min-width:52px;padding:0 10px;border:1px solid var(--footer-line,var(--line));border-radius:7px;
-  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
-  color:var(--footer-soft,var(--ink-soft));background:var(--footer-chip,var(--bg));}
+/* Payment marks. The brand SVGs (/public/finence-logos, mirrored to R2 under
+   branding/payments/) are cropped to their ink, so the tile sets the size on its
+   own. Tiles stay white on every footer colour — the artwork is drawn for a
+   light ground, and a white card on a navy footer is exactly the contrast a
+   payment strip wants. auto-fit reflows the row to whatever width the brand
+   column has, and max-width stops it stretching past five across. */
+.fz .ft-pay{margin-top:2px;}
+.fz .ft-pay-hd{display:flex;align-items:center;gap:7px;margin:0 0 10px;
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--footer-soft,var(--ink-mute));}
+.fz .ft-pay-hd svg{flex-shrink:0;color:var(--footer-ink,var(--brand-dark));}
+.fz .ft-pay-list{list-style:none;margin:0;padding:0;max-width:422px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));gap:8px;}
+.fz .ft-pay .pay{height:48px;padding:6px 9px;border-radius:11px;
+  background:#fff;border:1px solid var(--footer-line,var(--line));
+  box-shadow:0 1px 2px rgba(20,18,14,.09);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .18s cubic-bezier(.16,1,.3,1),box-shadow .18s,border-color .18s;}
+/* object-fit keeps a mark letterboxed rather than squashed if the tile ever gets
+   narrower than the mark's natural width at these heights. */
+.fz .ft-pay .pay img{width:auto;max-width:100%;object-fit:contain;}
+/* Optical sizing, tuned per mark rather than shared — matching pixel heights
+   would leave VISA towering over the COD illustration. */
+.fz .pay-bkash img{height:24px;}
+.fz .pay-nagad img{height:24px;}
+.fz .pay-rocket img{height:30px;}
+.fz .pay-visa img{height:21px;}
+.fz .pay-cod img{height:34px;}
+@media (hover:hover){
+  .fz .ft-pay .pay:hover{transform:translateY(-2px);border-color:var(--btn-primary,var(--brand));
+    box-shadow:0 8px 18px -8px rgba(20,18,14,.35);}
+}
+@media (prefers-reduced-motion:reduce){
+  .fz .ft-pay .pay{transition:none;}
+  .fz .ft-pay .pay:hover{transform:none;}
+}
 .fz .ft-col h4{font-size:13px;font-weight:700;letter-spacing:.02em;margin:0 0 16px;color:var(--footer-ink,var(--ink));}
 .fz .ft-col a{display:block;font-size:13.5px;color:var(--footer-soft,var(--ink-mute));margin-bottom:11px;transition:color .15s;}
 .fz .ft-col a:hover{color:var(--footer-ink,var(--brand-dark));}
@@ -1067,6 +1099,9 @@
   .fz .trust-sub{font-size:12px;}
   .fz .prow,.fz .pgrid{grid-template-columns:repeat(2,1fr);}
   .fz .ft-top{grid-template-columns:1fr 1fr;}
+  /* Half a phone width cannot hold the payment row, and the brand blurb reads
+     badly at that measure — give the whole block the row to itself. */
+  .fz .ft-brand{grid-column:1/-1;}
   .fz .banner h1{font-size:32px;}
   .fz .co-row2{grid-template-columns:1fr;}
   .fz .sec-hd{align-items:center;gap:10px;}
@@ -1079,6 +1114,18 @@
   .fz .news form{flex:1 1 100%;min-width:0;max-width:100%;width:100%;flex-direction:column;gap:12px;}
   .fz .news input,.fz .news .n-btn{flex:0 0 auto;width:100%;max-width:100%;height:50px;border-radius:12px;}
   .fz .news input{font-size:16px;padding:0 16px;}
+}
+
+/* Payment tiles hold a single row all the way down: five equal fractions rather
+   than a fixed width, so they shrink with the viewport instead of wrapping a
+   lone tile onto a second line. */
+@media(max-width:560px){
+  .fz .ft-pay-list{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;max-width:none;}
+  .fz .ft-pay .pay{height:42px;padding:5px 6px;border-radius:9px;}
+  .fz .pay-bkash img,.fz .pay-nagad img{height:19px;}
+  .fz .pay-rocket img{height:25px;}
+  .fz .pay-visa img{height:17px;}
+  .fz .pay-cod img{height:28px;}
 }
 
 /* Category-tile breakpoints, from the source design: 6 -> 4 -> 3 -> 2 columns.

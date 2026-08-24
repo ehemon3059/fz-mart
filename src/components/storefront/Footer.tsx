@@ -4,7 +4,22 @@ import { getCompanyInfo } from "@/server/settings/company";
 import { getLogoUrl } from "@/server/settings/branding";
 import { getShopLinks } from "@/server/settings/footer-links";
 import { LOGO_DISPLAY_WIDTH, LOGO_DISPLAY_HEIGHT, LOGO_MAX_DISPLAY_WIDTH } from "@/lib/logo-spec";
-import { FacebookIcon, InstagramIcon, YoutubeIcon, TwitterIcon, PinIcon, PhoneIcon, MailIcon } from "./icons";
+import { FacebookIcon, InstagramIcon, YoutubeIcon, TwitterIcon, PinIcon, PhoneIcon, MailIcon, ShieldCheck } from "./icons";
+
+// Payment marks shown under the brand column. The artwork lives in
+// /public/finence-logos (mirrored to R2 under branding/payments/) with each
+// viewBox cropped to its ink, so the tile alone controls the size — there is no
+// baked-in whitespace to fight. width/height are the intrinsic pixels at the
+// brand's optical height so the browser reserves the box before the SVG lands;
+// they differ per brand because a bold wordmark (VISA) reads far larger than a
+// detailed illustration (COD) at the same pixel height. CSS keeps the ratio.
+const PAYMENTS: { slug: string; label: string; w: number; h: number }[] = [
+  { slug: "bkash", label: "bKash", w: 51, h: 24 },
+  { slug: "nagad", label: "Nagad", w: 54, h: 24 },
+  { slug: "rocket", label: "Rocket", w: 47, h: 30 },
+  { slug: "visa", label: "VISA", w: 60, h: 21 },
+  { slug: "cod", label: "Cash on Delivery", w: 34, h: 34 },
+];
 
 // The Shop column is admin-managed (/admin/pages); the rest are fixed routes.
 const COLS: { heading: string; links: { label: string; href: string }[] }[] = [
@@ -110,17 +125,36 @@ export default async function Footer() {
             )}
 
             <div className="ft-pay">
-              {["bKash", "Nagad", "Rocket", "VISA", "COD"].map((p) => (
-                <span className="pay" key={p}>{p}</span>
-              ))}
+              <p className="ft-pay-hd"><ShieldCheck size={14} /> {dict.footer.weAccept}</p>
+              <ul className="ft-pay-list">
+                {PAYMENTS.map((p) => (
+                  <li className={`pay pay-${p.slug}`} key={p.slug}>
+                    {/* Plain <img>: next/image refuses to optimise SVG without
+                        dangerouslyAllowSVG, and there is nothing to optimise —
+                        the biggest of these is under 20 KB. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/finence-logos/${p.slug}.svg`}
+                      alt={p.label}
+                      title={p.label}
+                      width={p.w}
+                      height={p.h}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
 
           {columns.map((col) => (
             <div className="ft-col" key={col.heading}>
               <h4>{col.heading}</h4>
+              {/* Keyed by label too: Returns & Refunds and Shipping Info both
+                  point at /pages/shipping, and href alone collides. */}
               {col.links.map((l) => (
-                <Link key={l.href} href={l.href}>{l.label}</Link>
+                <Link key={`${l.label}|${l.href}`} href={l.href}>{l.label}</Link>
               ))}
             </div>
           ))}

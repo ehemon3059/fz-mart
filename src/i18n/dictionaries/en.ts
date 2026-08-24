@@ -66,6 +66,7 @@ export const en = {
   },
   footer: {
     tagline: "Order online, pay on delivery.",
+    weAccept: "We Accept",
     allRightsReserved: "All rights reserved.",
   },
 };
