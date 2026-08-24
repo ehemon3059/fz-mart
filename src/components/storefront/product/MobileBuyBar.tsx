@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ShoppingBag } from "lucide-react";
 import { formatTaka, priceColorStyle } from "@/lib/money";
 
@@ -32,6 +32,29 @@ export default function MobileBuyBar({
   revealAfterId,
 }: Props) {
   const [show, setShow] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  // Publish the bar's real height as --buybar-h on `.fz` so the chat/scroll
+  // FABs can stack above it. Measured rather than hardcoded: the bar grows a
+  // line taller when a long "From ৳x,xxx ৳y,yyy" price wraps, and a stale
+  // constant would let the FABs sit on top of the Buy Now button.
+  useEffect(() => {
+    const el = barRef.current;
+    const root = el?.closest(".fz") as HTMLElement | null;
+    if (!el || !root) return;
+
+    const publish = () => {
+      root.style.setProperty("--buybar-h", `${Math.round(el.offsetHeight)}px`);
+    };
+    publish();
+
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--buybar-h");
+    };
+  }, []);
 
   useEffect(() => {
     const target = document.getElementById(revealAfterId);
@@ -62,43 +85,57 @@ export default function MobileBuyBar({
 
   return (
     <div
+      ref={barRef}
       data-mobile-buy-bar
       className={[
-        // Sits directly on top of the global .mtab nav (fixed, z-60, ~62px
-        // tall incl. safe area), so both stay usable at once.
-        "fixed inset-x-0 z-[61] border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_-8px_rgba(15,23,42,0.25)] backdrop-blur transition-transform duration-300 md:hidden",
+        // Sits directly on top of the global .mtab nav (fixed, z-60), so both
+        // stay usable at once. Visibility is driven by the `mbb-root` media
+        // query rather than Tailwind's `md:hidden`: .mtab appears at
+        // max-width:760px while `md` breaks at 768px, and that 8px gap left
+        // the bar floating 58px above nothing on 761–767px viewports.
+        "mbb-root fixed inset-x-0 z-[61] border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_-8px_rgba(15,23,42,0.25)] backdrop-blur transition-transform duration-300",
         show ? "translate-y-0" : "translate-y-[130%]",
       ].join(" ")}
-      style={{ bottom: "calc(58px + env(safe-area-inset-bottom))" }}
+      // Offset from the shared --mtab-h token so the bar tracks the nav's real
+      // height instead of a hand-measured 58px that drifted out of sync.
+      style={{ bottom: "calc(var(--mtab-h, 58px) + env(safe-area-inset-bottom))" }}
       aria-hidden={!show}
     >
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            {isFromPrice && <span className="text-[11px] font-medium text-slate-500">From</span>}
+          {/* nowrap + truncate: on a 320px viewport a variant product's
+              "From ৳1,299 ৳1,899" would otherwise wrap and push the bar a line
+              taller. The price is the one thing that must stay on one line, so
+              the struck-through original is what gets clipped if space runs out. */}
+          <div className="flex items-baseline gap-2 whitespace-nowrap">
+            {isFromPrice && (
+              <span className="shrink-0 text-[11px] font-medium text-slate-500">From</span>
+            )}
             <span
-              className="text-[19px] font-extrabold leading-none text-slate-900"
+              className="shrink-0 text-[19px] font-extrabold leading-none text-slate-900"
               style={priceColorStyle(priceColor)}
             >
               {formatTaka(price)}
             </span>
             {saving > 0 && (
-              <span className="text-[12.5px] text-slate-400 line-through">
+              <span className="truncate text-[12.5px] text-slate-400 line-through">
                 {formatTaka(originalPrice!)}
               </span>
             )}
           </div>
-          <p className={`mt-0.5 text-[11.5px] font-semibold ${inStock ? "text-emerald-700" : "text-rose-600"}`}>
+          <p className={`mt-0.5 truncate text-[11.5px] font-semibold ${inStock ? "text-emerald-700" : "text-rose-600"}`}>
             {inStock ? "In stock · Cash on Delivery" : "Out of stock"}
           </p>
         </div>
 
+        {/* px-4 under 360px so the button still clears the 44px tap target
+            without starving the price block on an iPhone SE. */}
         <button
           type="button"
           onClick={jumpToBuyBox}
           disabled={!inStock}
           tabIndex={show ? 0 : -1}
-          className="btn-brand-solid flex shrink-0 items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-brand-solid flex shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold min-[360px]:px-5 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ShoppingBag size={16} />
           Buy Now

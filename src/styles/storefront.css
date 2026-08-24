@@ -1102,21 +1102,35 @@
 
 /* ---------- mobile bottom tab bar ---------- */
 .fz .mtab{display:none;}
+/* Height of the fixed bottom nav, excluding the safe area (added separately
+   wherever it matters). Everything that has to sit clear of the nav — the
+   FABs, the sticky buy bar, the page's bottom padding — derives its offset
+   from this one token instead of repeating a hand-measured pixel value. */
+.fz{--mtab-h:58px;}
+/* The sticky product buy bar is only meaningful while the bottom nav exists,
+   so it shares .mtab's exact breakpoint. Tailwind's md:hidden (768px) left an
+   8px band where the bar hung above no nav at all. */
+.fz .mbb-root{display:none;}
 @media(max-width:760px){
+  .fz .mbb-root{display:block;}
   /* Header: account button moves to the bottom tab bar; the search bar
      drops onto its own full-width row beneath the logo (see rules below). */
   .fz .hdr-account{display:none;}
   /* Stack the two side promos (New season, then Free shipping) vertically. */
   .fz .promo-col{flex-direction:column;}
   /* Keep the floating chat buttons clear of the fixed bottom bar. */
-  .fz .chat-fab{bottom:78px;}
+  .fz .chat-fab{bottom:calc(var(--mtab-h) + env(safe-area-inset-bottom) + 20px);}
   /* On a product page the sticky buy bar stacks on top of the mobile tab bar.
      While it is showing, lift both FABs above it so neither covers the CTA.
-     Driven by the bar's own data attribute, so other pages are unaffected. */
-  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .chat-fab{bottom:154px;}
-  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .scroll-top-fab{bottom:158px;}
+     Driven by the bar's own data attribute, so other pages are unaffected.
+     --buybar-h is published by MobileBuyBar from its own measured height, so
+     this keeps working when the bar wraps to two lines (long price + "From"). */
+  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .chat-fab{
+    bottom:calc(var(--mtab-h) + var(--buybar-h, 76px) + env(safe-area-inset-bottom) + 20px);}
+  .fz:has([data-mobile-buy-bar][aria-hidden="false"]) .scroll-top-fab{
+    bottom:calc(var(--mtab-h) + var(--buybar-h, 76px) + env(safe-area-inset-bottom) + 24px);}
   /* Room at the bottom so the fixed bar never covers page content/footer. */
-  .fz{padding-bottom:64px;}
+  .fz{padding-bottom:calc(var(--mtab-h) + env(safe-area-inset-bottom) + 6px);}
 
   /* Whole bar background uses the active theme preset (brand colour), including
      the safe-area free space below it; icons/labels flip to white for contrast. */

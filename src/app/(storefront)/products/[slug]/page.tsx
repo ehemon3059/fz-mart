@@ -325,7 +325,7 @@ export default async function ProductPage({
 
       {/* Sticky mobile CTA — appears once the buy box scrolls out of view.
           Extra bottom padding keeps it clear of the global mobile tab bar. */}
-      <div className="h-20 md:hidden" aria-hidden />
+      <div className="mbb-root h-20" aria-hidden />
       <MobileBuyBar
         price={hasVariants ? minVariantPrice : effectivePrice}
         originalPrice={hasDiscount ? product.price : null}
