@@ -281,9 +281,18 @@
    most visibly on hover. The wrapper is layout only, sized by the artwork. */
 .fz .trust-ic{position:relative;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  transition:transform .3s cubic-bezier(.16,1,.3,1);}
-.fz .trust-ic img{width:50px;height:50px;object-fit:contain;}
-.fz .trust-item:hover .trust-ic{transform:scale(1.09) rotate(-3deg);}
+  transition:transform .34s cubic-bezier(.34,1.56,.64,1);}
+/* drop-shadow, not box-shadow: it traces the illustration's own silhouette, so
+   the icon casts a shadow while it lifts without a rectangle reappearing
+   around it. Sits on the <img> so the wrapper's transform doesn't drag it. */
+.fz .trust-ic img{width:50px;height:50px;object-fit:contain;
+  transition:filter .34s cubic-bezier(.34,1.56,.64,1);}
+/* Hover: the icon rises off the card. The lift is larger than the card's own
+   -6px, so the icon climbs relative to the copy beside it rather than just
+   riding along — that difference is what reads as "rising". The back-out
+   easing overshoots a touch at the top so it springs rather than slides. */
+.fz .trust-item:hover .trust-ic{transform:translateY(-9px);}
+.fz .trust-item:hover .trust-ic img{filter:drop-shadow(0 9px 7px rgba(20,18,14,.22));}
 .fz .trust-copy{min-width:0;}
 .fz .trust-item b{display:block;font-size:15px;font-weight:800;letter-spacing:-.015em;color:var(--ink);
   line-height:1.25;}
@@ -298,12 +307,16 @@
 .fz[data-surface="theme-dark"] .trust-item:hover{
   border-color:color-mix(in srgb, var(--brand) 45%, var(--line));
   box-shadow:0 2px 6px rgba(0,0,0,.5), 0 26px 46px -22px rgba(0,0,0,.9);}
+.fz[data-surface="theme-dark"] .trust-item:hover .trust-ic img{
+  filter:drop-shadow(0 9px 8px rgba(0,0,0,.6));}
 .fz[data-surface="theme-dark"] .trust-item::before{
   background:radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--brand) 20%, transparent) 0%, transparent 62%);}
 @media (prefers-reduced-motion:reduce){
-  .fz .trust-item,.fz .trust-item::before,.fz .trust-ic{transition:none;}
+  .fz .trust-item,.fz .trust-item::before,.fz .trust-ic,.fz .trust-ic img{transition:none;}
   .fz .trust-item:hover{transform:none;}
   .fz .trust-item:hover .trust-ic{transform:none;}
+  .fz .trust-item:hover .trust-ic img,
+  .fz[data-surface="theme-dark"] .trust-item:hover .trust-ic img{filter:none;}
 }
 
 /* ---------- section header ---------- */
