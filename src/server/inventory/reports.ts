@@ -512,3 +512,68 @@ export async function listMovementProducts(): Promise<{ id: number; name: string
     orderBy: { name: "asc" },
   });
 }
+
+/** RFC-4180 cell: quote when the value contains a comma, quote or newline. */
+function csvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+/**
+ * The stock overview as a spreadsheet.
+ *
+ * Money is written in TAKA with two decimals rather than paisa: this file is
+ * opened by a person, and an unexplained ×100 is exactly the kind of thing that
+ * turns a stock-take into an argument. Unknown costs are left blank, not zero —
+ * "we don't know" and "it was free" are different facts, and a zero would
+ * quietly understate the value of the shelf.
+ */
+export function buildStockCsv(rows: StockRow[]): string {
+  const header = [
+    "Product",
+    "Option",
+    "SKU",
+    "Category",
+    "On hand",
+    "Reserved",
+    "Available",
+    "Incoming",
+    "Expected on",
+    "Unit cost (Tk)",
+    "Stock value (Tk)",
+    "Reorder point",
+    "Low-stock alert",
+    "Sold per day (30d)",
+    "Days since last sale",
+    "Status",
+  ];
+
+  const taka = (paisa: number | null) => (paisa == null ? "" : (paisa / 100).toFixed(2));
+
+  const lines = [header.map(csvCell).join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        csvCell(r.name),
+        csvCell(r.option ?? ""),
+        csvCell(r.sku ?? ""),
+        csvCell(r.categoryPath),
+        String(r.onHand),
+        String(r.reserved),
+        String(r.available),
+        String(r.incoming),
+        csvCell(r.incomingOn ? r.incomingOn.toISOString().slice(0, 10) : ""),
+        taka(r.unitCost),
+        taka(r.stockValue),
+        String(r.reorderPoint),
+        String(r.lowStockThreshold),
+        r.dailyVelocity.toFixed(2),
+        r.daysSinceLastSale == null ? "" : String(r.daysSinceLastSale),
+        csvCell(r.status),
+      ].join(","),
+    );
+  }
+
+  // UTF-8 BOM so Excel opens Bangla product names correctly.
+  return "\ufeff" + lines.join("\r\n");
+}

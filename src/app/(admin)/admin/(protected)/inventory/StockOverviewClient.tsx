@@ -181,10 +181,22 @@ export default function StockOverviewClient({
               </>
             )}
           </div>
-          <DigestToggle
-            enabled={digestEnabled}
-            labels={{ title: t.digestTitle, sub: t.digestSub, send: t.digestSend }}
-          />
+          <div className="flex items-center gap-3">
+            {/* A plain link, not fetch(): the browser handles the download and
+                the route re-reads the same filter the screen is showing, so
+                "export" means "export what I'm looking at". */}
+            <a
+              href={filter ? `/admin/inventory/export?filter=${filter}` : "/admin/inventory/export"}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-[13px] font-semibold text-stone-700 transition hover:border-stone-400"
+            >
+              <Icon name="file" size={14} />
+              Export CSV
+            </a>
+            <DigestToggle
+              enabled={digestEnabled}
+              labels={{ title: t.digestTitle, sub: t.digestSub, send: t.digestSend }}
+            />
+          </div>
         </div>
 
         {writeOffs.units > 0 && (

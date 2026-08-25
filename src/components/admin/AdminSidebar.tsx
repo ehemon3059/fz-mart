@@ -52,6 +52,8 @@ const NAV_SECTIONS: NavSection[] = [
     heading: "Reports",
     links: [
       { href: "/admin/reports/finance", label: "Profit & Loss", icon: "tag", area: "reports" },
+      { href: "/admin/reports/cashflow", label: "Cash Flow", icon: "cart", area: "reports" },
+      { href: "/admin/reports/suppliers", label: "Profit by Supplier", icon: "users", area: "reports" },
       { href: "/admin/reports/orders", label: "Order Reports", icon: "grid", area: "reports" },
       { href: "/admin/reports/delivery", label: "Delivery", icon: "box", area: "reports" },
       { href: "/admin/reports/abandoned-carts", label: "Abandoned Carts", icon: "cart", area: "reports" },

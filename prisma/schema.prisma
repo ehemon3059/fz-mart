@@ -170,7 +170,6 @@ model Product {
   variants           ProductVariant[]
   wishlistItems      WishlistItem[]
   stockNotifications StockNotification[]
-  stockAdjustments   StockAdjustment[]
   stockMovements     StockMovement[]
   purchaseOrderLines PurchaseOrderLine[]
   coupons            Coupon[]
@@ -1347,25 +1346,6 @@ model StockNotification {
   product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, notifiedAt])
-}
-
-// DEPRECATED (Phase A) — superseded by StockMovement, which records EVERY stock
-// change rather than only hand corrections. Rows were copied across by
-// migration 20260816120000_add_stock_movement_ledger; nothing writes here any
-// more. Kept read-only as a safety net so the copy can be verified against the
-// original before the table is finally dropped.
-model StockAdjustment {
-  id        Int      @id @default(autoincrement())
-  productId Int
-  variantId Int?
-  delta     Int
-  newStock  Int
-  reason    String
-  adminName String
-  createdAt DateTime @default(now())
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([productId, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────
