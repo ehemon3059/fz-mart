@@ -245,41 +245,79 @@
 .fz .promo .p-link{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px;margin-top:14px;}
 .fz .promo .p-art{position:absolute;right:-10px;bottom:-10px;width:96px;height:96px;border-radius:18px;opacity:.9;}
 
-/* ---------- trust strip ---------- */
-/* The benefit line under each title is the part customers actually scan
+/* ---------- trust cards ---------- */
+/* Four standalone cards rather than one connected bar: the artwork in
+   /public/trust is a set of full-colour illustrations, and they need their own
+   surface + breathing room to read as individual badges.
+   The benefit line under each title is the part customers actually scan
    ("Pay when it arrives"), so it is NOT muted grey: it takes the brand accent
    at weight 600. --link-accent keeps it re-colourable from Settings →
    Appearance, falling back to the palette's dark shade. */
-.fz .trust{margin-top:14px;}
+.fz .trust{margin-top:56px;}
+.fz .trust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
+  list-style:none;margin:0;padding:0;}
 /* `--trust-bg` is an optional admin override; unset it follows --card. */
-.fz .trust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:var(--trust-bg,var(--card));
-  border:1px solid var(--line);border-radius:var(--radius);padding:6px;}
-.fz .trust-item{position:relative;display:flex;align-items:center;gap:13px;padding:16px 18px;
-  border-radius:var(--radius-sm);transition:background .18s,transform .18s;}
-/* Hairline separators instead of gaps — reads as one connected bar. */
-.fz .trust-item + .trust-item{box-shadow:inset 1px 0 0 var(--line);}
-/* A wash, not the chip colour itself — an admin-picked saturated chip would
-   otherwise flood the whole row and swallow the text on hover. */
-.fz .trust-item:hover{background:color-mix(in srgb, var(--chip-bg,var(--brand-tint)) 16%, var(--card));
-  transform:translateY(-1px);}
-/* Background and glyph must come from the SAME pair: --chip-ink is derived to
-   stay readable on --chip-bg (see readableInk in lib/theme-colors.ts). Pairing
-   the chip background with any other accent breaks once an admin picks a
-   saturated chip colour — the glyph disappears into it. */
-.fz .trust-ic{width:44px;height:44px;border-radius:13px;background:var(--chip-bg,var(--brand-tint));
-  color:var(--chip-ink,var(--brand-dark));
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  transition:background .18s,color .18s,transform .18s;}
-.fz .trust-item:hover .trust-ic{background:var(--btn-primary,var(--brand));color:#fff;transform:scale(1.06);}
-.fz .trust-item b{display:block;font-size:14.5px;font-weight:800;letter-spacing:-.01em;color:var(--ink);
+.fz .trust-item{position:relative;isolation:isolate;
+  display:flex;align-items:center;gap:14px;padding:18px;
+  background:var(--trust-bg,var(--card));border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);
+  transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s cubic-bezier(.16,1,.3,1),
+    border-color .3s ease;}
+/* Brand wash on a pseudo-element instead of the card's own background, so an
+   admin-set --trust-bg is never overwritten by the hover state. z-index:-1
+   under `isolation:isolate` paints it above the card's fill but below the
+   icon and copy. */
+.fz .trust-item::before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;
+  border-radius:inherit;
+  background:
+    radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--brand-tint) 85%, transparent) 0%, transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--brand-tint) 40%, transparent) 0%, transparent 72%);
+  transition:opacity .3s ease;}
+.fz .trust-item:hover{transform:translateY(-6px);border-color:var(--brand-tint-2);
+  box-shadow:var(--shadow-hover), 0 22px 40px -26px color-mix(in srgb, var(--brand) 60%, transparent);}
+.fz .trust-item:hover::before{opacity:1;}
+/* The halo is a WASH of the chip colour, not the chip colour itself: these
+   icons are multi-colour illustrations, and a saturated admin-picked chip
+   behind them turns the whole tile into mud. */
+.fz .trust-ic{position:relative;width:60px;height:60px;border-radius:18px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(145deg,
+    color-mix(in srgb, var(--chip-bg,var(--brand-tint)) 62%, #fff) 0%,
+    color-mix(in srgb, var(--chip-bg,var(--brand-tint)) 26%, #fff) 100%);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--brand-tint-2) 60%, transparent);
+  transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease;}
+.fz .trust-ic img{width:40px;height:40px;object-fit:contain;}
+.fz .trust-item:hover .trust-ic{transform:scale(1.09) rotate(-3deg);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--brand-tint-2) 95%, transparent),
+    0 12px 22px -12px color-mix(in srgb, var(--brand) 55%, transparent);}
+.fz .trust-copy{min-width:0;}
+.fz .trust-item b{display:block;font-size:15px;font-weight:800;letter-spacing:-.015em;color:var(--ink);
   line-height:1.25;}
-.fz .trust-sub{display:block;margin-top:2px;font-size:13px;font-weight:600;
-  color:var(--link-accent,var(--brand-dark));line-height:1.3;}
+.fz .trust-sub{display:block;margin-top:3px;font-size:12.75px;font-weight:600;
+  color:var(--link-accent,var(--brand-dark));line-height:1.35;}
 /* On the dark surface the palette's DARK shade would sink into the card
-   (measured 2.4:1 on Royal Blue), so the light tint carries the accent there. */
+   (measured 2.4:1 on Royal Blue), so the light tint carries the accent there —
+   and the light-mode shadows disappear against #0b1220, so they go darker. */
 .fz[data-surface="theme-dark"] .trust-sub{color:var(--brand-tint-2);}
-.fz[data-surface="theme-dark"] .trust-ic{color:var(--brand-tint-2);background:rgba(255,255,255,.06);}
-.fz[data-surface="theme-dark"] .trust-item:hover{background:rgba(255,255,255,.05);}
+.fz[data-surface="theme-dark"] .trust-item{
+  box-shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 28px -16px rgba(0,0,0,.85);}
+.fz[data-surface="theme-dark"] .trust-item:hover{
+  border-color:color-mix(in srgb, var(--brand) 45%, var(--line));
+  box-shadow:0 2px 6px rgba(0,0,0,.5), 0 26px 46px -22px rgba(0,0,0,.9);}
+.fz[data-surface="theme-dark"] .trust-item::before{
+  background:radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--brand) 20%, transparent) 0%, transparent 62%);}
+.fz[data-surface="theme-dark"] .trust-ic{background:rgba(255,255,255,.07);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);}
+/* Needs the surface attribute to out-specify `.trust-item:hover .trust-ic`
+   above — without it the light-mode tint ring flares white on the dark card. */
+.fz[data-surface="theme-dark"] .trust-item:hover .trust-ic{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),
+    0 12px 22px -12px color-mix(in srgb, var(--brand) 65%, transparent);}
+@media (prefers-reduced-motion:reduce){
+  .fz .trust-item,.fz .trust-item::before,.fz .trust-ic{transition:none;}
+  .fz .trust-item:hover{transform:none;}
+  .fz .trust-item:hover .trust-ic{transform:none;}
+}
 
 /* ---------- section header ---------- */
 .fz section.blk{margin-top:60px;}
@@ -1077,6 +1115,12 @@
 
 /* ---------- responsive ---------- */
 @media(max-width:1080px){
+  /* Measured: the horizontal 4-up card keeps every title on one line down to
+     1080px and wraps all four onto two ragged lines by 980px. Rather than
+     shrink the type, the icon moves on top and the copy centres under it —
+     that hands the title the full card width, and the layout then holds all
+     the way down to the 2-up phone grid below. */
+  .fz .trust-item{flex-direction:column;align-items:center;text-align:center;gap:10px;padding:18px 12px;}
   .fz .co-grid{grid-template-columns:1fr;}
   .fz .co-side{position:static;}
   .fz .hero-grid{grid-template-columns:1fr;}
@@ -1087,16 +1131,14 @@
 @media(max-width:760px){
   .fz .util-left span.hide-sm,.fz .icon-btn .ib-txt{display:none;}
   /* Two per row on phones — four stacked rows pushed the products too far
-     down. Vertical separators become horizontal ones. */
-  .fz .trust-grid{grid-template-columns:repeat(2,1fr);}
-  .fz .trust-item{padding:13px 10px;gap:10px;}
-  .fz .trust-item + .trust-item{box-shadow:none;}
-  .fz .trust-item:nth-child(2){box-shadow:inset 1px 0 0 var(--line);}
-  .fz .trust-item:nth-child(3){box-shadow:inset 0 1px 0 var(--line);}
-  .fz .trust-item:nth-child(4){box-shadow:inset 1px 0 0 var(--line),inset 0 1px 0 var(--line);}
-  .fz .trust-ic{width:38px;height:38px;border-radius:11px;}
+     down. Cards stay separate, the gap just tightens with them. */
+  .fz .trust-grid{grid-template-columns:repeat(2,1fr);gap:11px;}
+  .fz .trust-item{padding:16px 10px;gap:9px;border-radius:var(--radius-sm);}
+  .fz .trust-ic{width:52px;height:52px;border-radius:15px;}
+  .fz .trust-ic img{width:34px;height:34px;}
   .fz .trust-item b{font-size:13.5px;}
-  .fz .trust-sub{font-size:12px;}
+  .fz .trust-sub{font-size:11.75px;}
+  .fz .trust-item:hover{transform:translateY(-4px);}
   .fz .prow,.fz .pgrid{grid-template-columns:repeat(2,1fr);}
   .fz .ft-top{grid-template-columns:1fr 1fr;}
   /* Half a phone width cannot hold the payment row, and the brand blurb reads
