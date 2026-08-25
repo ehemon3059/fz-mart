@@ -41,7 +41,7 @@ export default function TrustStrip() {
                   vector, and these are decorative — the adjacent title already
                   carries the meaning, so alt stays empty. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" width={40} height={40} loading="lazy" decoding="async" />
+              <img src={src} alt="" width={50} height={50} loading="lazy" decoding="async" />
             </span>
             <div className="trust-copy">
               <b>{title}</b>

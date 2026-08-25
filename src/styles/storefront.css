@@ -250,9 +250,9 @@
    /public/trust is a set of full-colour illustrations, and they need their own
    surface + breathing room to read as individual badges.
    The benefit line under each title is the part customers actually scan
-   ("Pay when it arrives"), so it is NOT muted grey: it takes the brand accent
-   at weight 600. --link-accent keeps it re-colourable from Settings →
-   Appearance, falling back to the palette's dark shade. */
+   ("Pay when it arrives"), so it is NOT muted grey. Its violet is a fixed
+   client-specified colour, deliberately NOT var(--link-accent) — this one line
+   no longer tracks Settings → Appearance. */
 .fz .trust{margin-top:56px;}
 .fz .trust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
   list-style:none;margin:0;padding:0;}
@@ -276,25 +276,19 @@
 .fz .trust-item:hover{transform:translateY(-6px);border-color:var(--brand-tint-2);
   box-shadow:var(--shadow-hover), 0 22px 40px -26px color-mix(in srgb, var(--brand) 60%, transparent);}
 .fz .trust-item:hover::before{opacity:1;}
-/* The halo is a WASH of the chip colour, not the chip colour itself: these
-   icons are multi-colour illustrations, and a saturated admin-picked chip
-   behind them turns the whole tile into mud. */
-.fz .trust-ic{position:relative;width:60px;height:60px;border-radius:18px;flex-shrink:0;
+/* No plate behind the icon: these are full-colour illustrations that already
+   carry their own shape, and any tinted panel drew a square edge around them —
+   most visibly on hover. The wrapper is layout only, sized by the artwork. */
+.fz .trust-ic{position:relative;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(145deg,
-    color-mix(in srgb, var(--chip-bg,var(--brand-tint)) 62%, #fff) 0%,
-    color-mix(in srgb, var(--chip-bg,var(--brand-tint)) 26%, #fff) 100%);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--brand-tint-2) 60%, transparent);
-  transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease;}
-.fz .trust-ic img{width:40px;height:40px;object-fit:contain;}
-.fz .trust-item:hover .trust-ic{transform:scale(1.09) rotate(-3deg);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--brand-tint-2) 95%, transparent),
-    0 12px 22px -12px color-mix(in srgb, var(--brand) 55%, transparent);}
+  transition:transform .3s cubic-bezier(.16,1,.3,1);}
+.fz .trust-ic img{width:50px;height:50px;object-fit:contain;}
+.fz .trust-item:hover .trust-ic{transform:scale(1.09) rotate(-3deg);}
 .fz .trust-copy{min-width:0;}
 .fz .trust-item b{display:block;font-size:15px;font-weight:800;letter-spacing:-.015em;color:var(--ink);
   line-height:1.25;}
 .fz .trust-sub{display:block;margin-top:3px;font-size:12.75px;font-weight:600;
-  color:var(--link-accent,var(--brand-dark));line-height:1.35;}
+  color:#8c12e5;line-height:1.35;}
 /* On the dark surface the palette's DARK shade would sink into the card
    (measured 2.4:1 on Royal Blue), so the light tint carries the accent there —
    and the light-mode shadows disappear against #0b1220, so they go darker. */
@@ -306,13 +300,6 @@
   box-shadow:0 2px 6px rgba(0,0,0,.5), 0 26px 46px -22px rgba(0,0,0,.9);}
 .fz[data-surface="theme-dark"] .trust-item::before{
   background:radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--brand) 20%, transparent) 0%, transparent 62%);}
-.fz[data-surface="theme-dark"] .trust-ic{background:rgba(255,255,255,.07);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);}
-/* Needs the surface attribute to out-specify `.trust-item:hover .trust-ic`
-   above — without it the light-mode tint ring flares white on the dark card. */
-.fz[data-surface="theme-dark"] .trust-item:hover .trust-ic{
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),
-    0 12px 22px -12px color-mix(in srgb, var(--brand) 65%, transparent);}
 @media (prefers-reduced-motion:reduce){
   .fz .trust-item,.fz .trust-item::before,.fz .trust-ic{transition:none;}
   .fz .trust-item:hover{transform:none;}
@@ -1134,8 +1121,7 @@
      down. Cards stay separate, the gap just tightens with them. */
   .fz .trust-grid{grid-template-columns:repeat(2,1fr);gap:11px;}
   .fz .trust-item{padding:16px 10px;gap:9px;border-radius:var(--radius-sm);}
-  .fz .trust-ic{width:52px;height:52px;border-radius:15px;}
-  .fz .trust-ic img{width:34px;height:34px;}
+  .fz .trust-ic img{width:42px;height:42px;}
   .fz .trust-item b{font-size:13.5px;}
   .fz .trust-sub{font-size:11.75px;}
   .fz .trust-item:hover{transform:translateY(-4px);}
