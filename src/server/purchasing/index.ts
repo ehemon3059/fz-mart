@@ -259,6 +259,12 @@ export async function receivePurchaseOrder(
   id: number,
   receipts: ReceiptLineInput[],
   actorName: string,
+  /**
+   * Where the goods physically landed. Null when the shop keeps no locations —
+   * recorded on the movement rather than guessed, so per-location reporting
+   * never invents a shelf.
+   */
+  locationId: number | null = null,
 ): Promise<void> {
   if (receipts.length === 0) throw new PurchasingError("Nothing to receive.");
 
@@ -310,6 +316,7 @@ export async function receivePurchaseOrder(
         unitCost: landedUnitCost,
         reason: po.poNo,
         actorName,
+        locationId,
       });
 
       await tx.purchaseOrderLine.update({

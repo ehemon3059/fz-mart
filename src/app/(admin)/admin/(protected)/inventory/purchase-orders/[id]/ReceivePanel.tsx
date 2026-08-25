@@ -18,7 +18,18 @@ interface Line {
  * require the admin to do arithmetic. "Receive all" fills in whatever is still
  * outstanding.
  */
-export default function ReceivePanel({ id, lines }: { id: number; lines: Line[] }) {
+export default function ReceivePanel({
+  id,
+  lines,
+  locations,
+  defaultLocationId,
+}: {
+  id: number;
+  lines: Line[];
+  /** Empty for a shop that keeps no locations — the picker then hides itself. */
+  locations: { id: number; name: string }[];
+  defaultLocationId: number | null;
+}) {
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -49,6 +60,26 @@ export default function ReceivePanel({ id, lines }: { id: number; lines: Line[] 
 
   return (
     <form action={submit} className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
+      {locations.length > 0 && (
+        <div className="mb-4 max-w-xs">
+          <label className="mb-1 block text-[12px] font-semibold text-stone-600">
+            Landed at
+          </label>
+          <select
+            name="locationId"
+            defaultValue={defaultLocationId != null ? String(defaultLocationId) : ""}
+            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-accent"
+          >
+            <option value="">Not recorded</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-[13px] font-semibold text-stone-900">Receive delivery</h2>

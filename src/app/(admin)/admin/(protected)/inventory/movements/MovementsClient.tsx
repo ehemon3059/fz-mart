@@ -23,6 +23,7 @@ export interface MovementRowView {
   orderId: number | null;
   orderNo: string | null;
   isBackfill: boolean;
+  locationName: string | null;
 }
 
 interface Props {
@@ -250,7 +251,15 @@ export default function MovementsClient({ rows, products, total, page, pageCount
                         <td className="nums px-4 py-3.5 text-right text-stone-500">
                           {m.unitCost ?? "—"}
                         </td>
-                        <td className="px-5 py-3.5 text-[12px] text-stone-500">{m.actorName}</td>
+                        <td className="px-5 py-3.5 text-[12px] text-stone-500">
+                          {m.actorName}
+                          {/* Where it happened, when the shop records locations.
+                              Absent on every movement written before they existed,
+                              which is shown as nothing rather than as a guess. */}
+                          {m.locationName && (
+                            <span className="block text-[11px] text-stone-400">{m.locationName}</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

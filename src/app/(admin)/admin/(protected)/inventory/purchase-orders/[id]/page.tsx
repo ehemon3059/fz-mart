@@ -9,6 +9,7 @@ import { formatTaka } from "@/lib/money";
 import { Badge } from "@/components/admin/ui/Badge";
 import PurchaseOrderControls from "./PurchaseOrderControls";
 import ReceivePanel from "./ReceivePanel";
+import { listLocations, getDefaultLocation } from "@/server/inventory/locations";
 import PaymentsPanel from "./PaymentsPanel";
 
 export const metadata = { title: "Purchase Order — FZ-Mart Admin" };
@@ -21,6 +22,10 @@ export default async function PurchaseOrderDetailPage({
   const { id } = await params;
   const po = await getPurchaseOrder(Number(id));
   if (!po) notFound();
+
+  // Where a delivery can land. Empty for a shop that keeps no locations, in
+  // which case the receive panel simply doesn't ask.
+  const [locations, defaultLocation] = await Promise.all([listLocations(), getDefaultLocation()]);
 
   // Goods that arrived against this order but still cannot be sold. Nothing to
   // compute until something has actually been received.
@@ -147,6 +152,8 @@ export default async function PurchaseOrderDetailPage({
       {po.status === "ORDERED" && (
         <ReceivePanel
           id={po.id}
+          locations={locations.map((l) => ({ id: l.id, name: l.name }))}
+          defaultLocationId={defaultLocation?.id ?? null}
           lines={po.lines.map((l) => ({
             id: l.id,
             label: l.variantLabel ? `${l.productName} — ${l.variantLabel}` : l.productName,

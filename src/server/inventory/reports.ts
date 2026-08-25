@@ -366,6 +366,8 @@ export interface MovementFilter {
   type?: StockMovementType;
   from?: Date;
   to?: Date;
+  /** Restrict to one location; "none" finds the rows that never recorded one. */
+  locationId?: number | "none";
   page?: number;
   pageSize?: number;
 }
@@ -391,6 +393,8 @@ export interface MovementRow {
   orderNo: string | null;
   /** True for rows synthesised by the Phase A backfill, whose levels are unknown. */
   isBackfill: boolean;
+  /** Where it happened; null for movements that never recorded a location. */
+  locationName: string | null;
 }
 
 /** Paginated ledger view, newest first. */
@@ -406,6 +410,9 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
   const where: Record<string, unknown> = {};
   if (filter.productId) where.productId = filter.productId;
   if (filter.type) where.type = filter.type;
+  if (filter.locationId != null) {
+    where.locationId = filter.locationId === "none" ? null : filter.locationId;
+  }
   if (filter.from || filter.to) {
     where.createdAt = {
       ...(filter.from ? { gte: filter.from } : {}),
@@ -434,6 +441,7 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
         variant: { select: { size: true, colorName: true, sku: true } },
         orderId: true,
         order: { select: { orderNo: true } },
+        location: { select: { name: true } },
       },
     }),
     prisma.stockMovement.count({ where }),
@@ -460,6 +468,7 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
       sku: m.variant?.sku ?? m.product.baseSku ?? null,
       orderId: m.orderId,
       orderNo: m.order?.orderNo ?? null,
+      locationName: m.location?.name ?? null,
       // The backfill could not know historical levels and wrote 0/0 with an
       // accurate delta. Flagged so the UI shows "—" instead of a false "0 → 0".
       isBackfill: m.beforeQty === 0 && m.afterQty === 0 && m.reason === "Backfilled from order history",

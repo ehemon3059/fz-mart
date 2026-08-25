@@ -33,6 +33,14 @@ export interface MovementInput {
   reason?: string | null;
   /** Admin username, "customer", or "system". */
   actorName: string;
+  /**
+   * Where the stock physically moved, when the shop keeps more than one
+   * location. Omitted/null for the movements nobody can place — a customer
+   * order shipping, historical rows — which is why it is nullable rather than
+   * defaulted to the main location: a guess here would be repeated as fact by
+   * every per-location report.
+   */
+  locationId?: number | null;
 }
 
 export class LedgerError extends Error {
@@ -56,7 +64,8 @@ export async function recordMovement(
   tx: TxClient,
   input: MovementInput,
 ): Promise<number> {
-  const { productId, variantId, type, delta, unitCost, orderId, reason, actorName } = input;
+  const { productId, variantId, type, delta, unitCost, orderId, reason, actorName, locationId } =
+    input;
 
   if (!Number.isInteger(delta) || delta === 0) {
     throw new LedgerError("A stock movement must have a non-zero whole delta.");
@@ -111,6 +120,7 @@ export async function recordMovement(
       orderId: orderId ?? null,
       reason: reason?.trim() || null,
       actorName,
+      locationId: locationId ?? null,
     },
   });
 

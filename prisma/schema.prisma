@@ -1531,28 +1531,28 @@ enum StockMovementType {
 // describes, so a movement can never be orphaned from its effect, nor an effect
 // go unrecorded.
 model StockMovement {
-  id        Int               @id @default(autoincrement())
-  productId Int
+  id         Int               @id @default(autoincrement())
+  productId  Int
   // Which stock row actually moved: the variant's when set, else the product's.
   // Mirrors how checkout decrements — a sized product holds stock per variant.
-  variantId Int?
-  type      StockMovementType
+  variantId  Int?
+  type       StockMovementType
   // Signed change (+ added, − removed). Never zero.
-  delta     Int
+  delta      Int
   // The level before and after this movement, on the row identified above.
   // Stored rather than derived so a replay can pinpoint exactly where a
   // discrepancy entered, instead of only showing that one exists.
-  beforeQty Int
-  afterQty  Int
+  beforeQty  Int
+  afterQty   Int
   // Per-unit sourcing cost in paisa at the time of the movement, SNAPSHOTTED
   // like OrderItem.purchaseCost — inventory valuation and write-off cost must
   // use the cost that applied then, not today's supplier price. Null when not
   // meaningful (a stock-take correction has no cost basis).
-  unitCost  Int?
+  unitCost   Int?
   // The order that caused this, for SALE / CANCEL_RESTOCK / RETURN. Null for
   // PURCHASE / DAMAGE / ADJUSTMENT. SetNull rather than Cascade: deleting an
   // order must never erase the fact that stock moved.
-  orderId   Int?
+  orderId    Int?
   // Free text for the movements a human initiates (ADJUSTMENT, DAMAGE,
   // PURCHASE). Null for system-generated rows, which explain themselves via
   // type + orderId.
@@ -1560,17 +1560,30 @@ model StockMovement {
   // A PURCHASE receipt puts its PO number here ("PO-0042") rather than carrying
   // a third nullable FK: the ledger is the hottest table in the inventory
   // system, and the reference is for a human reading a row, not for joining.
-  reason    String?
+  reason     String?
   // Who caused it: an admin username, "customer" for self-service, or "system"
   // for job- and webhook-driven changes.
-  actorName String
-  createdAt DateTime          @default(now())
-  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  variant   ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  order     Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  actorName  String
+  // WHERE the stock moved, when the shop keeps more than one. Nullable because
+  // every movement written before locations existed genuinely has no answer,
+  // and inventing one would be a lie the reports would then repeat.
+  //
+  // A LABEL, not a level: Product.stock / ProductVariant.stock remain single
+  // shop-wide figures, so availability, reservations and the oversell guard are
+  // untouched by locations. A per-location BALANCE is derived by summing this
+  // ledger's deltas for a location — which is exactly what an append-only
+  // ledger is good for.
+  locationId Int?
+  createdAt  DateTime          @default(now())
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant    ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  order      Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  location   StockLocation?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   // The ledger view for one product, newest first.
   @@index([productId, createdAt])
+  // Per-location balances and history.
+  @@index([locationId, createdAt])
   // Per-variant history, and the replay in stock-ledger-verify.
   @@index([variantId, createdAt])
   // "What did this order do to stock?" on the order detail page.
@@ -1591,4 +1604,104 @@ model NewsletterSubscriber {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Locations & stock-takes (Phase F)
+// ─────────────────────────────────────────────────────────────
+
+// Somewhere stock physically sits — "Main Shop", "Warehouse", "Shop 2".
+//
+// Deliberately a LABEL rather than a separate stock pool. Splitting
+// Product.stock per location would mean rewriting reservations, checkout
+// availability and the oversell guard, and inventing an answer to "which
+// location fulfils this order?" that a single-counter shop does not need. So a
+// location records WHERE a movement happened; the sellable total stays
+// shop-wide, and a per-location balance is derived from the ledger.
+model StockLocation {
+  id         Int             @id @default(autoincrement())
+  name       String          @unique
+  // Where goods land when nobody says otherwise — receiving a purchase order,
+  // mainly. Exactly one location should carry this; the app keeps it that way.
+  isDefault  Boolean         @default(false)
+  isActive   Boolean         @default(true)
+  sortOrder  Int             @default(0)
+  note       String?         @db.Text
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  movements  StockMovement[]
+  stockTakes StockTake[]
+
+  @@index([isActive, sortOrder])
+}
+
+// Lifecycle of a physical count.
+//
+//   OPEN       being counted; nothing has moved yet
+//   COMMITTED  variances applied to stock as ADJUSTMENT movements
+//   CANCELLED  abandoned; the counts are kept as a record, stock untouched
+//
+// A count is never applied twice: only an OPEN session can be committed, and
+// committing is what closes it.
+enum StockTakeStatus {
+  OPEN
+  COMMITTED
+  CANCELLED
+}
+
+// A counting session — walking the shelves with a scanner, then applying what
+// you found.
+//
+// The point of holding this as a session rather than letting someone adjust
+// each product one at a time: a count is only trustworthy as a snapshot. Lines
+// record what the system BELIEVED at the moment they were added, next to what
+// was actually on the shelf, so the variance is visible and reviewable before
+// anything moves — and the whole count lands as one act, attributable to one
+// person and one moment.
+model StockTake {
+  id          Int             @id @default(autoincrement())
+  // Short human reference, "ST-0007".
+  reference   String          @unique
+  locationId  Int?
+  status      StockTakeStatus @default(OPEN)
+  note        String?         @db.Text
+  actorName   String
+  startedAt   DateTime        @default(now())
+  committedAt DateTime?
+  updatedAt   DateTime        @updatedAt
+  location    StockLocation?  @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  lines       StockTakeLine[]
+
+  @@index([status, startedAt])
+}
+
+// One counted line of a stock-take.
+//
+// expectedQty is a SNAPSHOT taken when the line was added, kept so the person
+// counting can see what the system thought at that moment. It is deliberately
+// NOT what the commit trusts: stock can move while a count is in progress (a
+// sale ships, a delivery arrives), so committing re-reads the live level and
+// adjusts to the counted figure from there. Otherwise a long count would
+// silently undo every sale made during it.
+model StockTakeLine {
+  id           Int       @id @default(autoincrement())
+  stockTakeId  Int
+  productId    Int
+  variantId    Int?
+  // Snapshots, so a rename mid-count doesn't rewrite the sheet.
+  productName  String
+  variantLabel String?
+  expectedQty  Int
+  // What was actually on the shelf. Null = added to the sheet but not counted
+  // yet, which is different from a counted zero.
+  countedQty   Int?
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  stockTake    StockTake @relation(fields: [stockTakeId], references: [id], onDelete: Cascade)
+
+  // One line per stock row per session — scanning the same barcode twice
+  // updates the count rather than adding a duplicate to argue with.
+  @@unique([stockTakeId, productId, variantId])
+  @@index([stockTakeId])
 }

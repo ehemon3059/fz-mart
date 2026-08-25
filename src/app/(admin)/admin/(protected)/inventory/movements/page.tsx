@@ -77,6 +77,7 @@ export default async function StockMovementsPage({
         orderId: m.orderId,
         orderNo: m.orderNo,
         isBackfill: m.isBackfill,
+        locationName: m.locationName,
       }))}
       products={products}
       total={result.total}

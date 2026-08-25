@@ -315,7 +315,17 @@ export async function receiveAction(id: number, formData: FormData): Promise<Act
   }
 
   try {
-    await receivePurchaseOrder(id, receipts, admin.username);
+    // Where the delivery landed. Blank means the shop keeps no locations, and
+    // the movement records none rather than guessing at one.
+    const rawLocation = String(formData.get("locationId") ?? "").trim();
+    const locationId = rawLocation ? Number(rawLocation) : null;
+
+    await receivePurchaseOrder(
+      id,
+      receipts,
+      admin.username,
+      Number.isFinite(locationId) ? locationId : null,
+    );
   } catch (err) {
     if (err instanceof PurchasingError) return { error: err.message };
     throw err;
