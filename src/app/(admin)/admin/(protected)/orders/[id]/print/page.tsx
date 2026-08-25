@@ -44,6 +44,15 @@ export default async function OrderInvoicePage({
           <p className="font-medium">{order.customerName}</p>
           <p className="text-sm">{order.customerPhone}</p>
           <p className="text-sm whitespace-pre-line">{order.address}</p>
+          {/* Snapshot taken at checkout — the courier reads this, so it must
+              show the place as ordered even if the admin later renames it. */}
+          {(order.districtName || order.divisionName) && (
+            <p className="text-sm font-medium">
+              {[order.upazilaName, order.districtName, order.divisionName]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+          )}
           {order.shippingZone && (
             <p className="text-sm text-gray-500">Zone: {order.shippingZone.name}</p>
           )}

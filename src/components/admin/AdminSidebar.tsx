@@ -71,6 +71,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/settings/appearance", label: "Appearance", icon: "image", area: "settings" },
       { href: "/admin/settings/localization", label: "Localization", icon: "settings", area: "settings" },
       { href: "/admin/settings/shipping", label: "Shipping Zones", icon: "settings", area: "settings" },
+      { href: "/admin/settings/locations", label: "Delivery Locations", icon: "settings", area: "settings" },
       { href: "/admin/settings/conversion", label: "Conversion", icon: "settings", area: "settings" },
       { href: "/admin/settings/payments", label: "Payments", icon: "settings", area: "settings" },
       { href: "/admin/settings/feeds", label: "Marketing Feeds", icon: "settings", area: "settings" },

@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { E2E_DIVISION, E2E_DISTRICT } from "./db";
 
 // UI-level helpers shared by the checkout specs. Selectors are the visible
 // labels/placeholders customers see — the same contract a real shopper uses.
@@ -14,8 +15,13 @@ export async function fillCheckoutForm(
 ): Promise<void> {
   await page.getByPlaceholder("Your full name *").fill(name);
   await page.getByPlaceholder("017XXXXXXXX").fill(phone);
+  // Delivery location: the charge is derived from it, so checkout refuses to
+  // submit until a division AND district are picked. Selected by visible label,
+  // the same way a shopper does it.
+  await page.getByLabel(/Division/).selectOption({ label: E2E_DIVISION });
+  await page.getByLabel(/District/).selectOption({ label: E2E_DISTRICT });
   await page.getByPlaceholder(/House no/).fill("12/A E2E Street, Test Area, Dhaka");
-  await page.getByRole("checkbox").check(); // terms & conditions
+  await page.getByRole("checkbox", { name: /terms/i }).check();
 }
 
 /** Submits checkout and waits until it either lands on the confirmation page or shows an error. */

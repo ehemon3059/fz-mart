@@ -13,6 +13,7 @@ import { Icon } from "@/components/icons";
 import { ErrorText } from "./atoms";
 import { variantLabelOf } from "./helpers";
 import { VariantPhotoField } from "./ImageUploader";
+import { rowKey } from "./variant-utils";
 import type { VariantRow } from "./types";
 
 interface Props {
@@ -27,6 +28,8 @@ interface Props {
   showErrors: boolean;
   /** True while row `idx` has a photo upload in flight. */
   isBusy: (idx: number) => boolean;
+  /** Row keys whose stock is owned by the ledger and so is read-only here. */
+  lockedStockKeys: Set<string>;
   onChange: (idx: number, patch: Partial<VariantRow>) => void;
   onAdd: () => void;
   onRemove: (idx: number) => void;
@@ -40,6 +43,7 @@ export default function VariantRows({
   imageError,
   showErrors,
   isBusy,
+  lockedStockKeys,
   onChange,
   onAdd,
   onRemove,
@@ -140,15 +144,27 @@ export default function VariantRows({
                         className="w-full min-w-0 bg-transparent px-2 py-2 text-[13.5px] text-stone-800 outline-none"
                       />
                     </div>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={v.stock}
-                      onChange={(e) => onChange(idx, { stock: e.target.value })}
-                      placeholder="0"
-                      className="min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500"
-                    />
+                    {lockedStockKeys.has(rowKey(v.color, v.size)) ? (
+                      // Ledger-owned. Shown as a reading so the number is still
+                      // visible while pricing, but not as something to retype.
+                      <span
+                        title="Stock comes from the ledger — receive a purchase order or use the Stock panel"
+                        className="min-w-0 rounded-md border border-dashed border-stone-200 bg-stone-50 px-2.5 py-2 text-[13.5px] tabular-nums text-stone-500"
+                      >
+                        {v.stock || "0"}
+                      </span>
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={v.stock}
+                        onChange={(e) => onChange(idx, { stock: e.target.value })}
+                        placeholder="0"
+                        title="Opening stock for this new option"
+                        className="min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500"
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => onRemove(idx)}

@@ -148,7 +148,10 @@ export async function placeOrder(
   const customerEmail = String(formData.get("customerEmail") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
   const customerNote = String(formData.get("customerNote") ?? "").trim().slice(0, 90);
-  const shippingZoneId = Number(formData.get("shippingZoneId"));
+  const divisionId = Number(formData.get("divisionId"));
+  const districtId = Number(formData.get("districtId"));
+  const upazilaRaw = Number(formData.get("upazilaId"));
+  const upazilaId = Number.isFinite(upazilaRaw) && upazilaRaw > 0 ? upazilaRaw : null;
   const couponCode = String(formData.get("couponCode") ?? "").trim() || undefined;
   // Facebook click ids captured client-side (may be empty) — bounded so a
   // crafted form can't stuff arbitrary data onto the order.
@@ -172,8 +175,11 @@ export async function placeOrder(
   if (!address || address.length < 5) {
     return { error: "Please enter a delivery address." };
   }
-  if (!shippingZoneId || Number.isNaN(shippingZoneId)) {
-    return { error: "Please select a delivery zone." };
+  if (!divisionId || Number.isNaN(divisionId)) {
+    return { error: "Please select your division." };
+  }
+  if (!districtId || Number.isNaN(districtId)) {
+    return { error: "Please select your district." };
   }
   if (items.length === 0) {
     return { error: "Your cart is empty." };
@@ -239,7 +245,9 @@ export async function placeOrder(
       customerEmail: customerEmail || undefined,
       address,
       customerNote: customerNote || undefined,
-      shippingZoneId,
+      divisionId,
+      districtId,
+      upazilaId,
       items,
       paymentMethod,
       couponCode,

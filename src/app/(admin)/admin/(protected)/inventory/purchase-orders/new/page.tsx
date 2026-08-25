@@ -1,18 +1,23 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { listSuppliers } from "@/server/purchasing";
+import { listAllCategories } from "@/server/categories/admin";
+import { ancestorsOf } from "@/server/categories/tree";
 import { EmptyState } from "@/components/admin/ui/EmptyState";
 import PurchaseOrderForm from "./PurchaseOrderForm";
 
 export const metadata = { title: "New Purchase Order — FZ-Mart Admin" };
 
 export default async function NewPurchaseOrderPage() {
-  const [suppliers, products] = await Promise.all([
+  const [suppliers, products, categories] = await Promise.all([
     listSuppliers(),
+    // DRAFT products are included deliberately: a draft exists precisely so it
+    // can be ordered against before it is finished.
     prisma.product.findMany({
       select: {
         id: true,
         name: true,
+        status: true,
         purchaseCost: true,
         variants: {
           select: { id: true, size: true, colorName: true, purchaseCost: true },
@@ -21,7 +26,17 @@ export default async function NewPurchaseOrderPage() {
       },
       orderBy: { name: "asc" },
     }),
+    listAllCategories(),
   ]);
+
+  // Flattened "Kids › Tops › T-Shirts" labels, so the quick-create picker shows
+  // where in the tree a category actually sits rather than a bare leaf name.
+  const categoryOptions = categories
+    .map((c) => ({
+      id: c.id,
+      path: [...ancestorsOf(c.id, categories).map((a) => a.name), c.name].join(" › "),
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path));
 
   // A purchase order without a supplier is meaningless, so send the admin to
   // create one rather than showing a form they can't submit.
@@ -57,9 +72,10 @@ export default async function NewPurchaseOrderPage() {
 
       <PurchaseOrderForm
         suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+        categories={categoryOptions}
         products={products.map((p) => ({
           id: p.id,
-          name: p.name,
+          name: p.status === "DRAFT" ? `${p.name} (draft)` : p.name,
           purchaseCost: p.purchaseCost,
           variants: p.variants.map((v) => ({
             id: v.id,

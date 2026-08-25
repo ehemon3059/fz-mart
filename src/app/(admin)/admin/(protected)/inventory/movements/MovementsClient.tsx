@@ -42,6 +42,8 @@ const TYPE_CLS: Record<StockMovementType, string> = {
   CANCEL_RESTOCK: "bg-sky-50 text-sky-700",
   DAMAGE: "bg-rose-50 text-rose-700",
   ADJUSTMENT: "bg-violet-50 text-violet-700",
+  // Opening reads as an arrival, but a paler one: no supplier stands behind it.
+  OPENING: "bg-teal-50 text-teal-700",
 };
 
 const ALL_TYPES: StockMovementType[] = [
@@ -51,6 +53,7 @@ const ALL_TYPES: StockMovementType[] = [
   "DAMAGE",
   "PURCHASE",
   "ADJUSTMENT",
+  "OPENING",
 ];
 
 export default function MovementsClient({ rows, products, total, page, pageCount, active }: Props) {
@@ -65,6 +68,7 @@ export default function MovementsClient({ rows, products, total, page, pageCount
       DAMAGE: t.typeDamage,
       PURCHASE: t.typePurchase,
       ADJUSTMENT: t.typeAdjustment,
+      OPENING: t.typeOpening,
     })[type];
 
   /** Keep the active filters when paging. */

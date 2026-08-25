@@ -249,7 +249,15 @@ export async function searchProducts(q: SearchQuery): Promise<SearchResult> {
           // falls back to those — without them such cards show the placeholder.
           variants: {
             orderBy: { sortOrder: "asc" },
-            select: { price: true, discountPrice: true, priceColor: true, imageUrl: true },
+            select: {
+      price: true,
+      discountPrice: true,
+      priceColor: true,
+      imageUrl: true,
+      // Availability for the card: a product with options holds its units here.
+      stock: true,
+      reserved: true,
+    },
           },
           // Second fallback for the thumbnail, after variant photos.
           colors: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },

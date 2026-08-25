@@ -68,6 +68,23 @@ export interface ShipOrderOptions {
  * currently-active one — so switching the shop's active courier can never
  * misroute an already-shipped order's status lookups.
  */
+/**
+ * Street line plus the Division/District/Upazila chosen at checkout. Parts the
+ * customer already typed are skipped, so an address ending in "…, Savar" does
+ * not become "…, Savar, Savar, Dhaka".
+ */
+function withLocation(order: {
+  address: string;
+  upazilaName?: string | null;
+  districtName?: string | null;
+  divisionName?: string | null;
+}): string {
+  const seen = order.address.toLowerCase();
+  const extra = [order.upazilaName, order.districtName, order.divisionName]
+    .filter((part): part is string => Boolean(part) && !seen.includes(part!.toLowerCase()));
+  return extra.length ? `${order.address}, ${extra.join(", ")}` : order.address;
+}
+
 export async function shipOrder(orderId: number, options: ShipOrderOptions = {}) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -94,7 +111,11 @@ export async function shipOrder(orderId: number, options: ShipOrderOptions = {})
     orderNo: order.orderNo,
     recipientName: order.customerName,
     recipientPhone: order.customerPhone,
-    recipientAddress: order.address,
+    // The courier needs the administrative location, not just the street line —
+    // `address` holds only house/road/area. Appended from the checkout snapshot
+    // so the label reads the same as the order, and de-duplicated in case the
+    // customer already typed the district into the free-text field.
+    recipientAddress: withLocation(order),
     codAmount: order.total,
     recipientCityId: options.recipientCityId,
     recipientZoneId: options.recipientZoneId,

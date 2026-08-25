@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
+import type { ProductStatus } from "@prisma/client";
 import { takaToPaisa } from "@/lib/money";
 import { requirePermission } from "@/server/admin/guard";
 import {
   createProduct,
   updateProduct,
   deleteProduct,
+  ProductStockError,
+  ProductPublishError,
   type ProductAccordionSectionInput,
   type ProductColorInput,
   type ProductImageInput,
@@ -196,7 +199,7 @@ export async function saveProduct(
   id: number | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requirePermission("products");
+  const admin = await requirePermission("products");
   const name = String(formData.get("name") ?? "").trim();
   const categoryId = Number(formData.get("categoryId"));
   const description = String(formData.get("description") ?? "").trim();
@@ -212,7 +215,9 @@ export async function saveProduct(
   const showStock = formData.get("showStock") !== "false";
   const priceColor = parseHexColor(formData.get("priceColor"));
   const isFeatured = formData.get("isFeatured") === "on";
-  const status = formData.get("status") === "INACTIVE" ? "INACTIVE" : "ACTIVE";
+  const rawStatus = String(formData.get("status") ?? "ACTIVE");
+  const status: ProductStatus =
+    rawStatus === "INACTIVE" ? "INACTIVE" : rawStatus === "DRAFT" ? "DRAFT" : "ACTIVE";
   const promoBadge = String(formData.get("promoBadge") ?? "").trim();
   // Offer strip copy. Capped so a runaway paste can't blow out the buy box; the
   // storefront renders it as text, never as markup.
@@ -270,7 +275,7 @@ export async function saveProduct(
     showStock,
     priceColor,
     isFeatured,
-    status: status as "ACTIVE" | "INACTIVE",
+    status,
     promoBadge: promoBadge || null,
     offerText: offerText || null,
     metaTitle: metaTitle || null,
@@ -289,11 +294,24 @@ export async function saveProduct(
 
   try {
     if (id) {
-      await updateProduct(id, input);
+      await updateProduct(id, input, admin.username);
     } else {
-      await createProduct(input);
+      await createProduct(input, admin.username);
     }
   } catch (err) {
+    // Removing an option that still holds stock or reservations. Surfaced on
+    // the options step, naming the rows, rather than thrown — the admin can
+    // put the option back or write the stock off, and both are their call.
+    if (err instanceof ProductStockError) {
+      return { fieldErrors: { variants: err.message } };
+    }
+    // Not complete enough for the storefront. Reported twice on purpose: next
+    // to the status control where the decision was made, and in the banner at
+    // the top of the form, because the Visibility card sits in a side column
+    // that may be well off-screen when a long product is submitted.
+    if (err instanceof ProductPublishError) {
+      return { fieldErrors: { status: err.message, _form: err.message } };
+    }
     // ProductVariant.sku is unique shop-wide: a clash means this SKU already
     // belongs to another product, which is worth naming rather than throwing.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {

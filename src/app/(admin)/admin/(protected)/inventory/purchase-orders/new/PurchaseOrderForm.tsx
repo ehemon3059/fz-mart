@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { formatTaka } from "@/lib/money";
+import SearchSelect from "@/components/admin/ui/SearchSelect";
 import { createPurchaseOrderAction } from "../actions";
+import QuickProductPanel, { type CategoryOption } from "./QuickProductPanel";
 
 interface VariantOption {
   id: number;
@@ -42,12 +44,20 @@ const blankLine = (): LineDraft => ({
 
 export default function PurchaseOrderForm({
   suppliers,
-  products,
+  products: initialProducts,
+  categories,
 }: {
   suppliers: { id: number; name: string }[];
   products: ProductOption[];
+  categories: CategoryOption[];
 }) {
   const [lines, setLines] = useState<LineDraft[]>([blankLine()]);
+  // Products are state, not a prop: a draft created from this form has to join
+  // the picker immediately, without a round trip that would lose the order
+  // being written.
+  const [products, setProducts] = useState<ProductOption[]>(initialProducts);
+  // Which line opened the "new product" panel, so the result attaches to it.
+  const [creatingFor, setCreatingFor] = useState<number | null>(null);
   const [shipping, setShipping] = useState("");
   const [customs, setCustoms] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +86,22 @@ export default function PurchaseOrderForm({
     const variant = product?.variants.find((v) => String(v.id) === variantId);
     const cost = variant?.purchaseCost || product?.purchaseCost || 0;
     patch(key, { variantId, unitCost: cost > 0 ? String(cost / 100) : "" });
+  }
+
+  /** A draft just created from this form: add it and select it on its line. */
+  function adoptNewProduct(
+    lineKey: number,
+    created: { id: number; name: string; purchaseCost: number; variants: { id: number; label: string }[] },
+  ) {
+    const option: ProductOption = {
+      id: created.id,
+      name: created.name,
+      purchaseCost: created.purchaseCost,
+      variants: created.variants.map((v) => ({ ...v, purchaseCost: 0 })),
+    };
+    setProducts((prev) => [...prev, option].sort((a, b) => a.name.localeCompare(b.name)));
+    patch(lineKey, { productId: String(created.id), variantId: "", unitCost: "" });
+    setCreatingFor(null);
   }
 
   // Running totals, so the admin sees the order's value as they build it.
@@ -135,19 +161,20 @@ export default function PurchaseOrderForm({
               >
                 <div className="sm:col-span-5">
                   <label className={label}>Product</label>
-                  <select
+                  {/* Always submits, even when empty, so the parallel arrays in
+                      the action stay aligned across rows. */}
+                  <SearchSelect
                     name="lineProductId"
                     value={line.productId}
-                    onChange={(e) => chooseProduct(line.key, e.target.value)}
-                    className={field}
-                  >
-                    <option value="">Choose…</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => chooseProduct(line.key, v)}
+                    placeholder="Type to search…"
+                    options={products.map((p) => ({
+                      value: String(p.id),
+                      label: p.name,
+                      hint: p.variants.length > 0 ? `${p.variants.length} options` : undefined,
+                    }))}
+                    action={{ label: "New product", onSelect: () => setCreatingFor(line.key) }}
+                  />
                 </div>
                 <div className="sm:col-span-3">
                   <label className={label}>Option</label>
@@ -200,6 +227,18 @@ export default function PurchaseOrderForm({
                     >
                       Remove line
                     </button>
+                  </div>
+                )}
+
+                {/* Sits inside the row that opened it, so it is obvious which
+                    line the new product will land on. */}
+                {creatingFor === line.key && (
+                  <div className="sm:col-span-12">
+                    <QuickProductPanel
+                      categories={categories}
+                      onCreated={(created) => adoptNewProduct(line.key, created)}
+                      onCancel={() => setCreatingFor(null)}
+                    />
                   </div>
                 )}
               </div>

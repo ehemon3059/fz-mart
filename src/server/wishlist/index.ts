@@ -44,7 +44,15 @@ export async function listWishlist(customerId: string) {
           // card falls back to these (see resolvePrimaryImage).
           variants: {
             orderBy: { sortOrder: "asc" },
-            select: { price: true, discountPrice: true, priceColor: true, imageUrl: true },
+            select: {
+      price: true,
+      discountPrice: true,
+      priceColor: true,
+      imageUrl: true,
+      // Availability for the card: a product with options holds its units here.
+      stock: true,
+      reserved: true,
+    },
           },
           colors: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
           images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },

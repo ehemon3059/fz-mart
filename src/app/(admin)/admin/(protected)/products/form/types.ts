@@ -126,7 +126,7 @@ export interface FormState {
   showStock: boolean; // show the "In stock (N available)" count on the storefront
   /** Storefront price colour (#rrggbb); "" = theme default (near-black). */
   priceColor: string;
-  status: "ACTIVE" | "INACTIVE";
+  status: "ACTIVE" | "INACTIVE" | "DRAFT";
   promoBadge: string;
   /** Offer strip copy; only shown on the storefront while a discount is set. */
   offerText: string;

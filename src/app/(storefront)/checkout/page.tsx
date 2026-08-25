@@ -1,4 +1,4 @@
-import { listActiveShippingZones } from "@/server/settings/shipping";
+import { getLocationTree } from "@/server/settings/locations";
 import { getCheckoutPaymentOptions } from "@/server/settings/payments";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { listAddresses, MAX_ADDRESSES } from "@/server/customers/addresses";
@@ -11,8 +11,8 @@ export default async function CheckoutPage({
   searchParams: Promise<{ buyNow?: string; variant?: string }>;
 }) {
   const { buyNow, variant } = await searchParams;
-  const [zones, paymentOptions, customer] = await Promise.all([
-    listActiveShippingZones(),
+  const [locations, paymentOptions, customer] = await Promise.all([
+    getLocationTree(),
     getCheckoutPaymentOptions(),
     getCurrentCustomer(),
   ]);
@@ -27,7 +27,7 @@ export default async function CheckoutPage({
     <div className="co-wrap">
       <h1 className="co-title">Checkout</h1>
       <CheckoutForm
-        zones={zones}
+        locations={locations}
         paymentOptions={paymentOptions}
         buyNowProductId={buyNow ? Number(buyNow) : null}
         buyNowVariantId={variant ? Number(variant) : null}
@@ -38,6 +38,9 @@ export default async function CheckoutPage({
           fullName: a.fullName,
           phone: a.phone,
           address: a.address,
+          divisionId: a.divisionId,
+          districtId: a.districtId,
+          upazilaId: a.upazilaId,
           shippingZoneId: a.shippingZoneId,
           isDefault: a.isDefault,
         }))}

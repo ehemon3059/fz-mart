@@ -85,9 +85,9 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
 
   const activeUrl = safeImages[active]?.url ?? PLACEHOLDER;
 
-  // Hover magnifier lens — a round circle that follows the cursor over the main
+  // Hover magnifier lens — a square that follows the cursor over the main
   // image and shows a zoomed-in crop of the exact spot under it (desktop only).
-  const LENS_SIZE = 180; // diameter of the circular lens, px
+  const LENS_SIZE = 180; // side length of the square lens, px
   const ZOOM = 2.4; // magnification factor
   const mainRef = useRef<HTMLDivElement>(null);
   const [lens, setLens] = useState<{ x: number; y: number } | null>(null);
@@ -240,10 +240,10 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
           />
         ))}
 
-        {/* Magnifier lens — circular zoom that tracks the cursor (desktop) */}
+        {/* Magnifier lens — square zoom that tracks the cursor (desktop) */}
         {lens && (
           <div
-            className="pointer-events-none absolute z-20 hidden rounded-full border-2 border-white shadow-[0_4px_20px_rgba(0,0,0,0.35)] ring-1 ring-black/10 md:block"
+            className="pointer-events-none absolute z-20 hidden rounded-md border-2 border-white shadow-[0_4px_20px_rgba(0,0,0,0.35)] ring-1 ring-black/10 md:block"
             style={{
               width: LENS_SIZE,
               height: LENS_SIZE,
@@ -261,7 +261,7 @@ export default function ProductGallery({ images, name, promoBadge, overlay }: Pr
           />
         )}
 
-        {/* "click to view" hint under the lens circle */}
+        {/* "click to view" hint under the lens square */}
         {lens && (
           <span
             className="pointer-events-none absolute z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-medium text-white md:block"

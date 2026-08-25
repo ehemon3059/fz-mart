@@ -1,9 +1,72 @@
+import type { Prisma, ProductStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slugify";
 import { deleteImage } from "@/integrations/storage";
 import { invalidateProductCaches } from "./cache";
 import { productInStock, notifyBackInStock } from "./stock-notify";
 import { ancestorsOf } from "@/server/categories/tree";
+import { recordMovement } from "@/server/inventory/ledger";
+
+/**
+ * Raised when a save would destroy stock the shop actually holds. Carries the
+ * option labels so the form can name them instead of failing abstractly.
+ */
+export class ProductStockError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProductStockError";
+  }
+}
+
+/** Raised when a product isn't complete enough to go on the storefront. */
+export class ProductPublishError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProductPublishError";
+  }
+}
+
+/**
+ * Does this product have a photo ANYWHERE?
+ *
+ * Deliberately generous about where: a product sold by colour often has an
+ * empty gallery because every photo was uploaded onto a colour swatch or a
+ * variant row instead (see the note in listAllProducts). Requiring a gallery
+ * image specifically would reject products that are, to a shopper, fully
+ * illustrated.
+ */
+function hasAnyImage(input: ProductInput): boolean {
+  const gallery = imageRowsFromInput(input) ?? [];
+  if (gallery.some((i) => i.url.trim())) return true;
+  if (input.colors?.some((c) => c.imageUrl?.trim())) return true;
+  if (input.variants?.some((v) => v.imageUrl?.trim())) return true;
+  return false;
+}
+
+/**
+ * Guard the transition ONTO the storefront.
+ *
+ * Only a product becoming ACTIVE is checked. A product that is already live is
+ * grandfathered, because this rule is newer than the catalogue: enforcing it on
+ * every save would block editing the products that predate it, which is a
+ * regression dressed up as a standard.
+ */
+function assertPublishable(input: ProductInput, previousStatus: ProductStatus | null): void {
+  const goingLive = (input.status ?? "ACTIVE") === "ACTIVE";
+  if (!goingLive) return;
+  if (previousStatus === "ACTIVE") return; // already published; leave it alone
+
+  const missing: string[] = [];
+  if (!hasAnyImage(input)) missing.push("at least one photo");
+  if (!(input.price > 0)) missing.push("a price");
+
+  if (missing.length > 0) {
+    throw new ProductPublishError(
+      `This product needs ${missing.join(" and ")} before it can go on the storefront. ` +
+        `Save it as a draft for now, and publish once it's ready.`,
+    );
+  }
+}
 
 // A category listing page shows products from the node AND all its ancestors'
 // pages, so a product write must clear the node's slug plus every ancestor's.
@@ -76,6 +139,15 @@ export interface ProductVariantInput {
   price: number;
   /** Paisa — optional sale price (< price). Null/omitted = no discount. */
   discountPrice?: number | null;
+  /**
+   * OPENING stock only — the units this option starts with. Honoured when the
+   * variant row is first created (at product creation, or when a new option is
+   * added to an existing product) and recorded as an OPENING movement.
+   *
+   * IGNORED for an option that already exists: its level belongs to the ledger
+   * from that point on, and is changed by a purchase-order receipt or an
+   * audited adjustment — never by re-saving the product form.
+   */
   stock: number;
   /** Show the stock count on the storefront for this variant. Default true. */
   showStock?: boolean;
@@ -102,8 +174,26 @@ export interface ProductInput {
   price: number;
   /** Paisa, or null to clear */
   discountPrice?: number | null;
-  /** Sourcing/purchase cost per unit (paisa) — the COGS basis. */
+  /**
+   * Sourcing/purchase cost per unit (paisa) — the COGS basis.
+   *
+   * Seeded at creation, then OWNED BY THE LEDGER: receiving a purchase order
+   * rewrites it to the landed cost (supplier price + that line's share of
+   * freight and customs). updateProduct therefore ignores this field, so a
+   * stale number typed into the form can't overwrite what the goods really
+   * cost — checkout snapshots this onto OrderItem, and a snapshot can never be
+   * corrected after the fact.
+   */
   purchaseCost?: number;
+  /**
+   * OPENING stock — the units already on the shelf when the product is first
+   * entered. Recorded as an OPENING movement so the ledger replays from zero.
+   * IGNORED by updateProduct: an existing product's level is owned by the
+   * ledger (purchase-order receipts and audited adjustments).
+   *
+   * For a product with variants this is derived from the rows and is not the
+   * authoritative figure — each variant carries its own opening stock.
+   */
   stock: number;
   /** Low-stock alert threshold; 0 disables. */
   lowStockThreshold?: number;
@@ -112,7 +202,8 @@ export interface ProductInput {
   /** Storefront price colour (#rrggbb); null/undefined = theme default. */
   priceColor?: string | null;
   isFeatured?: boolean;
-  status?: "ACTIVE" | "INACTIVE";
+  /** DRAFT = created from a purchase order, not finished, never on the storefront. */
+  status?: ProductStatus;
   promoBadge?: string | null;
   /** Gradient offer strip copy; shown only while the product is discounted. */
   offerText?: string | null;
@@ -153,9 +244,21 @@ function imageRowsFromInput(input: ProductInput): ProductImageInput[] | undefine
   return input.imageUrls?.map((url) => ({ url }));
 }
 
-export async function createProduct(input: ProductInput) {
+/**
+ * Create a product, with its opening stock written through the ledger.
+ *
+ * Every row is created at ZERO and then credited by an OPENING movement, rather
+ * than being born holding stock. That costs one extra write and buys the thing
+ * the old path could never offer: a ledger that replays from zero to today's
+ * level for every product created from here on, so
+ * scripts/stock-ledger-verify.ts reports a real fault instead of the noise of
+ * unexplained starting balances.
+ */
+export async function createProduct(input: ProductInput, actorName = "system") {
+  assertPublishable(input, null);
   const imageRows = imageRowsFromInput(input);
-  const product = await prisma.product.create({
+  const product = await prisma.$transaction(async (tx) => {
+  const created = await tx.product.create({
     data: {
       name: input.name,
       slug: slugify(input.name),
@@ -164,7 +267,8 @@ export async function createProduct(input: ProductInput) {
       price: input.price,
       discountPrice: input.discountPrice ?? null,
       purchaseCost: input.purchaseCost ?? 0,
-      stock: input.stock,
+      // Opening stock is credited below, through the ledger.
+      stock: 0,
       lowStockThreshold: input.lowStockThreshold ?? 0,
       showStock: input.showStock ?? true,
       priceColor: input.priceColor ?? null,
@@ -241,7 +345,8 @@ export async function createProduct(input: ProductInput) {
                 colorName: v.colorName ?? null,
                 price: v.price,
                 discountPrice: v.discountPrice ?? null,
-                stock: v.stock,
+                // Opening stock is credited below, through the ledger.
+                stock: 0,
                 showStock: v.showStock ?? true,
                 priceColor: v.priceColor ?? null,
                 imageUrl: v.imageUrl ?? null,
@@ -252,6 +357,39 @@ export async function createProduct(input: ProductInput) {
           }
         : undefined,
     },
+    include: { variants: { orderBy: { sortOrder: "asc" } } },
+  });
+
+    // Credit the opening balances. A sized product holds its units on the
+    // variants, so the product row is only credited when it has none —
+    // crediting both would double-count the same goods.
+    if (created.variants.length > 0) {
+      const openings = input.variants ?? [];
+      for (const [i, variant] of created.variants.entries()) {
+        const qty = Math.max(0, Math.floor(openings[i]?.stock ?? 0));
+        if (qty === 0) continue;
+        await recordMovement(tx, {
+          productId: created.id,
+          variantId: variant.id,
+          type: "OPENING",
+          delta: qty,
+          unitCost: variant.purchaseCost || created.purchaseCost || null,
+          reason: "Opening stock",
+          actorName,
+        });
+      }
+    } else if (input.stock > 0) {
+      await recordMovement(tx, {
+        productId: created.id,
+        type: "OPENING",
+        delta: Math.floor(input.stock),
+        unitCost: created.purchaseCost || null,
+        reason: "Opening stock",
+        actorName,
+      });
+    }
+
+    return created;
   });
 
   await invalidateProductCaches({
@@ -264,22 +402,145 @@ export async function createProduct(input: ProductInput) {
 }
 
 /**
- * KNOWN LEDGER GAP (Phase A): the product form writes `stock` directly, so an
- * admin retyping the number here changes it WITHOUT a StockMovement. The stock
- * ledger will then disagree with the cached level, and
- * scripts/stock-ledger-verify.ts reports it as post-cutover drift.
+ * Identity of a variant ACROSS SAVES.
  *
- * Left as-is deliberately for now — routing this through recordMovement() means
- * reworking the form so stock is edited only via the adjustment panel (which is
- * audited), not typed in the middle of a product save. That is a UI decision,
- * so it belongs in Phase B alongside the rest of the inventory screens.
- * Until then, prefer the Stock panel's adjustment box over editing the number.
+ * A SKU is the real identifier when one exists — it survives a colour being
+ * renamed or a size being relabelled. Otherwise the (colour, size) pair is what
+ * the admin actually manipulates in the matrix, and it is what the form itself
+ * matches on when it regenerates rows (see form/variant-utils.ts), so the two
+ * sides agree on what "the same option" means.
  */
-export async function updateProduct(id: number, input: ProductInput) {
+function variantKey(v: { sku?: string | null; colorName?: string | null; size?: string | null }): string {
+  const sku = v.sku?.trim().toUpperCase();
+  if (sku) return `sku:${sku}`;
+  return `cs:${(v.colorName ?? "").trim().toLowerCase()}|${(v.size ?? "").trim().toLowerCase()}`;
+}
+
+/** Human label for an option, for error messages: "Navy / M". */
+function variantLabel(v: { colorName?: string | null; size?: string | null }): string {
+  return [v.colorName, v.size].filter(Boolean).join(" / ") || "Option";
+}
+
+/**
+ * Reconcile a product's variants IN PLACE, preserving their identity.
+ *
+ * This used to be `deleteMany` + `createMany`, which was correct for the
+ * catalogue fields and catastrophic for everything anchored to a variant id:
+ *
+ *   • `reserved` was destroyed, so units promised to unshipped orders silently
+ *     became sellable again — the same unit could be sold twice;
+ *   • `stock` survived only because the form happened to round-trip it;
+ *   • StockMovement.variantId and PurchaseOrderLine.variantId are SetNull, so
+ *     every save detached that option's ledger history and cut the purchase
+ *     order's link to the exact thing it ordered.
+ *
+ * So: matched rows are UPDATED (catalogue fields only — never stock, never
+ * reserved), genuinely new options are created, and a removed option is deleted
+ * only when it holds nothing. Removing an option that still has stock or
+ * reservations is refused rather than absorbed, because there is no correct
+ * silent answer — the goods are either on a shelf or promised to a customer.
+ */
+async function syncVariants(
+  tx: Prisma.TransactionClient,
+  productId: number,
+  incoming: ProductVariantInput[],
+  actorName: string,
+): Promise<void> {
+  const existing = await tx.productVariant.findMany({ where: { productId } });
+  const byKey = new Map(existing.map((v) => [variantKey(v), v]));
+  // Cost basis for any opening movement below. A brand-new variant row has no
+  // cost of its own yet (a PO receipt sets that), so it values its opening
+  // units at the product's current sourcing cost — the same fallback checkout
+  // uses when a variant's purchaseCost is 0.
+  const { purchaseCost: productCost } = await tx.product.findUniqueOrThrow({
+    where: { id: productId },
+    select: { purchaseCost: true },
+  });
+
+  const keptIds = new Set<number>();
+  // Opening stock for options created during this save, credited after the
+  // rows exist so recordMovement can address them by id.
+  const openings: { variantId: number; qty: number; unitCost: number }[] = [];
+
+  for (const [i, v] of incoming.entries()) {
+    const match = byKey.get(variantKey(v));
+
+    // Catalogue fields only. `stock` and `reserved` are deliberately absent:
+    // from the moment a row exists, its level belongs to the ledger.
+    const fields = {
+      size: v.size ?? null,
+      colorName: v.colorName ?? null,
+      price: v.price,
+      discountPrice: v.discountPrice ?? null,
+      showStock: v.showStock ?? true,
+      priceColor: v.priceColor ?? null,
+      imageUrl: v.imageUrl ?? null,
+      sku: v.sku ?? null,
+      sortOrder: i,
+    };
+
+    // A row may only claim an existing variant once. Without this, two
+    // submitted rows that resolve to the same variant (one matching by SKU, one
+    // by colour+size) would both update it and the second option would vanish
+    // instead of being created.
+    if (match && !keptIds.has(match.id)) {
+      keptIds.add(match.id);
+      await tx.productVariant.update({ where: { id: match.id }, data: fields });
+    } else {
+      const created = await tx.productVariant.create({
+        data: { productId, ...fields, stock: 0 },
+      });
+      const qty = Math.max(0, Math.floor(v.stock ?? 0));
+      if (qty > 0) {
+        openings.push({ variantId: created.id, qty, unitCost: created.purchaseCost || productCost });
+      }
+    }
+  }
+
+  const removed = existing.filter((v) => !keptIds.has(v.id));
+  const holding = removed.filter((v) => v.stock > 0 || v.reserved > 0);
+  if (holding.length > 0) {
+    const named = holding
+      .map((v) => `${variantLabel(v)} (${v.stock} on hand${v.reserved > 0 ? `, ${v.reserved} reserved` : ""})`)
+      .join("; ");
+    throw new ProductStockError(
+      `Can't remove an option that still holds stock: ${named}. ` +
+        `Write the stock off from the Stock panel first, or leave the option in place.`,
+    );
+  }
+  if (removed.length > 0) {
+    await tx.productVariant.deleteMany({ where: { id: { in: removed.map((v) => v.id) } } });
+  }
+
+  for (const o of openings) {
+    await recordMovement(tx, {
+      productId,
+      variantId: o.variantId,
+      type: "OPENING",
+      delta: o.qty,
+      unitCost: o.unitCost || null,
+      reason: "Opening stock — new option",
+      actorName,
+    });
+  }
+}
+
+/**
+ * Update a product's CATALOGUE data.
+ *
+ * `stock` and `purchaseCost` are not written here, and that is the whole point:
+ * this closes the old KNOWN LEDGER GAP, where retyping the stock number changed
+ * the level with no StockMovement to explain it, and where a stale sourcing
+ * cost could overwrite the landed cost a purchase-order receipt had just
+ * calculated. Stock now changes only through the ledger (a PO receipt or an
+ * audited adjustment), and cost only through a receipt.
+ */
+export async function updateProduct(id: number, input: ProductInput, actorName = "system") {
   const before = await prisma.product.findUnique({
     where: { id },
     include: { category: true },
   });
+  assertPublishable(input, before?.status ?? null);
   // Snapshot stock state before the edit, to detect an out-of-stock → in-stock
   // transition that should fire "back in stock" alerts.
   const wasInStock = await productInStock(id);
@@ -294,9 +555,9 @@ export async function updateProduct(id: number, input: ProductInput) {
         description: input.description,
         price: input.price,
         discountPrice: input.discountPrice ?? null,
-        purchaseCost: input.purchaseCost ?? 0,
-        stock: input.stock,
-      lowStockThreshold: input.lowStockThreshold ?? 0,
+        // purchaseCost and stock are intentionally NOT written here — see the
+        // doc comment above. They are owned by the ledger.
+        lowStockThreshold: input.lowStockThreshold ?? 0,
         showStock: input.showStock ?? true,
         priceColor: input.priceColor ?? null,
         isFeatured: input.isFeatured ?? false,
@@ -384,28 +645,10 @@ export async function updateProduct(id: number, input: ProductInput) {
       }
     }
 
+    // Reconcile in place rather than replacing the set — a variant id is
+    // referenced by reservations, the stock ledger and open purchase orders.
     if (input.variants) {
-      // Replace the variant set. Historical order rows keep their own snapshot
-      // (variantLabel) and their variantId is set null on delete, so wiping
-      // variants here never corrupts past orders.
-      await tx.productVariant.deleteMany({ where: { productId: id } });
-      if (input.variants.length > 0) {
-        await tx.productVariant.createMany({
-          data: input.variants.map((v, i) => ({
-            productId: id,
-            size: v.size ?? null,
-            colorName: v.colorName ?? null,
-            price: v.price,
-            discountPrice: v.discountPrice ?? null,
-            stock: v.stock,
-            showStock: v.showStock ?? true,
-            priceColor: v.priceColor ?? null,
-            imageUrl: v.imageUrl ?? null,
-            sku: v.sku ?? null,
-            sortOrder: i,
-          })),
-        });
-      }
+      await syncVariants(tx, id, input.variants, actorName);
     }
 
     return updated;

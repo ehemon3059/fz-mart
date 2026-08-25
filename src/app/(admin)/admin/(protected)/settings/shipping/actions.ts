@@ -23,13 +23,14 @@ export async function saveShippingZone(
   const chargeTaka = Number(formData.get("charge"));
   const sortOrder = Number(formData.get("sortOrder") ?? 0);
   const isActive = formData.get("isActive") === "on";
+  const isFallback = formData.get("isFallback") === "on";
 
   if (!name) return { error: "Name is required." };
   if (!Number.isFinite(chargeTaka) || chargeTaka < 0) {
     return { error: "Charge must be zero or a positive number." };
   }
 
-  const input = { name, charge: takaToPaisa(chargeTaka), sortOrder, isActive };
+  const input = { name, charge: takaToPaisa(chargeTaka), sortOrder, isActive, isFallback };
 
   if (id) {
     await updateShippingZone(id, input);
@@ -38,7 +39,10 @@ export async function saveShippingZone(
   }
 
   revalidatePath("/admin/settings/shipping");
+  revalidatePath("/admin/settings/locations");
   revalidatePath("/checkout");
+  revalidatePath("/account/addresses");
+  revalidatePath("/products", "layout");
   redirect("/admin/settings/shipping");
 }
 
@@ -50,6 +54,9 @@ export async function removeShippingZone(id: number): Promise<ActionResult> {
     return { error: "Could not delete — orders still reference this zone." };
   }
   revalidatePath("/admin/settings/shipping");
+  revalidatePath("/admin/settings/locations");
   revalidatePath("/checkout");
+  revalidatePath("/account/addresses");
+  revalidatePath("/products", "layout");
   return {};
 }

@@ -18,6 +18,12 @@ export const E2E_ADMIN = {
   password: "e2e-admin-password-1",
 } as const;
 
+// The delivery location the checkout specs pick. Seeded by global-setup and
+// mapped to zone 1, so the ৳60 delivery charge the specs assert stays fixed
+// regardless of what the real seed-locations.ts data says.
+export const E2E_DIVISION = "E2E Division";
+export const E2E_DISTRICT = "E2E District";
+
 /** Valid, unique Bangladeshi mobile number per call — keeps per-phone rate limits out of the way. */
 export function uniquePhone(): string {
   return `017${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`;
@@ -40,6 +46,8 @@ export async function createPendingOrder(productSlug: string) {
       customerPhone: uniquePhone(),
       address: "E2E test address, Dhaka",
       shippingZoneId: 1,
+      divisionName: E2E_DIVISION,
+      districtName: E2E_DISTRICT,
       deliveryCharge: 6000,
       subtotal: unitPrice,
       total: unitPrice + 6000,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { paisaToTaka } from "@/lib/money";
 import { saveShippingZone } from "./actions";
 
@@ -11,6 +12,7 @@ interface Props {
     charge: number;
     sortOrder: number;
     isActive: boolean;
+    isFallback: boolean;
   };
 }
 
@@ -34,7 +36,11 @@ export default function ShippingZoneForm({ zone }: Props) {
       <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-soft sm:p-6">
         <h2 className="text-[15px] font-bold text-stone-900">Zone details</h2>
         <p className="mt-0.5 text-[13px] text-stone-500">
-          Customers pick a zone at checkout and pay its charge.
+          A zone is a delivery rate. Customers never pick one directly — they choose a{" "}
+          <Link href="/admin/settings/locations" className="underline">
+            delivery location
+          </Link>
+          , and the zone mapped to it (or to its district/division) sets the charge.
         </p>
 
         <div className="mt-5 space-y-5">
@@ -83,6 +89,25 @@ export default function ShippingZoneForm({ zone }: Props) {
             />
             Active (available at checkout)
           </label>
+
+          <div className="rounded-xl border border-stone-200 bg-stone-50 p-3.5">
+            <label className="flex cursor-pointer items-start gap-2.5 text-[14px] font-medium text-stone-700">
+              <input
+                name="isFallback"
+                type="checkbox"
+                defaultChecked={zone?.isFallback ?? false}
+                className="mt-0.5 h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500/30"
+              />
+              <span>
+                Use as the fallback zone
+                <span className="mt-0.5 block text-[12px] font-normal leading-relaxed text-stone-500">
+                  Charged whenever a customer&apos;s location — and everything above it — has no
+                  zone of its own. Only one zone can be the fallback; ticking this un-ticks
+                  whichever zone holds it now.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 

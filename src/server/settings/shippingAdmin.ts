@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
 
 export async function listAllShippingZones() {
-  return prisma.shippingZone.findMany({ orderBy: { sortOrder: "asc" } });
+  return prisma.shippingZone.findMany({
+    orderBy: { sortOrder: "asc" },
+    // How many locations price against each zone — the admin list shows it so
+    // a zone about to be deleted or repriced states its blast radius up front.
+    include: {
+      _count: { select: { divisions: true, districts: true, upazilas: true, orders: true } },
+    },
+  });
 }
 
 export async function getShippingZoneById(id: number) {
@@ -14,28 +21,52 @@ export interface ShippingZoneInput {
   charge: number;
   sortOrder?: number;
   isActive?: boolean;
+  /** Charge used when a location's chain names no zone of its own. */
+  isFallback?: boolean;
 }
 
-export async function createShippingZone(input: ShippingZoneInput) {
-  return prisma.shippingZone.create({
-    data: {
-      name: input.name,
-      charge: input.charge,
-      sortOrder: input.sortOrder ?? 0,
-      isActive: input.isActive ?? true,
-    },
+/**
+ * At most one zone may be the fallback, so the lookup can never depend on row
+ * order. Promoting one demotes the rest in the same transaction as the write.
+ */
+async function writeZone(
+  id: number | null,
+  input: ShippingZoneInput,
+) {
+  const data = {
+    name: input.name,
+    charge: input.charge,
+    sortOrder: input.sortOrder ?? 0,
+    isActive: input.isActive ?? true,
+    isFallback: input.isFallback ?? false,
+  };
+  return prisma.$transaction(async (tx) => {
+    const zone = id
+      ? await tx.shippingZone.update({ where: { id }, data })
+      : await tx.shippingZone.create({ data });
+    if (data.isFallback) {
+      await tx.shippingZone.updateMany({
+        where: { isFallback: true, id: { not: zone.id } },
+        data: { isFallback: false },
+      });
+    }
+    return zone;
   });
 }
 
+export async function createShippingZone(input: ShippingZoneInput) {
+  return writeZone(null, input);
+}
+
 export async function updateShippingZone(id: number, input: ShippingZoneInput) {
-  return prisma.shippingZone.update({
-    where: { id },
-    data: {
-      name: input.name,
-      charge: input.charge,
-      sortOrder: input.sortOrder ?? 0,
-      isActive: input.isActive ?? true,
-    },
+  return writeZone(id, input);
+}
+
+export async function listZoneOptions() {
+  return prisma.shippingZone.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, charge: true },
   });
 }
 

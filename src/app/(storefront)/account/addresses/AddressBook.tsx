@@ -2,21 +2,46 @@
 
 import { useState, useTransition } from "react";
 import { formatTaka } from "@/lib/money";
-import type { SavedAddress, ZoneOption } from "@/lib/customer-address";
+import type { SavedAddress } from "@/lib/customer-address";
+import type { LocationTree } from "@/server/settings/locations";
 import { addAddress, editAddress, makeDefaultAddress, removeAddress } from "../actions";
 
 interface Props {
   addresses: SavedAddress[];
-  zones: ZoneOption[];
+  /** Admin-managed location tree; the zone (and its charge) is derived from it. */
+  locations: LocationTree;
   max: number;
   defaults: { fullName: string; phone: string };
 }
 
 const LABEL_PRESETS = ["Home", "Office", "Other"];
 
+/**
+ * Human-readable location for a saved address, plus the charge its zone
+ * currently costs. Resolved from the live tree rather than stored text, so a
+ * repriced zone shows the new charge here without touching the saved row.
+ * Returns null for addresses saved before locations existed, or whose location
+ * the admin has since removed.
+ */
+function describeLocation(
+  tree: LocationTree,
+  a: SavedAddress,
+): { where: string; zoneName: string; charge: number } | null {
+  const division = tree.divisions.find((d) => d.id === a.divisionId);
+  const district = division?.districts.find((d) => d.id === a.districtId);
+  if (!division || !district) return null;
+  const upazila = district.upazilas.find((u) => u.id === a.upazilaId);
+  const src = upazila ?? district;
+  return {
+    where: [upazila?.name, district.name, division.name].filter(Boolean).join(", "),
+    zoneName: src.zoneName,
+    charge: src.charge,
+  };
+}
+
 type Editing = { mode: "new" } | { mode: "edit"; address: SavedAddress } | null;
 
-export default function AddressBook({ addresses, zones, max, defaults }: Props) {
+export default function AddressBook({ addresses, locations, max, defaults }: Props) {
   const [editing, setEditing] = useState<Editing>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -95,7 +120,7 @@ export default function AddressBook({ addresses, zones, max, defaults }: Props) 
       {editing && (
         <AddressForm
           key={editing.mode === "edit" ? editing.address.id : "new"}
-          zones={zones}
+          locations={locations}
           initial={editing.mode === "edit" ? editing.address : null}
           defaults={defaults}
           pending={pending}
@@ -115,7 +140,7 @@ export default function AddressBook({ addresses, zones, max, defaults }: Props) 
 
       <div className="mt-4 space-y-3">
         {addresses.map((a) => {
-          const zone = zones.find((z) => z.id === a.shippingZoneId);
+          const place = describeLocation(locations, a);
           return (
             <div key={a.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
@@ -131,9 +156,9 @@ export default function AddressBook({ addresses, zones, max, defaults }: Props) 
               <p className="mt-2 text-sm font-semibold text-gray-900">{a.fullName}</p>
               <p className="text-sm text-gray-600">{a.phone}</p>
               <p className="mt-1 whitespace-pre-line text-sm text-gray-600">{a.address}</p>
-              {zone && (
+              {place && (
                 <p className="mt-1 text-xs text-gray-400">
-                  {zone.name} · delivery {formatTaka(zone.charge)}
+                  {place.where} · {place.zoneName} · delivery {formatTaka(place.charge)}
                 </p>
               )}
 
@@ -177,14 +202,14 @@ export default function AddressBook({ addresses, zones, max, defaults }: Props) 
 }
 
 function AddressForm({
-  zones,
+  locations,
   initial,
   defaults,
   pending,
   onCancel,
   onSubmit,
 }: {
-  zones: ZoneOption[];
+  locations: LocationTree;
   initial: SavedAddress | null;
   defaults: { fullName: string; phone: string };
   pending: boolean;
@@ -193,6 +218,21 @@ function AddressForm({
 }) {
   const [label, setLabel] = useState(initial?.label ?? LABEL_PRESETS[0]);
   const [phone, setPhone] = useState(initial?.phone ?? defaults.phone);
+  // Controlled so each level can clear the ones below it; an edit re-opens on
+  // whatever the address was saved with.
+  const [loc, setLoc] = useState({
+    divisionId: initial?.divisionId ?? null,
+    districtId: initial?.districtId ?? null,
+    upazilaId: initial?.upazilaId ?? null,
+  });
+
+  const selectedDivision = locations.divisions.find((d) => d.id === loc.divisionId);
+  const selectedDistrict = selectedDivision?.districts.find((d) => d.id === loc.districtId);
+  const selectedUpazila = selectedDistrict?.upazilas.find((u) => u.id === loc.upazilaId);
+  // Preview only — the server re-derives the zone when the address is saved.
+  const pickedCharge = selectedDistrict
+    ? (selectedUpazila ?? selectedDistrict)
+    : null;
 
   const field =
     "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100";
@@ -283,24 +323,99 @@ function AddressForm({
           />
         </div>
 
-        <div>
-          <label htmlFor="shippingZoneId" className={labelCls}>
-            Delivery area
-          </label>
-          <select
-            id="shippingZoneId"
-            name="shippingZoneId"
-            defaultValue={initial?.shippingZoneId ?? ""}
-            className={field}
-          >
-            <option value="">Choose at checkout</option>
-            {zones.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name} — {formatTaka(z.charge)}
+        {/* Delivery location — the charge follows from it, so there is no
+            separate "delivery area" to keep in sync. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="divisionId" className={labelCls}>
+              Division
+            </label>
+            <select
+              id="divisionId"
+              name="divisionId"
+              required
+              value={loc.divisionId ?? ""}
+              onChange={(e) =>
+                setLoc({
+                  divisionId: e.target.value === "" ? null : Number(e.target.value),
+                  districtId: null,
+                  upazilaId: null,
+                })
+              }
+              className={field}
+            >
+              <option value="">Select division</option>
+              {locations.divisions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="districtId" className={labelCls}>
+              District
+            </label>
+            <select
+              id="districtId"
+              name="districtId"
+              required
+              disabled={!selectedDivision}
+              value={loc.districtId ?? ""}
+              onChange={(e) =>
+                setLoc((prev) => ({
+                  ...prev,
+                  districtId: e.target.value === "" ? null : Number(e.target.value),
+                  upazilaId: null,
+                }))
+              }
+              className={field}
+            >
+              <option value="">
+                {selectedDivision ? "Select district" : "Choose a division first"}
               </option>
-            ))}
-          </select>
+              {(selectedDivision?.districts ?? []).map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {(selectedDistrict?.upazilas.length ?? 0) > 0 && (
+          <div>
+            <label htmlFor="upazilaId" className={labelCls}>
+              Upazila / Thana
+            </label>
+            <select
+              id="upazilaId"
+              name="upazilaId"
+              value={loc.upazilaId ?? ""}
+              onChange={(e) =>
+                setLoc((prev) => ({
+                  ...prev,
+                  upazilaId: e.target.value === "" ? null : Number(e.target.value),
+                }))
+              }
+              className={field}
+            >
+              <option value="">Select upazila / thana</option>
+              {(selectedDistrict?.upazilas ?? []).map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {pickedCharge && (
+          <p className="rounded-xl bg-brand-50 px-3.5 py-2.5 text-xs font-semibold text-brand-700">
+            {pickedCharge.zoneName} · delivery {formatTaka(pickedCharge.charge)}
+          </p>
+        )}
 
         <label className="flex items-center gap-2.5 text-sm text-gray-700">
           <input

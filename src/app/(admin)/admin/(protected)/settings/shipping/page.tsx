@@ -7,10 +7,28 @@ import { removeShippingZone } from "./actions";
 
 export const metadata = { title: "Shipping Zones — FZ-Mart Admin" };
 
+/**
+ * How many delivery locations price against a zone. Shown per row so the blast
+ * radius of a reprice (or a delete) is visible before it is made.
+ */
+function usedBy(zone: {
+  _count: { divisions: number; districts: number; upazilas: number };
+}): string {
+  const parts = [
+    zone._count.divisions && `${zone._count.divisions} division${zone._count.divisions === 1 ? "" : "s"}`,
+    zone._count.districts && `${zone._count.districts} district${zone._count.districts === 1 ? "" : "s"}`,
+    zone._count.upazilas && `${zone._count.upazilas} upazila${zone._count.upazilas === 1 ? "" : "s"}`,
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ") : "no locations";
+}
+
 export default async function AdminShippingZonesPage() {
   const zones = await listAllShippingZones();
 
   const active = zones.filter((z) => z.isActive).length;
+  // Without an active fallback, any location whose chain names no zone cannot
+  // be priced at all — checkout refuses the order. Worth saying loudly.
+  const hasFallback = zones.some((z) => z.isFallback && z.isActive);
   const stats = [
     { label: "Total zones", value: zones.length, sub: "configured", tone: "neutral" as const },
     { label: "Active", value: active, sub: "available at checkout", tone: "brand" as const },
@@ -23,7 +41,11 @@ export default async function AdminShippingZonesPage() {
         <div>
           <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">Shipping Zones</h1>
           <p className="mt-1 text-[14.5px] text-stone-500">
-            Delivery charges offered at checkout — {zones.length} total.
+            The delivery rates —{" "}
+            <Link href="/admin/settings/locations" className="underline">
+              delivery locations
+            </Link>{" "}
+            map to them. {zones.length} total.
           </p>
         </div>
         <Link
@@ -40,6 +62,17 @@ export default async function AdminShippingZonesPage() {
           <Icon name="plus" size={20} />
         </Link>
       </div>
+
+      {!hasFallback && zones.length > 0 && (
+        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5">
+          <p className="text-[13.5px] font-bold text-red-800">No fallback zone set</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-red-700">
+            Customers in any location that has no zone of its own — and no zone on its district or
+            division — cannot check out. Edit a zone and tick{" "}
+            <b>Use as the fallback zone</b> to fix it.
+          </p>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -82,7 +115,7 @@ export default async function AdminShippingZonesPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50 text-left">
-                    {["Zone", "Charge", "Status", ""].map((h, i) => (
+                    {["Zone", "Charge", "Used by", "Status", ""].map((h, i) => (
                       <th key={i} className="px-5 py-3.5 text-[11.5px] font-bold uppercase tracking-wider text-stone-400">
                         {h}
                       </th>
@@ -92,8 +125,19 @@ export default async function AdminShippingZonesPage() {
                 <tbody>
                   {zones.map((zone) => (
                     <tr key={zone.id} className="border-b border-stone-100 last:border-0 hover:bg-stone-50/60">
-                      <td className="px-5 py-4 text-[14.5px] font-semibold text-stone-900">{zone.name}</td>
+                      <td className="px-5 py-4 text-[14.5px] font-semibold text-stone-900">
+                        {zone.name}
+                        {zone.isFallback && (
+                          <span
+                            className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
+                            title="Charged when a location has no zone of its own"
+                          >
+                            Fallback
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-4 text-[14px] text-stone-600">{formatTaka(zone.charge)}</td>
+                      <td className="px-5 py-4 text-[13px] text-stone-500">{usedBy(zone)}</td>
                       <td className="px-5 py-4">
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-semibold ${
@@ -126,7 +170,14 @@ export default async function AdminShippingZonesPage() {
               {zones.map((zone) => (
                 <div key={zone.id} className="rounded-xl border border-stone-200 bg-white p-4 shadow-soft">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-[15px] font-semibold text-stone-900">{zone.name}</p>
+                    <p className="text-[15px] font-semibold text-stone-900">
+                      {zone.name}
+                      {zone.isFallback && (
+                        <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                          Fallback
+                        </span>
+                      )}
+                    </p>
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${
                         zone.isActive ? "bg-emerald-50 text-emerald-600" : "bg-stone-100 text-stone-500"
@@ -138,6 +189,7 @@ export default async function AdminShippingZonesPage() {
                   <p className="mt-2 text-[14px] text-stone-600">
                     Charge <span className="font-semibold text-stone-900">{formatTaka(zone.charge)}</span>
                   </p>
+                  <p className="mt-1 text-[12.5px] text-stone-400">{usedBy(zone)}</p>
                   <div className="mt-3 flex items-center gap-2 border-t border-stone-100 pt-3">
                     <Link
                       href={`/admin/settings/shipping/${zone.id}/edit`}

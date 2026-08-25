@@ -38,6 +38,7 @@
   ],
   "exclude": [
     "node_modules",
-    "src-homepage"
+    "src-homepage",
+    "extra"
   ]
 }

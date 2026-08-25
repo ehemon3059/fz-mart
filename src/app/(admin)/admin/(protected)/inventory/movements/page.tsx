@@ -12,6 +12,7 @@ const ALL_TYPES: StockMovementType[] = [
   "DAMAGE",
   "PURCHASE",
   "ADJUSTMENT",
+  "OPENING",
 ];
 
 function startOfDay(v: string): Date | undefined {

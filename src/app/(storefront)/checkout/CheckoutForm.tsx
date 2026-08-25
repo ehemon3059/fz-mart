@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import type { PaymentMethod, ShippingZone } from "@prisma/client";
+import type { PaymentMethod } from "@prisma/client";
 import { useCartStore, cartSubtotal, cartLineKey, type CartItem } from "@/lib/cart-store";
 import { formatTaka } from "@/lib/money";
 import { CashIcon, CheckIcon, TrashIcon } from "@/components/storefront/icons";
@@ -12,9 +12,15 @@ import { recordCheckoutStart } from "../funnel-actions";
 import { getFbAttribution } from "@/lib/fb-attribution";
 import { readUtmAttribution, type UtmAttribution } from "@/lib/utm-attribution";
 import { summarizeAddress, type SavedAddress } from "@/lib/customer-address";
+import LocationPicker, {
+  chargeForSelection,
+  type LocationSelection,
+} from "@/components/storefront/LocationPicker";
+import type { LocationTree } from "@/server/settings/locations";
 
 interface Props {
-  zones: ShippingZone[];
+  /** Admin-managed Division → District → Upazila tree, priced server-side. */
+  locations: LocationTree;
   /** Which payment choices the admin has enabled — nothing secret in here. */
   paymentOptions: CheckoutPaymentOptions;
   /** When set, checkout is for this single product only — bypasses the cart. */
@@ -37,7 +43,7 @@ const NEW_ADDRESS = "new";
 const NOTE_MAX = 90;
 
 export default function CheckoutForm({
-  zones,
+  locations,
   paymentOptions,
   buyNowProductId,
   buyNowVariantId,
@@ -77,9 +83,13 @@ export default function CheckoutForm({
   const [saveNewAddress, setSaveNewAddress] = useState(false);
   const canSaveMore = loggedIn && savedAddresses.length < maxAddresses;
 
-  const [zoneId, setZoneId] = useState<number | "">(
-    defaultAddress?.shippingZoneId ?? zones[0]?.id ?? "",
-  );
+  // The delivery location drives the charge. Seeded from the default saved
+  // address so a returning customer lands on their usual location already priced.
+  const [location, setLocation] = useState<LocationSelection>({
+    divisionId: defaultAddress?.divisionId ?? null,
+    districtId: defaultAddress?.districtId ?? null,
+    upazilaId: defaultAddress?.upazilaId ?? null,
+  });
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
   const [provider, setProvider] = useState(paymentOptions.providers[0]?.key ?? "");
   const [note, setNote] = useState("");
@@ -172,15 +182,24 @@ export default function CheckoutForm({
       address: picked.address,
       customerEmail: prev.customerEmail,
     }));
-    // A saved zone wins; otherwise keep whatever the customer already picked.
-    if (picked.shippingZoneId != null && zones.some((z) => z.id === picked.shippingZoneId)) {
-      setZoneId(picked.shippingZoneId);
+    // Restore the saved location so the dropdowns and the charge match the
+    // address the customer just picked.
+    if (picked.divisionId != null && picked.districtId != null) {
+      setLocation({
+        divisionId: picked.divisionId,
+        districtId: picked.districtId,
+        upazilaId: picked.upazilaId,
+      });
     }
   }
 
   const subtotal = cartSubtotal(checkoutItems);
-  const selectedZone = zones.find((z) => z.id === zoneId);
-  const deliveryCharge = selectedZone?.charge ?? 0;
+  // Mirrors the server's resolution so the summary shows the real charge as
+  // soon as a district is picked; the server re-resolves at submit regardless.
+  const { charge: deliveryCharge, zoneName, resolved: locationPriced } = chargeForSelection(
+    locations,
+    location,
+  );
   const discount = coupon?.discount ?? 0;
   const total = subtotal + deliveryCharge - discount;
 
@@ -242,7 +261,10 @@ export default function CheckoutForm({
     payload.set("fullName", String(formData.get("customerName") ?? ""));
     payload.set("phone", String(formData.get("customerPhone") ?? ""));
     payload.set("address", String(formData.get("address") ?? ""));
-    payload.set("shippingZoneId", String(formData.get("shippingZoneId") ?? ""));
+    // The zone is derived server-side from these, never sent from here.
+    payload.set("divisionId", String(formData.get("divisionId") ?? ""));
+    payload.set("districtId", String(formData.get("districtId") ?? ""));
+    payload.set("upazilaId", String(formData.get("upazilaId") ?? ""));
     payload.set("isDefault", savedAddresses.length === 0 ? "true" : "false");
     try {
       await addAddress(payload);
@@ -443,6 +465,15 @@ export default function CheckoutForm({
               />
             </div>
           </div>
+          {/* Location first, then the street line: narrowing down before
+              writing the address is the order Bangladeshi shoppers expect, and
+              it means the delivery charge is already on screen. */}
+          <LocationPicker
+            tree={locations}
+            value={location}
+            onChange={setLocation}
+          />
+
           <div className="co-field">
             <textarea
               name="address"
@@ -454,6 +485,16 @@ export default function CheckoutForm({
               onChange={(e) => setShippingField("address", e.target.value)}
             />
           </div>
+
+          {/* The resolved zone, named — so the customer can see WHY the charge
+              is what it is (e.g. Savar billed as sub-urban, not inside-Dhaka). */}
+          {locationPriced && zoneName && (
+            <div className="co-field">
+              <span className="co-zone-badge">
+                {zoneName} · {formatTaka(deliveryCharge)}
+              </span>
+            </div>
+          )}
           <div className="co-field">
             <input
               name="customerEmail"
@@ -499,36 +540,6 @@ export default function CheckoutForm({
               this order only.
             </p>
           )}
-          <div className="co-field">
-            <fieldset className="co-zones">
-              <legend className="co-zones-lg">Delivery location</legend>
-              {/* Submitted value for the server action — kept in sync with the
-                  chosen radio below. */}
-              <input type="hidden" name="shippingZoneId" value={zoneId} />
-              <div className="co-zone-list">
-                {zones.map((zone) => {
-                  const checked = zone.id === zoneId;
-                  return (
-                    <label
-                      key={zone.id}
-                      className={"co-zone" + (checked ? " is-checked" : "")}
-                    >
-                      <input
-                        type="radio"
-                        name="shippingZoneRadio"
-                        value={zone.id}
-                        checked={checked}
-                        onChange={() => setZoneId(zone.id)}
-                      />
-                      <span className="co-zone-dot" aria-hidden="true" />
-                      <span className="co-zone-name">{zone.name}</span>
-                      <span className="co-zone-charge">{formatTaka(zone.charge)}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-          </div>
         </div>
       </div>
 
@@ -614,7 +625,9 @@ export default function CheckoutForm({
             </div>
             <div className="r">
               <span>Delivery cost</span>
-              <span>{formatTaka(deliveryCharge)}</span>
+              <span>
+                {locationPriced ? formatTaka(deliveryCharge) : "Select your location"}
+              </span>
             </div>
             {coupon && (
               <div className="r" style={{ color: "var(--brand-dark)" }}>
@@ -713,9 +726,18 @@ export default function CheckoutForm({
             <p className="co-err" role="alert">{error}</p>
           )}
 
-          <button type="submit" className="co-place" disabled={pending || !agree}>
+          <button
+            type="submit"
+            className="co-place"
+            disabled={pending || !agree || !locationPriced}
+          >
             {pending ? "Placing order…" : "PLACE ORDER"}
           </button>
+          {!locationPriced && (
+            <p style={{ fontSize: 12, color: "var(--ink-mute)", marginTop: 8, textAlign: "center" }}>
+              Choose your division and district to see the delivery charge.
+            </p>
+          )}
         </div>
       </div>
     </form>

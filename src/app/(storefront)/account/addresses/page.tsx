@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentCustomer } from "@/lib/customer-session";
-import { prisma } from "@/lib/prisma";
 import { listAddresses, MAX_ADDRESSES } from "@/server/customers/addresses";
+import { getLocationTree } from "@/server/settings/locations";
 import { getProfile } from "@/server/customers/profile";
 import AddressBook from "./AddressBook";
 
@@ -11,13 +11,9 @@ export default async function AddressesPage() {
   const session = await getCurrentCustomer();
   if (!session) redirect("/login?next=/account/addresses");
 
-  const [addresses, zones, profile] = await Promise.all([
+  const [addresses, locations, profile] = await Promise.all([
     listAddresses(session.customerId),
-    prisma.shippingZone.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, charge: true },
-    }),
+    getLocationTree(),
     getProfile(session.customerId),
   ]);
 
@@ -29,10 +25,13 @@ export default async function AddressesPage() {
         fullName: a.fullName,
         phone: a.phone,
         address: a.address,
+        divisionId: a.divisionId,
+        districtId: a.districtId,
+        upazilaId: a.upazilaId,
         shippingZoneId: a.shippingZoneId,
         isDefault: a.isDefault,
       }))}
-      zones={zones}
+      locations={locations}
       max={MAX_ADDRESSES}
       // Prefill a brand-new address from the profile — most people's first
       // address is their own.

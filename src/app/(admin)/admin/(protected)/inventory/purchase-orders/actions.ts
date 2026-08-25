@@ -15,6 +15,12 @@ import {
   PurchasingError,
   type PurchaseOrderLineInput,
 } from "@/server/purchasing";
+import {
+  createProduct,
+  getProductById,
+  ProductPublishError,
+  ProductStockError,
+} from "@/server/products/admin";
 
 export interface ActionResult {
   error?: string;
@@ -197,4 +203,114 @@ export async function receiveAction(id: number, formData: FormData): Promise<Act
   revalidatePath("/admin/inventory");
   revalidatePath("/admin/inventory/movements");
   return { success: "Received — stock updated." };
+}
+
+// ── Quick product creation, from inside a purchase order ────────────────────
+
+/** One option of a quick-created product, as the picker will show it. */
+export interface QuickVariant {
+  id: number;
+  label: string;
+}
+
+export interface QuickProductResult {
+  error?: string;
+  product?: {
+    id: number;
+    name: string;
+    purchaseCost: number;
+    variants: QuickVariant[];
+  };
+}
+
+/**
+ * Create a DRAFT product from the purchase-order form.
+ *
+ * A purchase-order line needs a product row to point at, so ordering stock for
+ * something new used to mean leaving the form, inventing a price and a stock
+ * figure the product doesn't have yet, and coming back. This captures only what
+ * a PO actually needs — a name, a category, and the options being ordered —
+ * and leaves the product DRAFT so it can't reach the storefront until someone
+ * photographs and prices it.
+ *
+ * Opening stock is deliberately zero: the units are being ORDERED, not held.
+ * They arrive through the ledger when the PO is received, which is the whole
+ * point of ordering them here.
+ */
+export async function quickCreateProductAction(formData: FormData): Promise<QuickProductResult> {
+  const admin = await requirePermission("inventory");
+
+  const name = String(formData.get("name") ?? "").trim();
+  const categoryId = Number(formData.get("categoryId"));
+  if (!name) return { error: "Give the product a name." };
+  if (!categoryId) return { error: "Choose a category." };
+
+  // Colours and sizes arrive as comma-separated text — the fastest thing to
+  // type while you have a supplier on the phone. The full matrix editor is on
+  // the product form, for when the product is finished.
+  const split = (key: string) =>
+    String(formData.get(key) ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  const colors = [...new Set(split("colors"))];
+  const sizes = [...new Set(split("sizes"))];
+
+  // Every combination that was named. With neither list this is a simple
+  // product and carries no variants at all.
+  const variants: { colorName: string | null; size: string | null; price: number; stock: number }[] = [];
+  if (colors.length > 0 || sizes.length > 0) {
+    const colorList = colors.length > 0 ? colors : [null];
+    const sizeList = sizes.length > 0 ? sizes : [null];
+    for (const c of colorList) {
+      for (const s of sizeList) {
+        variants.push({ colorName: c, size: s, price: 0, stock: 0 });
+      }
+    }
+  }
+
+  try {
+    const created = await createProduct(
+      {
+        name,
+        categoryId,
+        // Not priced yet — that is what finishing the product is for. The
+        // publish guard blocks ACTIVE until a real price and a photo exist.
+        price: 0,
+        stock: 0,
+        purchaseCost: takaToPaisa(Number(formData.get("purchaseCost")) || 0),
+        status: "DRAFT",
+        variants: variants.length > 0 ? variants : undefined,
+        colors: colors.map((c) => ({ name: c, hexCode: "#000000" })),
+      },
+      admin.username,
+    );
+
+    const fresh = await getProductById(created.id);
+
+    await logActivity({
+      adminId: admin.id,
+      actorName: admin.username,
+      action: "product.quick_create",
+      detail: `${name} (draft, from purchase order)`,
+    });
+
+    return {
+      product: {
+        id: created.id,
+        name: created.name,
+        purchaseCost: created.purchaseCost,
+        variants: (fresh?.variants ?? []).map((v) => ({
+          id: v.id,
+          label: [v.colorName, v.size].filter(Boolean).join(" / ") || "Option",
+        })),
+      },
+    };
+  } catch (err) {
+    if (err instanceof ProductPublishError || err instanceof ProductStockError) {
+      return { error: err.message };
+    }
+    throw err;
+  }
 }

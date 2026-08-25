@@ -26,7 +26,17 @@ const productWithImages = {
   // back to these (see resolvePrimaryImage).
   variants: {
     orderBy: { sortOrder: "asc" },
-    select: { price: true, discountPrice: true, priceColor: true, imageUrl: true },
+    // stock/reserved are here so a card can judge availability from the
+    // options that actually hold the units -- Product.stock is vestigial for a
+    // product with variants and goes stale on the first PO receipt.
+    select: {
+      price: true,
+      discountPrice: true,
+      priceColor: true,
+      imageUrl: true,
+      stock: true,
+      reserved: true,
+    },
   },
   colors: { orderBy: { sortOrder: "asc" }, select: { imageUrl: true } },
   // Lets storefront cards know whether the shopper must pick a variant/color

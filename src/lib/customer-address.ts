@@ -9,6 +9,10 @@ export interface SavedAddress {
   fullName: string;
   phone: string;
   address: string;
+  /** The saved Division/District/Upazila, so the picker re-opens on it. */
+  divisionId: number | null;
+  districtId: number | null;
+  upazilaId: number | null;
   shippingZoneId: number | null;
   isDefault: boolean;
 }

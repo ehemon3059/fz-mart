@@ -55,17 +55,25 @@ export function StockDisplay({ stock }: { stock: number }) {
   return <span className="text-[14px] font-medium text-stone-700">{stock}</span>;
 }
 
-export function StatusPill({ status }: { status: "ACTIVE" | "INACTIVE" }) {
-  const active = status === "ACTIVE";
+// Three states, three readings. DRAFT is amber rather than grey because it is
+// a to-do, not a resting state: goods may already have arrived against it.
+const STATUS_STYLE = {
+  ACTIVE: { cls: "bg-brand-50 text-brand-700", dot: "bg-brand-500", label: "Active" },
+  INACTIVE: { cls: "bg-stone-100 text-stone-500", dot: "bg-stone-400", label: "Inactive" },
+  DRAFT: { cls: "bg-warning-soft text-warning-fg", dot: "bg-warning", label: "Draft" },
+} as const;
+
+export function StatusPill({ status }: { status: "ACTIVE" | "INACTIVE" | "DRAFT" }) {
+  const s = STATUS_STYLE[status] ?? STATUS_STYLE.INACTIVE;
   return (
     <span
       className={[
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold",
-        active ? "bg-brand-50 text-brand-700" : "bg-stone-100 text-stone-500",
+        s.cls,
       ].join(" ")}
     >
-      <span className={"h-1.5 w-1.5 rounded-full " + (active ? "bg-brand-500" : "bg-stone-400")} />
-      {active ? "Active" : "Inactive"}
+      <span className={"h-1.5 w-1.5 rounded-full " + s.dot} />
+      {s.label}
     </span>
   );
 }

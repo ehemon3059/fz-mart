@@ -23,6 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
   DAMAGE: "Damaged",
   PURCHASE: "Received",
   ADJUSTMENT: "Correction",
+  OPENING: "Opening stock",
 };
 
 // Manual stock corrections + the full movement history for a product. The

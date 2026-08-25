@@ -20,6 +20,8 @@ interface Props {
   rows: VariantRow[];
   /** The bulk price (taka) cells are compared against; "" = no bulk price set. */
   bulkPrice: string;
+  /** Row keys whose stock is owned by the ledger and so is read-only here. */
+  lockedStockKeys: Set<string>;
   onChangeCell: (color: string, size: string, patch: Partial<VariantRow>) => void;
   onToggleCell: (color: string, size: string) => void;
 }
@@ -29,6 +31,7 @@ export default function VariantMatrix({
   sizes,
   rows,
   bulkPrice,
+  lockedStockKeys,
   onChangeCell,
   onToggleCell,
 }: Props) {
@@ -120,16 +123,27 @@ export default function VariantMatrix({
                         </label>
                         <label className="mt-0.5 flex items-center gap-1 border-t border-stone-100 pt-0.5">
                           <Icon name="box" size={10} className="shrink-0 text-stone-300" />
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={row.stock}
-                            onChange={(e) => onChangeCell(c?.name ?? "", s, { stock: e.target.value })}
-                            placeholder="0"
-                            aria-label={`Stock for ${[c?.name, s].filter(Boolean).join(" / ") || "this option"}`}
-                            className="w-full min-w-0 bg-transparent py-0.5 text-[12px] text-stone-600 outline-none"
-                          />
+                          {lockedStockKeys.has(rowKey(c?.name ?? "", s)) ? (
+                            // Ledger-owned: shown, not typed. Changing it here
+                            // would move stock with nothing to explain why.
+                            <span
+                              title="Stock comes from the ledger — receive a purchase order or use the Stock panel"
+                              className="w-full min-w-0 py-0.5 text-[12px] tabular-nums text-stone-400"
+                            >
+                              {row.stock || "0"} in stock
+                            </span>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={row.stock}
+                              onChange={(e) => onChangeCell(c?.name ?? "", s, { stock: e.target.value })}
+                              placeholder="0"
+                              aria-label={`Opening stock for ${[c?.name, s].filter(Boolean).join(" / ") || "this option"}`}
+                              className="w-full min-w-0 bg-transparent py-0.5 text-[12px] text-stone-600 outline-none"
+                            />
+                          )}
                         </label>
                       </div>
                     ) : (

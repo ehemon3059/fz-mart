@@ -13,6 +13,7 @@ import { resolveProductImages, resolvePrimaryImage } from "@/lib/product-images"
 import AddToCartPanel from "@/components/storefront/AddToCartPanel";
 import ProductGallery from "@/components/storefront/ProductGallery";
 import { VariantImageProvider } from "@/components/storefront/product/VariantImageContext";
+import { PurchaseIntentProvider } from "@/components/storefront/product/PurchaseIntentContext";
 import ReviewsSection from "@/components/storefront/ReviewsSection";
 import Breadcrumb from "@/components/storefront/product/Breadcrumb";
 import GalleryBadges from "@/components/storefront/product/GalleryBadges";
@@ -194,7 +195,11 @@ export default async function ProductPage({
           : hasDiscount) && <OfferStrip text={product.offerText} className="mb-6" />}
 
       {/* ── hero: gallery + buy box ──
-          Wrapped so picking an option in the buy box swaps the gallery photo. */}
+          VariantImageProvider: picking an option in the buy box swaps the
+          gallery photo. PurchaseIntentProvider reaches further down the page —
+          it also wraps the sticky mobile bar, so that bar's Buy Now can run the
+          buy box's real purchase once colour/size are chosen. */}
+      <PurchaseIntentProvider>
       <VariantImageProvider>
       <div className="grid gap-6 lg:grid-cols-2 lg:gap-10">
         <div className="lg:sticky lg:top-6 lg:self-start">
@@ -278,7 +283,14 @@ export default async function ProductPage({
             zones={shippingZones.map((z) => ({
               name: z.name,
               charge: z.charge,
-              eta: /dhaka/i.test(z.name) && !/outside/i.test(z.name) ? "1–2 business days" : "2–4 business days",
+              // Zone names are admin-written and usually Bangla, so both scripts
+              // are matched — an ASCII-only test gave every Bangla-named zone
+              // the slower ETA.
+              eta:
+                (/dhaka/i.test(z.name) || z.name.includes("ঢাকা")) &&
+                !/outside|আউটসাইড/i.test(z.name)
+                  ? "1–2 business days"
+                  : "2–4 business days",
               note: "",
             }))}
           />
@@ -334,6 +346,7 @@ export default async function ProductPage({
         priceColor={headlinePriceColor}
         buyBoxId="buy-box"
       />
+      </PurchaseIntentProvider>
     </div>
   );
 }

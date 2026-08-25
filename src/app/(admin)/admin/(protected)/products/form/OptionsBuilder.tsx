@@ -29,6 +29,14 @@ interface Props {
   colors: ColorRow[];
   rows: VariantRow[];
   baseSku: string;
+  /**
+   * Row keys whose stock is owned by the ledger — every option that already
+   * existed when this form loaded. Their level changes through a purchase-order
+   * receipt or an audited adjustment, never by re-saving this form, so their
+   * stock is shown rather than typed. An option added since load is absent from
+   * this set and still takes an opening figure.
+   */
+  lockedStockKeys: Set<string>;
   /** Sizes offered by the resolved size guide, in the guide's order. */
   guideValues: string[];
   guideName: string | null;
@@ -50,6 +58,7 @@ export default function OptionsBuilder({
   colors,
   rows,
   baseSku,
+  lockedStockKeys,
   guideValues,
   guideName,
   error,
@@ -144,6 +153,11 @@ export default function OptionsBuilder({
   };
 
   /* ── bulk ── */
+  // A locked row's stock is a fact about the warehouse, not a form value, so no
+  // bulk control may touch it. Everything below therefore edits price freely
+  // and stock only where the option doesn't exist in the ledger yet.
+  const canSetStock = (r: VariantRow) => !lockedStockKeys.has(rowKey(r.color, r.size));
+
   const applyBulk = () => {
     const price = bulkPrice.trim();
     const stock = bulkStock.trim();
@@ -152,7 +166,7 @@ export default function OptionsBuilder({
       rows.map((r) => ({
         ...r,
         price: price ? price : r.price,
-        stock: stock ? stock : r.stock,
+        stock: stock && canSetStock(r) ? stock : r.stock,
       })),
     );
   };
@@ -166,10 +180,13 @@ export default function OptionsBuilder({
         price: !r.price.trim() && price ? price : r.price,
         // A typed 0 means "sold out", not "not filled in yet" — only a blank
         // is a gap. New rows start blank, so generating then filling works.
-        stock: !r.stock.trim() && stock ? stock : r.stock,
+        stock: !r.stock.trim() && stock && canSetStock(r) ? stock : r.stock,
       })),
     );
   };
+
+  /** Are there any rows whose opening stock can still be typed? */
+  const anyOpenStock = rows.some(canSetStock);
 
   const summary = summarise(rows);
 
@@ -218,20 +235,23 @@ export default function OptionsBuilder({
               />
             </span>
           </label>
-          <label className="min-w-0">
-            <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
-              Stock for all
-            </span>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={bulkStock}
-              onChange={(e) => setBulkStock(e.target.value)}
-              placeholder="0"
-              className="w-20 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-[13px] text-stone-800 outline-none focus:border-brand-500"
-            />
-          </label>
+          {anyOpenStock && (
+            <label className="min-w-0">
+              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
+                Opening stock
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={bulkStock}
+                onChange={(e) => setBulkStock(e.target.value)}
+                placeholder="0"
+                title="Only applies to options that aren't in the stock ledger yet"
+                className="w-20 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-[13px] text-stone-800 outline-none focus:border-brand-500"
+              />
+            </label>
+          )}
           <button
             type="button"
             onClick={fillEmpty}
@@ -275,7 +295,14 @@ export default function OptionsBuilder({
         <p className="mt-2 text-[11.5px] text-stone-400">
           “Fill blanks” only touches options you haven&apos;t priced yet. SKUs are built as{" "}
           <span className="font-semibold text-stone-500">ROOT-COLOUR-SIZE</span> and never rewritten once set, so
-          re-saving a product can&apos;t renumber your inventory.
+          re-saving a product can&apos;t renumber your inventory.{" "}
+          {anyOpenStock ? (
+            <>Opening stock applies only to options that aren&apos;t in the stock ledger yet.</>
+          ) : (
+            <>
+              Stock isn&apos;t edited here — receive a purchase order, or use the Stock panel to correct a count.
+            </>
+          )}
         </p>
       </div>
 
@@ -319,6 +346,7 @@ export default function OptionsBuilder({
               sizes={withSizes ? sizes : []}
               rows={rows}
               bulkPrice={bulkPrice}
+              lockedStockKeys={lockedStockKeys}
               onChangeCell={changeCell}
               onToggleCell={toggleCell}
             />
@@ -330,6 +358,7 @@ export default function OptionsBuilder({
               imageError={null}
               showErrors={false}
               isBusy={isRowBusy}
+              lockedStockKeys={lockedStockKeys}
               onChange={(idx, patch) => onRowsChange(rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)))}
               onAdd={() => onRowsChange([...rows, blankRow(null, "")])}
               onRemove={(idx) => onRowsChange(rows.filter((_, i) => i !== idx))}

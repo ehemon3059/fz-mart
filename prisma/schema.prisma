@@ -287,9 +287,26 @@ model ProductVariant {
   @@index([productId, sortOrder])
 }
 
+// Where a product is in its life, which is not the same question as whether it
+// is switched on:
+//
+//   DRAFT     not finished. Created from a purchase order so stock can be
+//             ordered against it before anyone has photographed or priced it.
+//             Never reaches the storefront, and cannot be published until it
+//             has an image and a price.
+//   ACTIVE    live on the storefront.
+//   INACTIVE  finished, but deliberately hidden — end of season, out of range.
+//
+// DRAFT and INACTIVE are kept apart on purpose: "not ready yet" and "ready but
+// withdrawn" call for opposite actions, and one shared status would hide the
+// received goods that nobody can sell yet.
+//
+// Every storefront, feed, sitemap and checkout query asks FOR `ACTIVE` rather
+// than excluding `INACTIVE`, so DRAFT is invisible to all of them by default.
 enum ProductStatus {
   ACTIVE
   INACTIVE
+  DRAFT
 }
 
 model ProductImage {
@@ -485,6 +502,12 @@ model CustomerAddress {
   fullName       String
   phone          String
   address        String        @db.Text
+  // Saved delivery location, by id so the address book re-opens on the exact
+  // dropdown selections. Nullable and SetNull-on-delete: a saved address keeps
+  // working (falling back to a re-pick at checkout) if a location is removed.
+  divisionId     Int?
+  districtId     Int?
+  upazilaId      Int?
   // Optional: the zone list is admin-managed and can change, so a saved
   // address keeps working even if its zone is later deleted.
   shippingZoneId Int?
@@ -494,6 +517,9 @@ model CustomerAddress {
   updatedAt      DateTime      @updatedAt
   customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   shippingZone   ShippingZone? @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
+  divisionRef    Division?     @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  districtRef    District?     @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  upazilaRef     Upazila?      @relation(fields: [upazilaId], references: [id], onDelete: SetNull)
 
   @@index([customerId])
 }
@@ -532,6 +558,14 @@ model Order {
   // delivery timing, etc.). Distinct from the admin-only `notes` relation.
   customerNote       String?           @db.Text
   shippingZoneId     Int?
+  // ── Delivery location snapshot ── the Division/District/Upazila the customer
+  // picked, stored as TEXT rather than FKs on purpose: a courier label and an
+  // order's history must stay exactly as placed even if the admin later renames
+  // a district, remaps its zone, or deletes it outright. `address` remains the
+  // free-text house/road line the customer typed.
+  divisionName       String?
+  districtName       String?
+  upazilaName        String?
   deliveryCharge     Int               @default(0)
   subtotal           Int
   total              Int
@@ -736,16 +770,90 @@ model OrderNote {
 // ─────────────────────────────────────────────────────────────
 
 model ShippingZone {
-  id        Int               @id @default(autoincrement())
-  name      String
-  charge    Int               @default(0)
-  isActive  Boolean           @default(true)
-  sortOrder Int               @default(0)
-  createdAt DateTime          @default(now())
-  orders    Order[]
-  addresses CustomerAddress[]
+  id         Int               @id @default(autoincrement())
+  name       String
+  charge     Int               @default(0)
+  isActive   Boolean           @default(true)
+  sortOrder  Int               @default(0)
+  // Exactly one zone may be the fallback: the charge used when a customer's
+  // chosen location (or any of its ancestors) has no zone of its own. Keeps
+  // checkout from ever landing on "no charge known" as new districts are added.
+  isFallback Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+  orders     Order[]
+  addresses  CustomerAddress[]
+  divisions  Division[]
+  districts  District[]
+  upazilas   Upazila[]
 
   @@index([isActive, sortOrder])
+  @@index([isFallback])
+}
+
+// ── Delivery locations (Division → District → Upazila) ──
+//
+// The customer picks a location as three cascading dropdowns at checkout; the
+// delivery charge is resolved MOST-SPECIFIC-FIRST by walking upazila → district
+// → division → fallback zone. That single rule expresses the real courier
+// pricing: "Dhaka district is inside-city rate, EXCEPT Savar/Keraniganj/Dhamrai,
+// which are sub-urban" is just an upazila-level zone overriding its district's.
+//
+// Every name and every mapping is admin-editable, so adding a district or
+// repricing a zone is a settings change, never a code change. shippingZoneId is
+// nullable at all three levels — a level with no zone simply defers to its
+// parent, which is what makes "set the division once" the common case.
+
+model Division {
+  id             Int               @id @default(autoincrement())
+  // Bangla display name shown in the checkout dropdown ("ঢাকা").
+  name           String
+  // Stable ASCII key used in URLs/imports and to keep seeds idempotent.
+  slug           String            @unique
+  shippingZoneId Int?
+  isActive       Boolean           @default(true)
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  shippingZone   ShippingZone?     @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
+  districts      District[]
+  addresses      CustomerAddress[]
+
+  @@index([isActive, sortOrder])
+}
+
+model District {
+  id             Int               @id @default(autoincrement())
+  divisionId     Int
+  name           String
+  slug           String            @unique
+  shippingZoneId Int?
+  isActive       Boolean           @default(true)
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  division       Division          @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  shippingZone   ShippingZone?     @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
+  upazilas       Upazila[]
+  addresses      CustomerAddress[]
+
+  @@index([divisionId, isActive, sortOrder])
+}
+
+model Upazila {
+  id             Int               @id @default(autoincrement())
+  districtId     Int
+  name           String
+  slug           String            @unique
+  shippingZoneId Int?
+  isActive       Boolean           @default(true)
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  district       District          @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  shippingZone   ShippingZone?     @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
+  addresses      CustomerAddress[]
+
+  @@index([districtId, isActive, sortOrder])
 }
 
 model AdminUser {
@@ -1381,6 +1489,11 @@ model PurchaseOrderLine {
 //   PURCHASE        stock received from a supplier (positive)
 //   ADJUSTMENT      a stock-take correction — the count was simply wrong
 //                   (either sign). Carries no cost implication of its own.
+//   OPENING         the units a product was already holding when it was first
+//                   entered into the system (positive). Distinct from PURCHASE
+//                   because no supplier order explains it, and from ADJUSTMENT
+//                   because nothing was mis-counted — this is the starting
+//                   balance, and it can only ever be written once, at creation.
 enum StockMovementType {
   SALE
   CANCEL_RESTOCK
@@ -1388,6 +1501,7 @@ enum StockMovementType {
   DAMAGE
   PURCHASE
   ADJUSTMENT
+  OPENING
 }
 
 // THE inventory ledger: one row for every change to a stock level, from any

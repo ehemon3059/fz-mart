@@ -96,6 +96,7 @@ export interface InventoryCopy {
     typeDamage: string;
     typePurchase: string;
     typeAdjustment: string;
+    typeOpening: string;
     noteTitle: string;
     noteBody: string;
   };
@@ -198,6 +199,7 @@ export const INVENTORY_COPY: Record<InvLang, InventoryCopy> = {
       typeDamage: "Damaged",
       typePurchase: "Received",
       typeAdjustment: "Correction",
+      typeOpening: "Opening",
       noteTitle: "Physical count doesn't match?",
       noteBody:
         "If the system says 100 and you count 97 on the shelf, don't edit the number directly. Enter a −3 Adjustment on the product instead — then six months from now you can still see why it dropped.",
@@ -300,6 +302,7 @@ export const INVENTORY_COPY: Record<InvLang, InventoryCopy> = {
       typeDamage: "নষ্ট",
       typePurchase: "রিসিভ",
       typeAdjustment: "সংশোধন",
+      typeOpening: "প্রারম্ভিক",
       noteTitle: "ফিজিক্যাল কাউন্ট মিলছে না?",
       noteBody:
         "সিস্টেম বলছে ১০০, গুদামে পাওয়া গেল ৯৭। সরাসরি ডেটাবেসে stock = 97 লিখবেন না। একটা −৩ সংশোধন এন্ট্রি দিন — তাহলে ছয় মাস পরেও জানা যাবে কেন কমেছে।",

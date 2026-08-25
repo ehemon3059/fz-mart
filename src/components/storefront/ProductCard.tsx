@@ -42,6 +42,13 @@ export interface ProductCardData {
     priceColor?: string | null;
     /** Per-option photo; used as the thumbnail when there is no gallery. */
     imageUrl?: string | null;
+    /**
+     * On hand / reserved for this option. Optional so leaner sources (search,
+     * wishlist) still compile; when absent the card falls back to the product
+     * row, which is the pre-variant behaviour.
+     */
+    stock?: number;
+    reserved?: number;
   }[];
   /** Colour swatch photos — another thumbnail fallback for a gallery-less product. */
   colors?: { imageUrl?: string | null }[];
@@ -91,7 +98,19 @@ export default function ProductCard({
   // Availability, not raw stock: units reserved by live orders are on the shelf
   // but already spoken for. Computed here rather than at each call site so no
   // listing can accidentally advertise reserved units as buyable.
-  const outOfStock = product.stock - (product.reserved ?? 0) <= 0;
+  // A product WITH options keeps its units on those options -- its own stock
+  // column is vestigial and goes stale the moment a purchase order is received
+  // against a single size. So availability is summed from the options whenever
+  // they carry stock, and only falls back to the product row for a simple
+  // product (or a data source too lean to select it).
+  const variantsCarryStock = (product.variants ?? []).some((v) => v.stock != null);
+  const availableUnits = variantsCarryStock
+    ? (product.variants ?? []).reduce(
+        (sum, v) => sum + Math.max(0, (v.stock ?? 0) - (v.reserved ?? 0)),
+        0,
+      )
+    : product.stock - (product.reserved ?? 0);
+  const outOfStock = availableUnits <= 0;
   // A required size/color/variant choice can't be made from a card, so those
   // products link to the detail page instead of quick-adding.
   const needsChoice =

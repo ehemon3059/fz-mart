@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout - Zone Based Delivery Charge with Upazila</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+
+  <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+    <div class="p-6 md:p-8 bg-gray-900 text-white">
+      <h1 class="text-2xl font-bold">ই-কমার্স চেকআউট</h1>
+      <p class="text-gray-400 text-sm mt-1">আপনার ডেলিভারি তথ্য দিন এবং অর্ডার সম্পন্ন করুন</p>
+    </div>
+
+    <div class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- Shipping Form (Left) -->
+      <div class="lg:col-span-7 space-y-5">
+        <h2 class="text-lg font-semibold text-gray-800 border-b pb-2">ডেলিভারি ঠিকানা</h2>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">আপনার নাম *</label>
+          <input type="text" placeholder="উদা: আবরার ফাহাদ" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">মোবাইল নম্বর *</label>
+          <input type="tel" placeholder="017XXXXXXXX" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+        </div>
+
+        <!-- Division Dropdown -->
+        <div>
+          <label for="division" class="block text-sm font-medium text-gray-700 mb-1">বিভাগ *</label>
+          <select id="division" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none">
+            <option value="" selected disabled>বিভাগ নির্বাচন করুন</option>
+            <option value="dhaka">ঢাকা</option>
+            <option value="chattogram">চট্টগ্রাম</option>
+            <option value="rajshahi">রাজশাহী</option>
+            <option value="khulna">খুলনা</option>
+            <option value="barishal">বরিশাল</option>
+            <option value="sylhet">সিলেট</option>
+            <option value="rangpur">রংপুর</option>
+            <option value="mymensingh">ময়মনসিংহ</option>
+          </select>
+        </div>
+
+        <!-- District Dropdown -->
+        <div>
+          <label for="district" class="block text-sm font-medium text-gray-700 mb-1">জেলা *</label>
+          <select id="district" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed" disabled>
+            <option value="" selected disabled>প্রথমে বিভাগ নির্বাচন করুন</option>
+          </select>
+        </div>
+
+        <!-- Upazila / Thana Dropdown -->
+        <div>
+          <label for="upazila" class="block text-sm font-medium text-gray-700 mb-1">উপজেলা / থানা *</label>
+          <select id="upazila" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed" disabled>
+            <option value="" selected disabled>প্রথমে জেলা নির্বাচন করুন</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">পূর্ণাঙ্গ ঠিকানা *</label>
+          <textarea rows="2" placeholder="বাড়ি/হোল্ডিং নম্বর, রোড, এলাকা..." class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"></textarea>
+        </div>
+      </div>
+
+      <!-- Order Summary (Right) -->
+      <div class="lg:col-span-5 bg-gray-50 p-6 rounded-xl border border-gray-200 flex flex-col justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800 border-b pb-3 mb-4">অর্ডার সামারি</h2>
+
+          <!-- Cart Item Sample -->
+          <div class="flex items-center gap-3 mb-4 pb-4 border-b">
+            <div class="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center font-bold text-gray-500 text-xs">IMG</div>
+            <div class="flex-1">
+              <h3 class="text-sm font-medium text-gray-800">প্রিমিয়াম টি-শার্ট</h3>
+              <p class="text-xs text-gray-500">পরিমাণ: ১</p>
+            </div>
+            <span class="text-sm font-semibold text-gray-800">৳১২০০</span>
+          </div>
+
+          <!-- Price Calculation Breakdown -->
+          <div class="space-y-2 text-sm text-gray-600">
+            <div class="flex justify-between">
+              <span>সাবটোটাল</span>
+              <span id="subtotal-display">৳১২০০</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span>ডেলিভারি চার্জ</span>
+              <span id="shipping-display" class="font-medium text-blue-600">জেলা/উপজেলা নির্বাচন করুন</span>
+            </div>
+            <div id="zone-badge" class="hidden">
+              <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded font-medium"></span>
+            </div>
+          </div>
+
+          <hr class="my-4 border-gray-300">
+
+          <div class="flex justify-between text-base font-bold text-gray-900">
+            <span>সর্বমোট</span>
+            <span id="total-display" class="text-xl text-blue-600">৳১২০০</span>
+          </div>
+        </div>
+
+        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg shadow-md transition duration-200 mt-6">
+          অর্ডার নিশ্চিত করুন
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const subtotal = 1200; // প্রোডাক্টের মূল দাম
+
+    // ১. ঢাকা সাব-আরবান জেলাগুলো (৳১০০ চার্জ)
+    const dhakaSuburbs = ["গাজীপুর", "নারায়ণগঞ্জ", "মানিকগঞ্জ", "মুন্সীগঞ্জ"];
+
+    // ২. ঢাকার ভেতরের কিছু বিশেষ থানা যেগুলোকে কুরিয়ার কোম্পানি সাব-আরবান হিসেবে গণ্য করে (৳১০০ চার্জ)
+    const dhakaSuburbUpazilas = ["সাভার", "ধামরাই", "কেরানীগঞ্জ", "নবাবগঞ্জ", "দোহার"];
+
+    // ৩. বিভাগ অনুযায়ী জেলা ডাটা
+    const districtData = {
+      dhaka: ["ঢাকা", "গাজীপুর", "নারায়ণগঞ্জ", "টাঙ্গাইল", "কিশোরগঞ্জ", "মানিকগঞ্জ", "মুন্সীগঞ্জ", "নরসিংদী", "ফরিদপুর", "গোপালগঞ্জ", "মাদারীপুর", "রাজবাড়ী", "শরীয়তপুর"],
+      chattogram: ["চট্টগ্রাম", "কক্সবাজার", "কুমিল্লা", "ফেণী", "ব্রাহ্মণবাড়িয়া", "নোয়াখালী", "লক্ষ্মীপুর", "চাঁদপুর", "খাগড়াছড়ি", "রাঙ্গামাটি", "বান্দরবান"],
+      rajshahi: ["রাজশাহী", "বগুড়া", "পাবনা", "সিরাজগঞ্জ", "নওগাঁ", "নাটোর", "জয়পুরহাট", "চাঁপাইনবাবগঞ্জ"],
+      khulna: ["খুলনা", "যশোর", "সাতক্ষীরা", "বাগেরহাট", "ঝিনাইদহ", "কুষ্টিয়া", "মাগুরা", "মেহেরপুর", "নড়াইল", "চুয়াডাঙ্গা"],
+      barishal: ["বরিশাল", "পটুয়াখালী", "ভোলা", "পিরোজপুর", "বরগুনা", "ঝালকাঠি"],
+      sylhet: ["সিলেট", "মৌলভীবাজার", "হবিগঞ্জ", "সুনামগঞ্জ"],
+      rangpur: ["রংপুর", "দিনাজপুর", "গাইবান্ধা", "কুড়িগ্রাম", "লালমনিরহাট", "নীলফামারী", "পঞ্চগড়", "ঠাকুরগাঁও"],
+      mymensingh: ["ময়মনসিংহ", "জামালপুর", "শেরপুর", "নেত্রকোণা"]
+    };
+
+    // ৪. জেলা অনুযায়ী উপজেলা / থানা ডাটা
+    const upazilaData = {
+      "ঢাকা": ["ধানমন্ডি", "গুলশান", "মিরপুর", "উত্তরা", "মোহাম্মদপুর", "শাহবাগ", "সাভার", "ধামরাই", "কেরানীগঞ্জ", "নবাবগঞ্জ", "দোহার"],
+      "গাজীপুর": ["গাজীপুর সদর", "কালিয়াকৈর", "শ্রীপুর", "কাপাসিয়া", "কালীগঞ্জ"],
+      "নারায়ণগঞ্জ": ["নারায়ণগঞ্জ সদর", "রূপগঞ্জ", "সোনারগাঁও", "আড়াইহাজার", "বন্দর"],
+      "টাঙ্গাইল": ["টাঙ্গাইল সদর", "মির্জাপুর", "ঘাটাইল", "কালিহাতী", "সখীপুর", "মধুপুর", "বাসাইল"],
+      "কিশোরগঞ্জ": ["কিশোরগঞ্জ সদর", "ভৈরব", "বাজিতপুর", "হোসেনপুর", "পাকুন্দিয়া"],
+      "মানিকগঞ্জ": ["মানিকগঞ্জ সদর", "সিংগাইর", "সাটুরিয়া", "ঘিওর", "শিবালয়"],
+      "মুন্সীগঞ্জ": ["মুন্সীগঞ্জ সদর", "সিরাজদিখান", "শ্রীনগর", "লৌহজং", "টঙ্গীবাড়ী"],
+      "চট্টগ্রাম": ["কোতোয়ালী", "পাহাড়তলী", "পাঁচলাইশ", "হাটহাজারী", "পটিয়া", "সীতাকুণ্ড"],
+      "কুমিল্লা": ["কুমিল্লা সদর", "লাকসাম", "দাউদকান্দি", "দেবিদ্বার"],
+      "সিলেট": ["সিলেট সদর", "দক্ষিণ সুরমা", "গোলাপগঞ্জ", "বীণাবাজার"],
+      "রাজশাহী": ["বোয়ালিয়া", "রাজপাড়া", "মতিহার", "পবা", "গোদাগাড়ী"],
+      "খুলনা": ["খুলনা সদর", "সোনাডাঙ্গা", "খালিশপুর", "দৌলতপুর", "রূপসা"],
+      "বরিশাল": ["বরিশাল সদর", "বাকেরগঞ্জ", "বাবুগঞ্জ", "উজিরপুর"],
+      "রংপুর": ["রংপুর সদর", "মিঠাপুকুর", "পীরগঞ্জ", "কাউনিয়া"],
+      "ময়মনসিংহ": ["ময়মনসিংহ সদর", "মুক্তাগাছা", "ফুলবাড়িয়া", "ত্রিশাল", "ভালুকা"],
+      "জামালপুর": ["জামালপুর সদর", "সরিষাবাড়ী", "মেলান্দহ", "ইসলামপুর"]
+    };
+
+    const divisionSelect = document.getElementById('division');
+    const districtSelect = document.getElementById('district');
+    const upazilaSelect = document.getElementById('upazila');
+
+    const shippingDisplay = document.getElementById('shipping-display');
+    const totalDisplay = document.getElementById('total-display');
+    const zoneBadge = document.getElementById('zone-badge');
+
+    // কুরিয়ার চার্জ হিসাবের লজিক
+    function calculateShipping(selectedDistrict, selectedUpazila) {
+      let charge = 0;
+      let zoneName = "";
+
+      if (!selectedDistrict) {
+        shippingDisplay.textContent = "জেলা/উপজেলা নির্বাচন করুন";
+        totalDisplay.textContent = `৳${subtotal}`;
+        zoneBadge.classList.add('hidden');
+        return;
+      }
+
+      // ঢাকা জেলার লজিক
+      if (selectedDistrict === "ঢাকা") {
+        if (selectedUpazila && dhakaSuburbUpazilas.includes(selectedUpazila)) {
+          charge = 100;
+          zoneName = "ঢাকা সাব-আরবান (সাভার/কেরানীগঞ্জ)";
+        } else {
+          charge = 70;
+          zoneName = "ইনসাইড ঢাকা সিটি";
+        }
+      } 
+      // ঢাকা সাব-আরবান জেলাসমূহ (গাজীপুর, নারায়ণগঞ্জ ইত্যাদি)
+      else if (dhakaSuburbs.includes(selectedDistrict)) {
+        charge = 100;
+        zoneName = "ঢাকা সাব-আরবান জোন";
+      } 
+      // ঢাকার বাইরের অন্যান্য সকল জেলা
+      else {
+        charge = 130;
+        zoneName = "আউটসাইড ঢাকা (অল বাংলাদেশ)";
+      }
+
+      // UI আপডেট
+      shippingDisplay.textContent = `৳${charge}`;
+      totalDisplay.textContent = `৳${subtotal + charge}`;
+      
+      zoneBadge.classList.remove('hidden');
+      zoneBadge.querySelector('span').textContent = zoneName;
+    }
+
+    // বিভাগ পরিবর্তন হলে
+    divisionSelect.addEventListener('change', function () {
+      const selectedDivision = this.value;
+
+      districtSelect.innerHTML = '<option value="" selected disabled>জেলা নির্বাচন করুন</option>';
+      upazilaSelect.innerHTML = '<option value="" selected disabled>প্রথমে জেলা নির্বাচন করুন</option>';
+      upazilaSelect.disabled = true;
+      upazilaSelect.value = "";
+
+      calculateShipping("", "");
+
+      if (selectedDivision && districtData[selectedDivision]) {
+        districtSelect.disabled = false;
+        districtData[selectedDivision].forEach(district => {
+          const option = document.createElement('option');
+          option.value = district;
+          option.textContent = district;
+          districtSelect.appendChild(option);
+        });
+      } else {
+        districtSelect.disabled = true;
+      }
+    });
+
+    // জেলা পরিবর্তন হলে
+    districtSelect.addEventListener('change', function () {
+      const selectedDistrict = this.value;
+
+      upazilaSelect.innerHTML = '<option value="" selected disabled>উপজেলা / থানা নির্বাচন করুন</option>';
+
+      calculateShipping(selectedDistrict, "");
+
+      if (selectedDistrict && upazilaData[selectedDistrict]) {
+        upazilaSelect.disabled = false;
+        upazilaData[selectedDistrict].forEach(upazila => {
+          const option = document.createElement('option');
+          option.value = upazila;
+          option.textContent = upazila;
+          upazilaSelect.appendChild(option);
+        });
+      } else {
+        // জেলা লিস্টে নির্দিষ্ট ডাটা না থাকলেও যেন ইউজার নির্বাচন ছাড়া আগাতে না পারে বা ডিফল্ট হিসেবে কাজ করে
+        upazilaSelect.disabled = true;
+      }
+    });
+
+    // উপজেলা/থানা পরিবর্তন হলে (সাভার/কেরানীগঞ্জ চেক করার জন্য)
+    upazilaSelect.addEventListener('change', function () {
+      const selectedDistrict = districtSelect.value;
+      const selectedUpazila = this.value;
+
+      calculateShipping(selectedDistrict, selectedUpazila);
+    });
+  </script>
+
+</body>
+</html>

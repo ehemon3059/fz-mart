@@ -30,7 +30,7 @@ import { GalleryGrid, useImageUpload } from "./form/ImageUploader";
 import { fmtTaka, fmtTakaInput, paisaToTakaStr, parseTaka } from "./form/helpers";
 import { initialFromProduct } from "./form/initialState";
 import { draftKey, useDraftAutosave } from "./form/useDraftAutosave";
-import { summarise } from "./form/variant-utils";
+import { rowKey, summarise } from "./form/variant-utils";
 import {
   MAX_IMAGES,
   type Category,
@@ -90,6 +90,21 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
   const set = <K extends keyof FormState>(key: K, val: FormState[K]) => setForm((f) => ({ ...f, [key]: val }));
 
   const hasOptions = form.sellingType !== "single";
+
+  /**
+   * Options whose stock is already in the ledger — everything this product had
+   * when the page loaded. Their level is changed by receiving a purchase order
+   * or by an audited adjustment, never by re-saving this form, so the form
+   * shows those numbers instead of offering them for editing. Anything the
+   * admin adds now is absent from the set and still takes an opening figure.
+   *
+   * Keyed off the product prop, not form state, so adding a row can't
+   * accidentally unlock a row that already exists.
+   */
+  const lockedStockKeys = useMemo(
+    () => new Set((product?.variants ?? []).map((v) => rowKey(v.colorName ?? "", v.size ?? ""))),
+    [product],
+  );
 
   // Uploads land wherever they were started from: the gallery appends (capped
   // at MAX_IMAGES); a colour or a variant row replaces, since each holds one
@@ -674,6 +689,7 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                 colors={form.colors}
                 rows={form.variants}
                 baseSku={form.baseSku}
+                lockedStockKeys={lockedStockKeys}
                 guideValues={resolvedGuide?.values ?? []}
                 guideName={resolvedGuide?.name ?? null}
                 error={errors.variants}
@@ -726,24 +742,46 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                   ) : null}
                 </div>
                 <div>
-                  <Label required>Stock on hand</Label>
-                  <FieldShell error={errors.stock}>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={form.stock === "" ? "" : String(form.stock)}
-                      onChange={(e) => set("stock", e.target.value === "" ? "" : Number(e.target.value))}
-                      placeholder="0"
-                      className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-                    />
-                  </FieldShell>
-                  <ErrorText>{errors.stock}</ErrorText>
-                  {stockLow && !errors.stock && (
-                    <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-amber-600">
-                      <Icon name="warn" size={13} />
-                      Out of stock — product won&apos;t be purchasable.
-                    </p>
+                  {/* Stock is typed ONCE, as an opening balance. After that the
+                      ledger owns it: a purchase-order receipt or an audited
+                      adjustment moves it, and this becomes a reading. */}
+                  <Label required={!isEdit}>{isEdit ? "Stock on hand" : "Opening stock"}</Label>
+                  {isEdit ? (
+                    <>
+                      <div className="flex items-baseline gap-2 rounded-lg border border-dashed border-stone-200 bg-stone-50 px-3 py-2.5">
+                        <span className="text-[15px] font-semibold tabular-nums text-stone-800">
+                          {product?.stock ?? 0}
+                        </span>
+                        <span className="text-[12.5px] text-stone-500">on hand</span>
+                        {(product?.reserved ?? 0) > 0 && (
+                          <span className="text-[12.5px] text-stone-400">· {product?.reserved} reserved</span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-[12px] text-stone-400">
+                        Changed by receiving a purchase order, or from the Stock panel below.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <FieldShell error={errors.stock}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={form.stock === "" ? "" : String(form.stock)}
+                          onChange={(e) => set("stock", e.target.value === "" ? "" : Number(e.target.value))}
+                          placeholder="0"
+                          className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+                        />
+                      </FieldShell>
+                      <ErrorText>{errors.stock}</ErrorText>
+                      {stockLow && !errors.stock && (
+                        <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-amber-600">
+                          <Icon name="warn" size={13} />
+                          Starts out of stock — it won&apos;t be purchasable until stock arrives.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -753,19 +791,40 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
             <div className="mt-5 border-t border-stone-100 pt-5">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
+                  {/* Seeded once, then owned by purchase-order receipts, which set
+                      it to the landed cost. Checkout snapshots this onto every
+                      order line and a snapshot can't be corrected afterwards, so a
+                      stale figure retyped here would misstate profit permanently.
+                      Still SHOWN on edit — you price against it. */}
                   <Label hint="for profit reports">Sourcing cost</Label>
-                  <FieldShell prefix="৳" error={errors.purchaseCost}>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={fmtTakaInput(form.purchaseCost)}
-                      onChange={(e) => set("purchaseCost", parseTaka(e.target.value))}
-                      placeholder="0"
-                      className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-                    />
-                  </FieldShell>
-                  <ErrorText>{errors.purchaseCost}</ErrorText>
+                  {isEdit ? (
+                    <>
+                      <div className="flex items-baseline gap-2 rounded-lg border border-dashed border-stone-200 bg-stone-50 px-3 py-2.5">
+                        <span className="text-[15px] font-semibold tabular-nums text-stone-800">
+                          {fmtTaka(product?.purchaseCost ?? 0)}
+                        </span>
+                        <span className="text-[12.5px] text-stone-500">per unit</span>
+                      </div>
+                      <p className="mt-1.5 text-[12px] text-stone-400">
+                        Set by the last purchase order received, including its share of freight.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <FieldShell prefix="৳" error={errors.purchaseCost}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={fmtTakaInput(form.purchaseCost)}
+                          onChange={(e) => set("purchaseCost", parseTaka(e.target.value))}
+                          placeholder="0"
+                          className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+                        />
+                      </FieldShell>
+                      <ErrorText>{errors.purchaseCost}</ErrorText>
+                    </>
+                  )}
                   {/* Margin is against the single price, which an option product
                       doesn't have — each row is priced on its own. */}
                   {marginPct != null && !hasOptions && !errors.purchaseCost && (
@@ -968,13 +1027,42 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
 
           <Card icon="eye" title="Visibility">
             <div className="space-y-4">
-              <Toggle
-                checked={form.status === "ACTIVE"}
-                onChange={(v) => set("status", v ? "ACTIVE" : "INACTIVE")}
-                icon="eye"
-                label="Active"
-                sublabel={form.status === "ACTIVE" ? "Visible on the storefront" : "Hidden — won't show in catalog"}
-              />
+              {/* Three states, not a switch: "not finished yet" and "finished
+                  but withdrawn" need different answers, and a draft created
+                  from a purchase order may already have stock against it. */}
+              <div>
+                <div className="grid grid-cols-3 gap-1 rounded-lg bg-stone-100 p-1">
+                  {(
+                    [
+                      ["DRAFT", "Draft"],
+                      ["ACTIVE", "Active"],
+                      ["INACTIVE", "Hidden"],
+                    ] as const
+                  ).map(([value, text]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => set("status", value)}
+                      className={[
+                        "rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition",
+                        form.status === value
+                          ? "bg-white text-stone-900 shadow-sm"
+                          : "text-stone-500 hover:text-stone-700",
+                      ].join(" ")}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[12px] text-stone-500">
+                  {form.status === "ACTIVE"
+                    ? "Visible on the storefront."
+                    : form.status === "DRAFT"
+                      ? "Not finished — needs a photo and a price before it can go live."
+                      : "Finished, but hidden from the catalog."}
+                </p>
+                <ErrorText>{errors.status}</ErrorText>
+              </div>
               <div className="border-t border-stone-100" />
               <Toggle
                 checked={form.isFeatured}

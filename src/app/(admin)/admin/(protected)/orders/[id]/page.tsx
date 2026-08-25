@@ -123,6 +123,14 @@ export default async function AdminOrderDetailPage({
         <p className="text-sm">{order.customerName}</p>
         <p className="text-sm">{order.customerPhone}</p>
         <p className="text-sm whitespace-pre-line">{order.address}</p>
+        {/* Location as chosen at checkout (snapshotted text, not a live join). */}
+        {(order.districtName || order.divisionName) && (
+          <p className="text-sm font-medium">
+            {[order.upazilaName, order.districtName, order.divisionName]
+              .filter(Boolean)
+              .join(", ")}
+          </p>
+        )}
         {order.shippingZone && (
           <p className="text-sm text-gray-500">Zone: {order.shippingZone.name}</p>
         )}

@@ -14,7 +14,15 @@ const productWithImages = {
   // photos were uploaded per-option); see resolvePrimaryImage.
   variants: {
     orderBy: { sortOrder: "asc" as const },
-    select: { price: true, discountPrice: true, priceColor: true, imageUrl: true },
+    select: {
+      price: true,
+      discountPrice: true,
+      priceColor: true,
+      imageUrl: true,
+      // Availability for the card: a product with options holds its units here.
+      stock: true,
+      reserved: true,
+    },
   },
   colors: { orderBy: { sortOrder: "asc" as const }, select: { imageUrl: true } },
   // Lets storefront cards decide quick-add vs. "View Details" (see ProductCard).

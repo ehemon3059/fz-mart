@@ -11,6 +11,7 @@ import {
   updateAddress,
   type AddressInput,
 } from "@/server/customers/addresses";
+import { resolveDeliveryLocation, LocationError } from "@/server/settings/locations";
 
 export interface ActionResult {
   error?: string;
@@ -65,13 +66,19 @@ export async function saveProfile(formData: FormData): Promise<ActionResult> {
   return { success: true };
 }
 
-/** Shared parse + validate for the add and edit forms. */
-function readAddress(formData: FormData): AddressInput | string {
+/**
+ * Shared parse + validate for the add and edit forms.
+ *
+ * Async because the delivery zone is DERIVED from the chosen location rather
+ * than accepted from the form: the same upazila → district → division →
+ * fallback walk checkout uses, so a saved address can never carry a cheaper
+ * zone than its location actually maps to.
+ */
+async function readAddress(formData: FormData): Promise<AddressInput | string> {
   const label = String(formData.get("label") ?? "").trim();
   const fullName = String(formData.get("fullName") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
-  const rawZone = String(formData.get("shippingZoneId") ?? "").trim();
 
   if (!label) return "Give this address a label, like Home or Office.";
   if (label.length > 30) return "Label is too long (30 characters max).";
@@ -83,9 +90,24 @@ function readAddress(formData: FormData): AddressInput | string {
   }
   if (address.length > ADDRESS_MAX) return "Address is too long (400 characters max).";
 
-  const shippingZoneId = rawZone === "" ? null : Number(rawZone);
-  if (shippingZoneId !== null && !Number.isInteger(shippingZoneId)) {
-    return "Please choose a valid delivery area.";
+  const num = (key: string) => {
+    const n = Number(String(formData.get(key) ?? "").trim());
+    return Number.isInteger(n) && n > 0 ? n : null;
+  };
+  const divisionId = num("divisionId");
+  const districtId = num("districtId");
+  const upazilaId = num("upazilaId");
+
+  if (!divisionId) return "Please choose your division.";
+  if (!districtId) return "Please choose your district.";
+
+  let shippingZoneId: number | null = null;
+  try {
+    const resolved = await resolveDeliveryLocation({ divisionId, districtId, upazilaId });
+    shippingZoneId = resolved.zoneId;
+  } catch (err) {
+    if (err instanceof LocationError) return err.message;
+    throw err;
   }
 
   return {
@@ -93,6 +115,9 @@ function readAddress(formData: FormData): AddressInput | string {
     fullName,
     phone,
     address,
+    divisionId,
+    districtId,
+    upazilaId,
     shippingZoneId,
     isDefault: formData.get("isDefault") === "on" || formData.get("isDefault") === "true",
   };
@@ -102,7 +127,7 @@ export async function addAddress(formData: FormData): Promise<ActionResult> {
   const customerId = await requireCustomer();
   if (!customerId) return { error: "Please sign in again." };
 
-  const parsed = readAddress(formData);
+  const parsed = await readAddress(formData);
   if (typeof parsed === "string") return { error: parsed };
 
   const created = await guarded(() => createAddress(customerId, parsed));
@@ -121,7 +146,7 @@ export async function editAddress(id: number, formData: FormData): Promise<Actio
   const customerId = await requireCustomer();
   if (!customerId) return { error: "Please sign in again." };
 
-  const parsed = readAddress(formData);
+  const parsed = await readAddress(formData);
   if (typeof parsed === "string") return { error: parsed };
 
   const updated = await guarded(() => updateAddress(customerId, id, parsed));

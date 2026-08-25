@@ -2,7 +2,13 @@ import bcrypt from "bcrypt";
 import Redis from "ioredis";
 import { loadEnv } from "./helpers/env";
 import { assertTestDatabase } from "./helpers/guard";
-import { prisma, E2E_PRODUCTS, E2E_ADMIN } from "./helpers/db";
+import {
+  prisma,
+  E2E_PRODUCTS,
+  E2E_ADMIN,
+  E2E_DIVISION,
+  E2E_DISTRICT,
+} from "./helpers/db";
 
 // Provisions everything the specs rely on, idempotently:
 //   - a dedicated admin user (separate from the seeded "admin" account),
@@ -47,8 +53,29 @@ export default async function globalSetup(): Promise<void> {
 
   await prisma.shippingZone.upsert({
     where: { id: 1 },
-    update: { isActive: true },
-    create: { id: 1, name: "Inside Dhaka", charge: 6000, sortOrder: 0 },
+    update: { isActive: true, isFallback: true },
+    // isFallback so any location the specs touch is priced even if it carries
+    // no zone of its own — checkout refuses an order it cannot price.
+    create: { id: 1, name: "Inside Dhaka", charge: 6000, sortOrder: 0, isFallback: true },
+  });
+
+  // Delivery location the checkout specs select. Pinned to zone 1 so the
+  // asserted ৳60 charge is independent of the production location seed.
+  const e2eDivision = await prisma.division.upsert({
+    where: { slug: "e2e-division" },
+    update: { isActive: true, shippingZoneId: 1 },
+    create: { name: E2E_DIVISION, slug: "e2e-division", shippingZoneId: 1, sortOrder: 0 },
+  });
+  await prisma.district.upsert({
+    where: { slug: "e2e-district" },
+    update: { isActive: true, shippingZoneId: 1, divisionId: e2eDivision.id },
+    create: {
+      name: E2E_DISTRICT,
+      slug: "e2e-district",
+      divisionId: e2eDivision.id,
+      shippingZoneId: 1,
+      sortOrder: 0,
+    },
   });
 
   const category = await prisma.category.upsert({

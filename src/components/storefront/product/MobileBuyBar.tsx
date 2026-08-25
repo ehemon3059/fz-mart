@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { ShoppingBag } from "lucide-react";
 import { formatTaka, priceColorStyle } from "@/lib/money";
+import { usePurchaseIntent } from "@/components/storefront/product/PurchaseIntentContext";
 
 interface Props {
   /** Paisa — the price shown in the bar. */
@@ -18,9 +19,14 @@ interface Props {
 
 /**
  * Sticky mobile purchase bar, pinned above the bottom nav for the whole page.
- * Its button scrolls to the real buy box rather than adding to the cart
- * directly — variant products need colour/size chosen first, and silently
- * skipping that would add the wrong item.
+ *
+ * The button buys when the buy box says a complete, in-stock selection exists,
+ * and otherwise scrolls to the buy box so the shopper can make one. It used to
+ * only ever scroll: correct for an untouched variant product (skipping the
+ * choice would add the wrong item) but a dead end once colour and size were
+ * already picked — tapping Buy Now just dragged the page back to a finished
+ * form. The selection arrives through PurchaseIntentContext, since the bar is
+ * fixed to the viewport and sits outside the hero that owns the buy box.
  */
 export default function MobileBuyBar({
   price,
@@ -54,7 +60,13 @@ export default function MobileBuyBar({
     };
   }, []);
 
-  const jumpToBuyBox = () => {
+  const { ready, buy } = usePurchaseIntent();
+
+  const handleClick = () => {
+    if (ready) {
+      buy();
+      return;
+    }
     document.getElementById(buyBoxId)?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
@@ -100,7 +112,7 @@ export default function MobileBuyBar({
             without starving the price block on an iPhone SE. */}
         <button
           type="button"
-          onClick={jumpToBuyBox}
+          onClick={handleClick}
           disabled={!inStock}
           className="btn-brand-solid flex shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold min-[360px]:px-5 disabled:cursor-not-allowed disabled:opacity-40"
         >

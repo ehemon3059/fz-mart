@@ -9,6 +9,7 @@ import { formatTaka, priceColorStyle } from "@/lib/money";
 import { Icon } from "@/components/icons";
 import { Banknote, ShoppingCart, Minus, Plus } from "lucide-react";
 import { useVariantImage } from "@/components/storefront/product/VariantImageContext";
+import { usePurchaseIntent } from "@/components/storefront/product/PurchaseIntentContext";
 import ColorStrip from "@/components/storefront/product/ColorStrip";
 import SizeChartModal from "@/components/storefront/product/SizeChartModal";
 
@@ -379,6 +380,19 @@ function VariantPurchase({
     if (addToCart()) router.push(`/checkout?buyNow=${productId}&variant=${selectedVariant!.id}`);
   }
 
+  // Hand the sticky mobile bar a working Buy Now once colour/size are settled,
+  // and take it back when they aren't — the bar scrolls here instead then.
+  // `ready()` reads state that changes on every pick, so this re-runs with it.
+  const canBuy = ready();
+  const { publish } = usePurchaseIntent();
+  useEffect(() => {
+    publish(canBuy ? handleBuy : null);
+    return () => publish(null);
+    // handleBuy closes over the current selection and quantity; canBuy flips
+    // whenever those make a purchase possible, so it is the honest trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canBuy, publish, selectedVariant?.id, quantity]);
+
   return (
     <div className="space-y-4">
       {/* Colour: a strip of product shots when every colour has one (the photo
@@ -551,6 +565,15 @@ function LegacyPurchase({
     addToCart();
     router.push(`/checkout?buyNow=${productId}`);
   }
+
+  // Nothing to choose on a no-variant product, so the mobile bar can buy
+  // straight away whenever there is stock.
+  const { publish } = usePurchaseIntent();
+  useEffect(() => {
+    publish(outOfStock ? null : handleBuy);
+    return () => publish(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outOfStock, publish, quantity]);
 
   return (
     <div className="space-y-4">

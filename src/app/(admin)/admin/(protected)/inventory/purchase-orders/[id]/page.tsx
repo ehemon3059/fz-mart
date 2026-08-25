@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPurchaseOrder } from "@/server/purchasing";
+import { getPurchaseOrder, getUnsellableReceived } from "@/server/purchasing";
 import { formatTaka } from "@/lib/money";
 import { Badge } from "@/components/admin/ui/Badge";
 import PurchaseOrderControls from "./PurchaseOrderControls";
@@ -16,6 +16,12 @@ export default async function PurchaseOrderDetailPage({
   const { id } = await params;
   const po = await getPurchaseOrder(Number(id));
   if (!po) notFound();
+
+  // Goods that arrived against this order but still cannot be sold. Nothing to
+  // compute until something has actually been received.
+  const unsellable = po.lines.some((l) => l.receivedQty > 0)
+    ? await getUnsellableReceived(po.id)
+    : [];
 
   const goodsValue = po.lines.reduce((s, l) => s + l.unitCost * l.quantity, 0);
   const overhead = po.shippingCost + po.customsCost;
@@ -134,6 +140,43 @@ export default async function PurchaseOrderDetailPage({
             receivedQty: l.receivedQty,
           }))}
         />
+      )}
+
+      {unsellable.length > 0 && (
+        <div className="rounded-lg border border-warning/40 bg-warning-soft px-4 py-3.5">
+          <h2 className="text-[13px] font-semibold text-warning-fg">
+            {unsellable.length} product{unsellable.length === 1 ? "" : "s"} received but not on sale
+            yet
+          </h2>
+          <p className="mt-0.5 text-[12.5px] text-stone-600">
+            These units are in stock and counted, but no shopper can buy them until each one is
+            finished.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {unsellable.map((row) => (
+              <li
+                key={row.productId}
+                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-warning/20 pt-2"
+              >
+                <span className="text-[13px] font-medium text-stone-800">
+                  {row.name}
+                  <span className="ml-2 text-[12px] font-normal text-stone-500">
+                    {row.receivedQty} received
+                  </span>
+                </span>
+                <span className="flex items-center gap-3">
+                  <span className="text-[12.5px] text-stone-600">Needs {row.missing.join(", ")}</span>
+                  <Link
+                    href={`/admin/products/${row.productId}/edit`}
+                    className="text-[12.5px] font-semibold text-accent underline-offset-2 hover:underline"
+                  >
+                    Finish it
+                  </Link>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {po.status === "RECEIVED" && (

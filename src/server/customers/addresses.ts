@@ -16,6 +16,15 @@ export interface AddressInput {
   fullName: string;
   phone: string;
   address: string;
+  /** The saved Division/District/Upazila selection, so the picker re-opens on it. */
+  divisionId: number | null;
+  districtId: number | null;
+  upazilaId: number | null;
+  /**
+   * Derived from the location above at save time, never taken from the client.
+   * Kept denormalised so the address list can show a charge without re-walking
+   * the zone chain for every row.
+   */
   shippingZoneId: number | null;
   isDefault: boolean;
 }

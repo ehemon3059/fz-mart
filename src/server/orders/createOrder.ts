@@ -4,6 +4,7 @@ import { generateOrderNo } from "./orderNo";
 import { redeemCoupon, type CouponCartLine } from "@/server/coupons";
 import { lineageIds } from "@/server/categories/tree";
 import { reserveUnits } from "@/server/inventory/reservations";
+import { resolveDeliveryLocation, LocationError } from "@/server/settings/locations";
 
 // Checkout is the riskiest code in the app. Everything the browser sends
 // (price, product name, displayed totals) is for UI only — this function
@@ -24,7 +25,15 @@ export interface CreateOrderInput {
   customerEmail?: string;
   address: string;
   customerNote?: string;
-  shippingZoneId: number;
+  /**
+   * The delivery location the customer picked. The charge is NOT taken from
+   * here — it is re-resolved server-side from these ids (upazila → district →
+   * division → fallback zone), so a client that fakes a cheap zone still pays
+   * the rate its real location maps to.
+   */
+  divisionId: number;
+  districtId: number;
+  upazilaId?: number | null;
   items: CheckoutItemInput[];
   /**
    * COD (default) starts the order at PENDING. ONLINE/PARTIAL start at
@@ -59,11 +68,21 @@ export async function createOrder(input: CreateOrderInput) {
   }
 
   return prisma.$transaction(async (tx) => {
-    const zone = await tx.shippingZone.findUnique({
-      where: { id: input.shippingZoneId, isActive: true },
-    });
-    if (!zone) {
-      throw new CheckoutError("Selected delivery zone is no longer available.");
+    // Resolved inside the transaction so the charge written to the order is the
+    // one live at write time, not the one the page rendered minutes ago.
+    let location;
+    try {
+      location = await resolveDeliveryLocation(
+        {
+          divisionId: input.divisionId,
+          districtId: input.districtId,
+          upazilaId: input.upazilaId ?? null,
+        },
+        tx,
+      );
+    } catch (err) {
+      if (err instanceof LocationError) throw new CheckoutError(err.message);
+      throw err;
     }
 
     const productIds = input.items.map((i) => i.productId);
@@ -201,7 +220,7 @@ export async function createOrder(input: CreateOrderInput) {
       }
     }
 
-    const deliveryCharge = zone.charge;
+    const deliveryCharge = location.charge;
     const baseTotal = subtotal + deliveryCharge;
     const paymentMethod = input.paymentMethod ?? "COD";
     const initialStatus = paymentMethod === "COD" ? "PENDING" : "PENDING_PAYMENT";
@@ -225,7 +244,10 @@ export async function createOrder(input: CreateOrderInput) {
             utmSource: input.utmSource || null,
             utmMedium: input.utmMedium || null,
             utmCampaign: input.utmCampaign || null,
-            shippingZoneId: zone.id,
+            shippingZoneId: location.zoneId,
+            divisionName: location.divisionName,
+            districtName: location.districtName,
+            upazilaName: location.upazilaName,
             deliveryCharge,
             subtotal,
             total: baseTotal,

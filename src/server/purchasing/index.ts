@@ -1,4 +1,4 @@
-import type { Prisma, PurchaseOrderStatus } from "@prisma/client";
+import type { Prisma, ProductStatus, PurchaseOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recordMovement } from "@/server/inventory/ledger";
 import { notifyBackInStock } from "@/server/products/stock-notify";
@@ -427,4 +427,83 @@ export async function getLeadTimesByProduct(): Promise<Map<number, number>> {
     if (lead != null) map.set(line.productId, lead);
   }
   return map;
+}
+
+/** A product on a PO that has received stock but can't be sold yet. */
+export interface UnsellableRow {
+  productId: number;
+  name: string;
+  status: ProductStatus;
+  receivedQty: number;
+  /** What is stopping it going on sale, in the admin's words. */
+  missing: string[];
+}
+
+/**
+ * Products on this PO that have taken delivery but cannot be sold.
+ *
+ * Receiving goods and listing them are separate jobs, often done by different
+ * people on different days, and the gap between them is where money quietly
+ * sits in a warehouse. This is the list that closes it: everything that arrived
+ * against this order and still needs a photo, a price, or publishing.
+ *
+ * Only lines with receivedQty > 0 are considered — nothing has arrived for the
+ * rest, so there is nothing to sell yet and no omission to report.
+ */
+export async function getUnsellableReceived(purchaseOrderId: number): Promise<UnsellableRow[]> {
+  const lines = await prisma.purchaseOrderLine.findMany({
+    where: { purchaseOrderId, receivedQty: { gt: 0 } },
+    select: {
+      productId: true,
+      receivedQty: true,
+      product: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          price: true,
+          images: { select: { id: true }, take: 1 },
+          colors: { select: { imageUrl: true } },
+          variants: { select: { imageUrl: true } },
+        },
+      },
+    },
+  });
+
+  // One row per product: a PO may carry several options of the same product,
+  // and "add a photo" is a job you do once for the product, not once per size.
+  const byProduct = new Map<number, UnsellableRow>();
+
+  for (const line of lines) {
+    const p = line.product;
+
+    const hasImage =
+      p.images.length > 0 ||
+      p.colors.some((c) => c.imageUrl?.trim()) ||
+      p.variants.some((v) => v.imageUrl?.trim());
+
+    const missing: string[] = [];
+    if (!hasImage) missing.push("a photo");
+    if (p.price <= 0) missing.push("a price");
+    // Listed last: it is the final step, and saying "publish it" while a photo
+    // is still missing would be advice the admin cannot act on yet.
+    if (p.status !== "ACTIVE") missing.push("publishing");
+
+    if (missing.length === 0) continue;
+
+    const existing = byProduct.get(p.id);
+    if (existing) {
+      existing.receivedQty += line.receivedQty;
+    } else {
+      byProduct.set(p.id, {
+        productId: p.id,
+        name: p.name,
+        status: p.status,
+        receivedQty: line.receivedQty,
+        missing,
+      });
+    }
+  }
+
+  return [...byProduct.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
