@@ -34,12 +34,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files — never commit real secrets; the documented template IS committed
-# env
-# env.local
-# env.*.local
-# env.test
-# env.example
+# env files — never commit real secrets; the documented templates ARE committed
+.env
+.env.local
+.env.*.local
+.env.test
+!.env.example
 !.env.test.example
 
 # mcp — contains DB credentials, never commit
@@ -51,3 +51,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local-only archive of unused/reference material
+/Extra/
