@@ -35,11 +35,11 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files — never commit real secrets; the documented template IS committed
-.env
-.env.local
-.env.*.local
-.env.test
-!.env.example
+# env
+# env.local
+# env.*.local
+# env.test
+# env.example
 !.env.test.example
 
 # mcp — contains DB credentials, never commit
