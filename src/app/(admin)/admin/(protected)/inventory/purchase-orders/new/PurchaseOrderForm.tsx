@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { formatTaka } from "@/lib/money";
 import SearchSelect from "@/components/admin/ui/SearchSelect";
-import { createPurchaseOrderAction } from "../actions";
+import { createPurchaseOrderAction, updatePurchaseOrderAction } from "../actions";
 import QuickProductPanel, { type CategoryOption } from "./QuickProductPanel";
 
 interface VariantOption {
@@ -42,24 +42,49 @@ const blankLine = (): LineDraft => ({
   unitCost: "",
 });
 
+/** An existing DRAFT being edited; omitted when writing a new order. */
+export interface ExistingOrder {
+  id: number;
+  supplierId: number;
+  /** "yyyy-mm-dd" for the date input, or "". */
+  expectedOn: string;
+  /** Taka, as strings for the inputs. */
+  shippingCost: string;
+  customsCost: string;
+  note: string;
+  lines: {
+    productId: string;
+    variantId: string;
+    quantity: string;
+    unitCost: string;
+  }[];
+}
+
 export default function PurchaseOrderForm({
   suppliers,
   products: initialProducts,
   categories,
+  order,
 }: {
   suppliers: { id: number; name: string }[];
   products: ProductOption[];
   categories: CategoryOption[];
+  order?: ExistingOrder;
 }) {
-  const [lines, setLines] = useState<LineDraft[]>([blankLine()]);
+  const isEdit = !!order;
+  const [lines, setLines] = useState<LineDraft[]>(
+    order && order.lines.length > 0
+      ? order.lines.map((l) => ({ ...blankLine(), ...l }))
+      : [blankLine()],
+  );
   // Products are state, not a prop: a draft created from this form has to join
   // the picker immediately, without a round trip that would lose the order
   // being written.
   const [products, setProducts] = useState<ProductOption[]>(initialProducts);
   // Which line opened the "new product" panel, so the result attaches to it.
   const [creatingFor, setCreatingFor] = useState<number | null>(null);
-  const [shipping, setShipping] = useState("");
-  const [customs, setCustoms] = useState("");
+  const [shipping, setShipping] = useState(order?.shippingCost ?? "");
+  const [customs, setCustoms] = useState(order?.customsCost ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -115,8 +140,10 @@ export default function PurchaseOrderForm({
   function submit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      // Success redirects, so anything returned is a failure.
-      const res = await createPurchaseOrderAction(formData);
+      // Both actions redirect on success, so anything returned is a failure.
+      const res = order
+        ? await updatePurchaseOrderAction(order.id, formData)
+        : await createPurchaseOrderAction(formData);
       if (res?.error) setError(res.error);
     });
   }
@@ -127,7 +154,7 @@ export default function PurchaseOrderForm({
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label className={label}>Supplier</label>
-            <select name="supplierId" required className={field}>
+            <select name="supplierId" required defaultValue={order?.supplierId ?? ""} className={field}>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -137,12 +164,12 @@ export default function PurchaseOrderForm({
           </div>
           <div>
             <label className={label}>Expected on</label>
-            <input type="date" name="expectedOn" className={field} />
+            <input type="date" name="expectedOn" defaultValue={order?.expectedOn ?? ""} className={field} />
             <p className="mt-1 text-[11px] text-stone-400">When the goods should arrive.</p>
           </div>
           <div>
             <label className={label}>Note</label>
-            <input name="note" className={field} placeholder="Optional" />
+            <input name="note" defaultValue={order?.note ?? ""} className={field} placeholder="Optional" />
           </div>
         </div>
       </div>
@@ -305,17 +332,23 @@ export default function PurchaseOrderForm({
           disabled={pending}
           className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {pending ? "Saving…" : "Create draft"}
+          {pending ? "Saving…" : isEdit ? "Save changes" : "Create draft"}
         </button>
         <Link
-          href="/admin/inventory/purchase-orders"
+          href={
+            order
+              ? `/admin/inventory/purchase-orders/${order.id}`
+              : "/admin/inventory/purchase-orders"
+          }
           className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
         >
           Cancel
         </Link>
       </div>
       <p className="text-[12px] text-stone-400">
-        Saved as a draft. Nothing counts as incoming until you place it.
+        {isEdit
+          ? "Still a draft. Nothing counts as incoming until you place it."
+          : "Saved as a draft. Nothing counts as incoming until you place it."}
       </p>
     </form>
   );

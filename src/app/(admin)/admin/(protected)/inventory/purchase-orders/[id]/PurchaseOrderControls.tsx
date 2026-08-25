@@ -1,8 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { PurchaseOrderStatus } from "@prisma/client";
-import { markOrderedAction, cancelPurchaseOrderAction } from "../actions";
+import {
+  markOrderedAction,
+  cancelPurchaseOrderAction,
+  deletePurchaseOrderAction,
+} from "../actions";
 
 /**
  * Lifecycle buttons for one purchase order. Which actions exist depends on the
@@ -33,6 +38,14 @@ export default function PurchaseOrderControls({
     });
   }
 
+  function remove() {
+    // Deleting is the only irreversible control here, so it names the order and
+    // says what survives: nothing, because only an order that received nothing
+    // can be deleted at all.
+    if (!confirm(`Delete ${poNo} permanently? This can't be undone.`)) return;
+    run(() => deletePurchaseOrderAction(id));
+  }
+
   function cancel() {
     const warning = hasReceipts
       ? `Cancel ${poNo}? Units already received stay on the shelf — only the outstanding ones are dropped.`
@@ -41,8 +54,12 @@ export default function PurchaseOrderControls({
     run(() => cancelPurchaseOrderAction(id));
   }
 
-  const terminal = status === "RECEIVED" || status === "CANCELLED";
-  if (terminal && !note && !error) return null;
+  // A cancelled order that never received anything is a mistake worth clearing
+  // away; a received one is the ledger's explanation for stock on a shelf and
+  // must stay. RECEIVED is therefore terminal with nothing left to offer.
+  const canDelete = !hasReceipts && (status === "DRAFT" || status === "CANCELLED");
+  const nothingToShow = status === "RECEIVED" || (status === "CANCELLED" && !canDelete);
+  if (nothingToShow && !note && !error) return null;
 
   return (
     <div className="rounded-lg border border-stone-200 bg-white px-4 py-3 shadow-card">
@@ -65,6 +82,24 @@ export default function PurchaseOrderControls({
             className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 disabled:opacity-50"
           >
             Cancel order
+          </button>
+        )}
+        {status === "DRAFT" && (
+          <Link
+            href={`/admin/inventory/purchase-orders/${id}/edit`}
+            className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:border-stone-400"
+          >
+            Edit
+          </Link>
+        )}
+        {canDelete && (
+          <button
+            type="button"
+            onClick={remove}
+            disabled={pending}
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-stone-500 transition hover:text-danger-fg disabled:opacity-50"
+          >
+            Delete
           </button>
         )}
         {status === "DRAFT" && (

@@ -109,6 +109,53 @@ async function nextPoNo(tx: Prisma.TransactionClient): Promise<string> {
   return `PO-${String((last?.id ?? 0) + 1).padStart(4, "0")}`;
 }
 
+/**
+ * Validate the submitted lines and snapshot what they refer to.
+ *
+ * The snapshot is the point: productName/variantLabel are frozen here so a
+ * later rename in the catalogue never rewrites paperwork already sent to a
+ * supplier. Shared by create and update so both agree on what a valid line is.
+ */
+async function resolveLines(tx: Prisma.TransactionClient, input: PurchaseOrderLineInput[]) {
+  return Promise.all(
+    input.map(async (line) => {
+      const product = await tx.product.findUnique({
+        where: { id: line.productId },
+        select: { id: true, name: true },
+      });
+      if (!product) throw new PurchasingError("A product on this order no longer exists.");
+
+      let variantLabel: string | null = null;
+      if (line.variantId != null) {
+        const variant = await tx.productVariant.findUnique({
+          where: { id: line.variantId },
+          select: { productId: true, size: true, colorName: true },
+        });
+        if (!variant || variant.productId !== product.id) {
+          throw new PurchasingError("A chosen option no longer belongs to its product.");
+        }
+        variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ") || null;
+      }
+
+      if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+        throw new PurchasingError(`Quantity for ${product.name} must be a positive whole number.`);
+      }
+      if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
+        throw new PurchasingError(`Unit cost for ${product.name} can't be negative.`);
+      }
+
+      return {
+        productId: product.id,
+        variantId: line.variantId ?? null,
+        productName: product.name,
+        variantLabel,
+        quantity: line.quantity,
+        unitCost: Math.round(line.unitCost),
+      };
+    }),
+  );
+}
+
 export async function createPurchaseOrder(input: PurchaseOrderInput) {
   if (input.lines.length === 0) {
     throw new PurchasingError("Add at least one product to the order.");
@@ -118,45 +165,7 @@ export async function createPurchaseOrder(input: PurchaseOrderInput) {
     const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
     if (!supplier) throw new PurchasingError("Supplier not found.");
 
-    // Snapshot product/variant names now, so a later rename doesn't rewrite the
-    // paperwork already sent to the supplier.
-    const lines = await Promise.all(
-      input.lines.map(async (line) => {
-        const product = await tx.product.findUnique({
-          where: { id: line.productId },
-          select: { id: true, name: true },
-        });
-        if (!product) throw new PurchasingError("A product on this order no longer exists.");
-
-        let variantLabel: string | null = null;
-        if (line.variantId != null) {
-          const variant = await tx.productVariant.findUnique({
-            where: { id: line.variantId },
-            select: { productId: true, size: true, colorName: true },
-          });
-          if (!variant || variant.productId !== product.id) {
-            throw new PurchasingError("A chosen option no longer belongs to its product.");
-          }
-          variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ") || null;
-        }
-
-        if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
-          throw new PurchasingError(`Quantity for ${product.name} must be a positive whole number.`);
-        }
-        if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
-          throw new PurchasingError(`Unit cost for ${product.name} can't be negative.`);
-        }
-
-        return {
-          productId: product.id,
-          variantId: line.variantId ?? null,
-          productName: product.name,
-          variantLabel,
-          quantity: line.quantity,
-          unitCost: Math.round(line.unitCost),
-        };
-      }),
-    );
+    const lines = await resolveLines(tx, input.lines);
 
     return tx.purchaseOrder.create({
       data: {
@@ -191,6 +200,7 @@ export async function getPurchaseOrder(id: number) {
     include: {
       supplier: true,
       lines: { orderBy: { id: "asc" } },
+      payments: { orderBy: [{ paidOn: "desc" }, { id: "desc" }] },
     },
   });
 }
@@ -506,4 +516,221 @@ export async function getUnsellableReceived(purchaseOrderId: number): Promise<Un
   }
 
   return [...byProduct.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ── Editing, deleting, and paying ───────────────────────────────────────────
+
+/**
+ * Rewrite a DRAFT purchase order.
+ *
+ * DRAFT only, and that restriction is what makes replacing the lines wholesale
+ * safe: a draft has never been received, so no PurchaseOrderLine id is
+ * referenced by a receipt or a stock movement. (Contrast ProductVariant, where
+ * delete-and-recreate destroyed reservations and ledger links — the difference
+ * is that nothing points at a draft's lines.)
+ *
+ * Once an order is placed it is a document the supplier also holds, so editing
+ * stops there: cancel it and write a new one instead.
+ */
+export async function updatePurchaseOrder(id: number, input: PurchaseOrderInput) {
+  if (input.lines.length === 0) {
+    throw new PurchasingError("Add at least one product to the order.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.purchaseOrder.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    if (!existing) throw new PurchasingError("Purchase order not found.");
+    if (existing.status !== "DRAFT") {
+      throw new PurchasingError(
+        "Only a draft can be edited. Cancel this order and write a new one instead.",
+      );
+    }
+
+    const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
+    if (!supplier) throw new PurchasingError("Supplier not found.");
+
+    const lines = await resolveLines(tx, input.lines);
+
+    await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: id } });
+
+    return tx.purchaseOrder.update({
+      where: { id },
+      data: {
+        supplierId: input.supplierId,
+        expectedOn: input.expectedOn ?? null,
+        shippingCost: Math.max(0, Math.round(input.shippingCost ?? 0)),
+        customsCost: Math.max(0, Math.round(input.customsCost ?? 0)),
+        note: input.note?.trim() || null,
+        lines: { createMany: { data: lines } },
+      },
+      include: { lines: true },
+    });
+  });
+}
+
+/**
+ * Delete a purchase order outright.
+ *
+ * Only when nothing was ever received against it. A received order is the
+ * explanation for stock that is physically on a shelf — its poNo is what the
+ * PURCHASE movements name as their reason — so deleting one would leave the
+ * ledger pointing at paperwork that no longer exists. Cancel those instead;
+ * cancelling is reversible reading, deletion is not.
+ *
+ * Its payment history goes with it (cascade), which is correct precisely
+ * because an order that received nothing and is being deleted was a mistake.
+ */
+export async function deletePurchaseOrder(id: number): Promise<void> {
+  const po = await prisma.purchaseOrder.findUnique({
+    where: { id },
+    select: { status: true, poNo: true, lines: { select: { receivedQty: true } } },
+  });
+  if (!po) throw new PurchasingError("Purchase order not found.");
+
+  const received = po.lines.reduce((sum, l) => sum + l.receivedQty, 0);
+  if (received > 0) {
+    throw new PurchasingError(
+      `${po.poNo} has already received ${received} unit(s). It can be cancelled, but not deleted — ` +
+        `the stock ledger refers to it for why those goods arrived.`,
+    );
+  }
+  if (po.status === "ORDERED") {
+    throw new PurchasingError(
+      "This order has been placed with the supplier. Cancel it first, then delete it.",
+    );
+  }
+
+  await prisma.purchaseOrder.delete({ where: { id } });
+}
+
+export interface PaymentInput {
+  purchaseOrderId: number;
+  /** Paisa. Must be positive. */
+  amount: number;
+  paidOn: Date;
+  method?: string | null;
+  note?: string | null;
+  actorName: string;
+}
+
+/** What a purchase order costs in total: goods plus the overheads on top. */
+export function purchaseOrderTotal(po: {
+  lines: { quantity: number; unitCost: number }[];
+  shippingCost: number;
+  customsCost: number;
+}): number {
+  const goods = po.lines.reduce((sum, l) => sum + l.unitCost * l.quantity, 0);
+  return goods + po.shippingCost + po.customsCost;
+}
+
+/**
+ * Record money paid to a supplier against one order.
+ *
+ * Overpayment is refused rather than absorbed: paying more than an order is
+ * worth is almost always a typo (a digit too many, or the same instalment
+ * entered twice), and silently accepting it turns the outstanding figure — the
+ * only number this feature exists to produce — into fiction.
+ */
+export async function recordSupplierPayment(input: PaymentInput) {
+  const amount = Math.round(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new PurchasingError("Enter a payment amount greater than zero.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const po = await tx.purchaseOrder.findUnique({
+      where: { id: input.purchaseOrderId },
+      select: {
+        status: true,
+        shippingCost: true,
+        customsCost: true,
+        lines: { select: { quantity: true, unitCost: true } },
+        payments: { select: { amount: true } },
+      },
+    });
+    if (!po) throw new PurchasingError("Purchase order not found.");
+    if (po.status === "CANCELLED") {
+      throw new PurchasingError("This order was cancelled. Payments can't be recorded against it.");
+    }
+
+    const total = purchaseOrderTotal(po);
+    const paid = po.payments.reduce((sum, p) => sum + p.amount, 0);
+    if (paid + amount > total) {
+      const remaining = Math.max(0, total - paid);
+      throw new PurchasingError(
+        remaining === 0
+          ? "This order is already fully paid."
+          : `That is more than the ${(remaining / 100).toLocaleString("en-BD")} \u09f3 still outstanding.`,
+      );
+    }
+
+    return tx.supplierPayment.create({
+      data: {
+        purchaseOrderId: input.purchaseOrderId,
+        amount,
+        paidOn: input.paidOn,
+        method: input.method?.trim() || null,
+        note: input.note?.trim() || null,
+        actorName: input.actorName,
+      },
+    });
+  });
+}
+
+/** Remove a recorded payment — for when one was entered by mistake. */
+export async function deleteSupplierPayment(id: number): Promise<void> {
+  await prisma.supplierPayment.delete({ where: { id } }).catch(() => {
+    throw new PurchasingError("That payment record no longer exists.");
+  });
+}
+
+export interface SupplierBalance {
+  supplierId: number;
+  name: string;
+  /** Value of every live (non-cancelled) order placed with them, paisa. */
+  ordered: number;
+  paid: number;
+  /** ordered − paid: what is still owed. */
+  due: number;
+}
+
+/**
+ * What is still owed to each supplier, across all their live orders.
+ *
+ * Cancelled orders are excluded — nothing is owed on an order that will never
+ * arrive. Drafts ARE included: an order you have written but not yet placed is
+ * money you are about to commit, and hiding it makes the figure optimistic.
+ */
+export async function getSupplierBalances(): Promise<SupplierBalance[]> {
+  const suppliers = await prisma.supplier.findMany({
+    select: {
+      id: true,
+      name: true,
+      purchaseOrders: {
+        where: { status: { not: "CANCELLED" } },
+        select: {
+          shippingCost: true,
+          customsCost: true,
+          lines: { select: { quantity: true, unitCost: true } },
+          payments: { select: { amount: true } },
+        },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return suppliers
+    .map((s) => {
+      let ordered = 0;
+      let paid = 0;
+      for (const po of s.purchaseOrders) {
+        ordered += purchaseOrderTotal(po);
+        paid += po.payments.reduce((sum, p) => sum + p.amount, 0);
+      }
+      return { supplierId: s.id, name: s.name, ordered, paid, due: ordered - paid };
+    })
+    .filter((s) => s.ordered > 0);
 }

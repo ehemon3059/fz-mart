@@ -9,9 +9,13 @@ import {
   saveSupplier,
   deleteSupplier,
   createPurchaseOrder,
+  updatePurchaseOrder,
+  deletePurchaseOrder,
   markOrdered,
   cancelPurchaseOrder,
   receivePurchaseOrder,
+  recordSupplierPayment,
+  deleteSupplierPayment,
   PurchasingError,
   type PurchaseOrderLineInput,
 } from "@/server/purchasing";
@@ -81,10 +85,12 @@ export async function deleteSupplierAction(id: number): Promise<ActionResult> {
 
 // ── Purchase orders ─────────────────────────────────────────────────────────
 
-export async function createPurchaseOrderAction(formData: FormData): Promise<ActionResult> {
-  const admin = await requirePermission("inventory");
-
-  // Lines arrive as parallel arrays from the repeating row UI.
+/**
+ * Lines arrive as parallel arrays from the repeating row UI, one entry per
+ * rendered row. Blank rows are skipped rather than rejected — the form always
+ * renders one spare, and an empty spare is not a mistake.
+ */
+function parseLines(formData: FormData): PurchaseOrderLineInput[] {
   const productIds = formData.getAll("lineProductId").map(String);
   const variantIds = formData.getAll("lineVariantId").map(String);
   const quantities = formData.getAll("lineQuantity").map(String);
@@ -94,7 +100,6 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<Act
   for (let i = 0; i < productIds.length; i++) {
     const productId = Number(productIds[i]);
     const quantity = Number(quantities[i]);
-    // Skip blank rows rather than erroring — the form always renders one spare.
     if (!productId || !quantity) continue;
     lines.push({
       productId,
@@ -103,17 +108,30 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<Act
       unitCost: takaToPaisa(Number(unitCosts[i]) || 0),
     });
   }
+  return lines;
+}
 
+/** "2026-08-27" from a date input, or null when blank/unparseable. */
+function parseDate(value: FormDataEntryValue | null): Date | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const d = new Date(`${raw}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function createPurchaseOrderAction(formData: FormData): Promise<ActionResult> {
+  const admin = await requirePermission("inventory");
+
+  const lines = parseLines(formData);
   if (lines.length === 0) return { error: "Add at least one product to the order." };
 
-  const expectedRaw = String(formData.get("expectedOn") ?? "").trim();
-  const expectedOn = expectedRaw ? new Date(`${expectedRaw}T00:00:00`) : null;
+  const expectedOn = parseDate(formData.get("expectedOn"));
 
   let po;
   try {
     po = await createPurchaseOrder({
       supplierId: Number(formData.get("supplierId")),
-      expectedOn: expectedOn && !Number.isNaN(expectedOn.getTime()) ? expectedOn : null,
+      expectedOn,
       shippingCost: takaToPaisa(Number(formData.get("shippingCost")) || 0),
       customsCost: takaToPaisa(Number(formData.get("customsCost")) || 0),
       note: String(formData.get("note") ?? ""),
@@ -132,6 +150,116 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<Act
   });
   revalidatePath("/admin/inventory/purchase-orders");
   redirect(`/admin/inventory/purchase-orders/${po.id}`);
+}
+
+export async function updatePurchaseOrderAction(
+  id: number,
+  formData: FormData,
+): Promise<ActionResult> {
+  const admin = await requirePermission("inventory");
+
+  const lines = parseLines(formData);
+  if (lines.length === 0) return { error: "Add at least one product to the order." };
+
+  let po;
+  try {
+    po = await updatePurchaseOrder(id, {
+      supplierId: Number(formData.get("supplierId")),
+      expectedOn: parseDate(formData.get("expectedOn")),
+      shippingCost: takaToPaisa(Number(formData.get("shippingCost")) || 0),
+      customsCost: takaToPaisa(Number(formData.get("customsCost")) || 0),
+      note: String(formData.get("note") ?? ""),
+      lines,
+    });
+  } catch (err) {
+    if (err instanceof PurchasingError) return { error: err.message };
+    throw err;
+  }
+
+  await logActivity({
+    adminId: admin.id,
+    actorName: admin.username,
+    action: "purchase_order.update",
+    detail: po.poNo,
+  });
+  revalidatePath(`/admin/inventory/purchase-orders/${id}`);
+  revalidatePath("/admin/inventory/purchase-orders");
+  redirect(`/admin/inventory/purchase-orders/${id}`);
+}
+
+export async function deletePurchaseOrderAction(id: number): Promise<ActionResult> {
+  const admin = await requirePermission("inventory");
+  try {
+    await deletePurchaseOrder(id);
+  } catch (err) {
+    if (err instanceof PurchasingError) return { error: err.message };
+    throw err;
+  }
+  await logActivity({
+    adminId: admin.id,
+    actorName: admin.username,
+    action: "purchase_order.delete",
+    detail: `#${id}`,
+  });
+  revalidatePath("/admin/inventory/purchase-orders");
+  redirect("/admin/inventory/purchase-orders");
+}
+
+// ── Supplier payments ───────────────────────────────────────────────────────
+
+export async function recordPaymentAction(
+  purchaseOrderId: number,
+  formData: FormData,
+): Promise<ActionResult> {
+  const admin = await requirePermission("inventory");
+
+  const paidOn = parseDate(formData.get("paidOn")) ?? new Date();
+
+  try {
+    await recordSupplierPayment({
+      purchaseOrderId,
+      amount: takaToPaisa(Number(formData.get("amount")) || 0),
+      paidOn,
+      method: String(formData.get("method") ?? ""),
+      note: String(formData.get("note") ?? ""),
+      actorName: admin.username,
+    });
+  } catch (err) {
+    if (err instanceof PurchasingError) return { error: err.message };
+    throw err;
+  }
+
+  await logActivity({
+    adminId: admin.id,
+    actorName: admin.username,
+    action: "supplier_payment.record",
+    detail: `PO #${purchaseOrderId} · ৳${formData.get("amount")}`,
+  });
+  revalidatePath(`/admin/inventory/purchase-orders/${purchaseOrderId}`);
+  revalidatePath("/admin/inventory/suppliers");
+  return { success: "Payment recorded." };
+}
+
+export async function deletePaymentAction(
+  id: number,
+  purchaseOrderId: number,
+): Promise<ActionResult> {
+  const admin = await requirePermission("inventory");
+  try {
+    await deleteSupplierPayment(id);
+  } catch (err) {
+    if (err instanceof PurchasingError) return { error: err.message };
+    throw err;
+  }
+  await logActivity({
+    adminId: admin.id,
+    actorName: admin.username,
+    action: "supplier_payment.delete",
+    detail: `#${id}`,
+  });
+  revalidatePath(`/admin/inventory/purchase-orders/${purchaseOrderId}`);
+  revalidatePath("/admin/inventory/suppliers");
+  return { success: "Payment removed." };
 }
 
 export async function markOrderedAction(id: number): Promise<ActionResult> {

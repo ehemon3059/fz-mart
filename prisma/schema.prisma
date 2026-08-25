@@ -1439,9 +1439,43 @@ model PurchaseOrder {
   updatedAt    DateTime            @updatedAt
   supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   lines        PurchaseOrderLine[]
+  payments     SupplierPayment[]
 
   @@index([status, expectedOn])
   @@index([supplierId])
+}
+
+// Money actually handed to a supplier against one purchase order.
+//
+// A LEDGER, not a counter: suppliers in this trade are paid in instalments — an
+// advance to start the order, the balance on delivery — and "how much is still
+// owed" is a question about a history, not a single number someone overwrites.
+// Rows accumulate; the amount paid is their sum, and the outstanding balance is
+// the order's total minus that sum.
+//
+// Note this is deliberately NOT part of the P&L. Profit is accrual-based:
+// goods become a cost when they are SOLD (COGS), not when the supplier is paid.
+// This model answers the separate, equally real question an owner asks — "who
+// do I still owe?" — which the finance report was never designed to.
+model SupplierPayment {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  // Paisa, like every other money column. Always positive: a refund from a
+  // supplier is rare enough to record as a note rather than model as a sign.
+  amount          Int
+  // When the money actually moved, which is often not when it was recorded.
+  paidOn          DateTime
+  // "bKash", "Bank transfer", "Cash" — free text on purpose. This is a note to
+  // yourself about a payment already made, not a payment being processed.
+  method          String?
+  note            String?       @db.Text
+  // Admin username who recorded it, for the same reason StockMovement carries
+  // one: money records need to say who wrote them.
+  actorName       String
+  createdAt       DateTime      @default(now())
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId, paidOn])
 }
 
 // One product (or variant) on a purchase order.

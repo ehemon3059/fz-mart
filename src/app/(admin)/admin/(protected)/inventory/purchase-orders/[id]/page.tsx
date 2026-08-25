@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPurchaseOrder, getUnsellableReceived } from "@/server/purchasing";
+import {
+  getPurchaseOrder,
+  getUnsellableReceived,
+  purchaseOrderTotal,
+} from "@/server/purchasing";
 import { formatTaka } from "@/lib/money";
 import { Badge } from "@/components/admin/ui/Badge";
 import PurchaseOrderControls from "./PurchaseOrderControls";
 import ReceivePanel from "./ReceivePanel";
+import PaymentsPanel from "./PaymentsPanel";
 
 export const metadata = { title: "Purchase Order — FZ-Mart Admin" };
 
@@ -28,6 +33,15 @@ export default async function PurchaseOrderDetailPage({
   const orderedUnits = po.lines.reduce((s, l) => s + l.quantity, 0);
   const receivedUnits = po.lines.reduce((s, l) => s + l.receivedQty, 0);
   const outstanding = orderedUnits - receivedUnits;
+
+  // What the order costs in total, against what has actually been handed over.
+  const orderTotal = purchaseOrderTotal(po);
+  const paidTotal = po.payments.reduce((sum, p) => sum + p.amount, 0);
+  const dueTotal = orderTotal - paidTotal;
+  const today = new Date();
+  const todayIso = new Date(today.getTime() - today.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
 
   return (
     <div className="max-w-4xl space-y-6 px-4 py-8 sm:px-7">
@@ -199,6 +213,28 @@ export default async function PurchaseOrderDetailPage({
           order once you have sent it to the supplier.
         </div>
       )}
+
+      <PaymentsPanel
+        purchaseOrderId={po.id}
+        total={formatTaka(orderTotal)}
+        paid={formatTaka(paidTotal)}
+        due={formatTaka(dueTotal)}
+        fullyPaid={dueTotal <= 0}
+        canRecord={po.status !== "CANCELLED"}
+        today={todayIso}
+        payments={po.payments.map((p) => ({
+          id: p.id,
+          amount: formatTaka(p.amount),
+          paidOn: p.paidOn.toLocaleDateString("en-BD", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }),
+          method: p.method,
+          note: p.note,
+          actorName: p.actorName,
+        }))}
+      />
 
       {po.note && (
         <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
