@@ -9,6 +9,9 @@ export const metadata = { title: "Stock-takes — FZ-Mart Admin" };
 
 const STATUS_TONE = {
   OPEN: "warning",
+  // Only visible if a commit died partway through — the session is sealed
+  // against further counting but was never finished, which needs looking at.
+  COMMITTING: "warning",
   COMMITTED: "success",
   CANCELLED: "neutral",
 } as const;

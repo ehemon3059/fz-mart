@@ -56,6 +56,13 @@ export async function saveLocation(id: number | null, input: LocationInput) {
   const name = input.name.trim();
   if (!name) throw new LocationError("Give the location a name.");
 
+  // Asking for both at once is a contradiction, not a preference to resolve
+  // quietly: deliveries cannot land somewhere that is closed. Say so rather
+  // than silently dropping one of the two ticks.
+  if (input.isDefault && input.isActive === false) {
+    throw new LocationError("A closed location cannot be the default for deliveries.");
+  }
+
   return prisma.$transaction(async (tx) => {
     const clash = await tx.stockLocation.findFirst({
       where: { name, ...(id ? { id: { not: id } } : {}) },
@@ -67,20 +74,36 @@ export async function saveLocation(id: number | null, input: LocationInput) {
       name,
       note: input.note?.trim() || null,
       isActive: input.isActive ?? true,
+      // Carried explicitly so the tick box works in BOTH directions. Leaving
+      // isDefault out of `data` meant only the branch below could set it, and
+      // only ever to true — unticking "default" was accepted by the form and
+      // then dropped on the floor, with the row re-rendering still badged.
+      // `?? false` is safe because the repair further down re-elects a default
+      // whenever clearing this one would leave the shop without any.
+      isDefault: input.isDefault ?? false,
     };
 
     const saved = id
       ? await tx.stockLocation.update({ where: { id }, data })
       : await tx.stockLocation.create({ data });
 
-    // Exactly one default. Claiming it clears every other, so the invariant is
+    // Exactly one default. This row already claimed it via `data` above; what
+    // remains is stripping the role from everyone else, so the invariant is
     // enforced by the write rather than hoped for.
     if (input.isDefault) {
       await tx.stockLocation.updateMany({
         where: { id: { not: saved.id } },
         data: { isDefault: false },
       });
-      await tx.stockLocation.update({ where: { id: saved.id }, data: { isDefault: true } });
+    }
+
+    // A deactivated location cannot stay the default: the role is about where
+    // goods land, and nothing lands anywhere closed. Clearing it here also
+    // stops the repair below from electing a second default while this row
+    // still claims the first — the "exactly one" invariant is only true if
+    // the old holder gives it up.
+    if (data.isActive === false) {
+      await tx.stockLocation.update({ where: { id: saved.id }, data: { isDefault: false } });
     }
 
     // The shop must never be left with no default while a location exists.

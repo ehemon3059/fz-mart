@@ -116,9 +116,39 @@ export default function CountClient({
 
   function saveCount() {
     if (!target) return;
-    const counted = Number(qty);
-    if (!Number.isInteger(counted) || counted < 0) {
-      setError("Enter the number on the shelf — zero or more.");
+    // A save already in flight must not be re-entered. A scanner that
+    // double-fires sends two Enters in quick succession, and without this the
+    // second one saves again before the first has cleared `target`.
+    if (pending) return;
+
+    // BLANK IS NOT ZERO. `Number("")` is 0 and would sail through the range
+    // check below, so an empty box — a stray Enter, or a scanner firing into a
+    // field that never received digits — would record "0 on shelf" and commit
+    // would then write that item's entire stock off. The whole point of a
+    // stock-take is to prevent exactly that, so an empty count is refused and
+    // a real zero has to be typed.
+    const raw = qty.trim();
+    if (raw === "") {
+      setError("Type the number on the shelf. Enter 0 only if there really are none.");
+      qtyRef.current?.focus();
+      return;
+    }
+
+    // Digits only. `Number()` alone would accept "1e3" as 1000 and " 1.5 " as
+    // a non-integer, and a barcode scanned into this box would otherwise be
+    // reported back as a vague range error, so match the shape first and quote
+    // what was actually typed.
+    if (!/^\d+$/.test(raw)) {
+      setError(`"${raw}" isn't a count. Type the number on the shelf, digits only.`);
+      setQty("");
+      qtyRef.current?.focus();
+      return;
+    }
+
+    const counted = Number(raw);
+    if (!Number.isSafeInteger(counted)) {
+      setError("That count is too large — check the number on the shelf.");
+      qtyRef.current?.focus();
       return;
     }
     startTransition(async () => {
@@ -190,10 +220,11 @@ export default function CountClient({
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={(e) => {
                 // A scanner ends with Enter, which must not submit anything —
-                // only resolve what was typed.
+                // only resolve what was typed. Ignored while a lookup is in
+                // flight so a double-fire can't queue two resolves.
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  resolve(code);
+                  if (!pending) resolve(code);
                 }
               }}
               placeholder="SAR-PUR-32"
@@ -258,9 +289,16 @@ export default function CountClient({
               <div className="mt-2.5 flex gap-2">
                 <input
                   ref={qtyRef}
-                  type="number"
-                  min="0"
-                  step="1"
+                  // Deliberately text, not number. A scanner fired at this box
+                  // types a barcode; `type="number"` reports that to React as
+                  // an empty string, so a mis-scan would be indistinguishable
+                  // from an untouched field. Text keeps the raw keystrokes
+                  // visible to the guard in `saveCount`, which can then say
+                  // what actually landed. `inputMode` still brings up the
+                  // numeric keypad on a phone.
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   value={qty}
                   onChange={(e) => setQty(e.target.value)}
                   onKeyDown={(e) => {
@@ -374,7 +412,13 @@ export default function CountClient({
                                 : "text-danger-fg",
                         ].join(" ")}
                       >
-                        {variance == null ? "—" : variance === 0 ? "0" : variance > 0 ? `+${variance}` : variance}
+                        {variance == null
+                          ? "—"
+                          : variance === 0
+                            ? "0"
+                            : variance > 0
+                              ? `+${variance}`
+                              : variance}
                       </td>
                       {isOpen && (
                         <td className="px-4 py-2.5 text-right">

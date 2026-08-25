@@ -129,6 +129,9 @@ export async function scanCode(raw: string): Promise<ScanResult> {
   return { kind: "miss", code };
 }
 
+/** Rows any single product may contribute to a name search. */
+const PER_PRODUCT_ROWS = 6;
+
 /**
  * Name search, for the rows that have no SKU at all.
  *
@@ -153,7 +156,13 @@ export async function searchStockRows(query: string, take = 20): Promise<ScanHit
         orderBy: { sortOrder: "asc" },
       },
     },
-    take,
+    // Fetch by PRODUCT, not by row. `take` bounds the rows returned below, and
+    // a product with many options expands into many rows — so limiting the
+    // query to `take` products and then slicing to `take` rows meant a single
+    // 25-option product could fill the picker and hide every other match.
+    // Over-fetch products so the row budget can span several of them; the cap
+    // keeps a broad query from pulling the catalogue.
+    take: Math.min(take * 3, 60),
   });
 
   const rows: ScanHit[] = [];
@@ -169,7 +178,10 @@ export async function searchStockRows(query: string, take = 20): Promise<ScanHit
         reserved: p.reserved,
       });
     } else {
-      for (const v of p.variants) {
+      // Bounded per product, so one heavily-optioned product cannot crowd the
+      // others out of the list. Someone who really wants a specific option
+      // types more of the name and narrows the search.
+      for (const v of p.variants.slice(0, PER_PRODUCT_ROWS)) {
         rows.push({
           productId: p.id,
           variantId: v.id,

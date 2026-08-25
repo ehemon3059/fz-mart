@@ -171,6 +171,11 @@ export async function handleVerifiedPayment(
       where: { id: payment.id },
       data: {
         status: "SUCCESS",
+        // Stamped once, here. This is the date cash-flow reports count the
+        // money in on, and it must not move again when the row is later
+        // touched — a refund next quarter must not drag this payment forward
+        // into that quarter's takings.
+        paidAt: new Date(),
         providerTxnId: verified.providerTxnId ?? payment.providerTxnId,
         rawPayload: (verified.raw ?? undefined) as Prisma.InputJsonValue,
       },
@@ -289,7 +294,12 @@ export async function markPaymentRefunded(paymentId: number, adminUsername: stri
       throw new PaymentFlowError("Only a successful payment can be marked refunded.");
     }
 
-    await tx.payment.update({ where: { id: paymentId }, data: { status: "REFUNDED" } });
+    await tx.payment.update({
+      where: { id: paymentId },
+      // Dated separately from paidAt so the refund lands as an outflow in the
+      // period it actually happened, leaving the original inflow where it was.
+      data: { status: "REFUNDED", refundedAt: new Date() },
+    });
     await tx.order.update({
       where: { id: payment.orderId },
       data: { paidAmount: { decrement: payment.amount } },

@@ -547,7 +547,7 @@ export async function updatePurchaseOrder(id: number, input: PurchaseOrderInput)
   return prisma.$transaction(async (tx) => {
     const existing = await tx.purchaseOrder.findUnique({
       where: { id },
-      select: { status: true },
+      select: { status: true, payments: { select: { amount: true } } },
     });
     if (!existing) throw new PurchasingError("Purchase order not found.");
     if (existing.status !== "DRAFT") {
@@ -560,6 +560,32 @@ export async function updatePurchaseOrder(id: number, input: PurchaseOrderInput)
     if (!supplier) throw new PurchasingError("Supplier not found.");
 
     const lines = await resolveLines(tx, input.lines);
+
+    // An edit must not shrink the order below what has already been handed
+    // over. recordSupplierPayment refuses to take more than an order is worth,
+    // but that guard only sees the total AT THE TIME OF PAYMENT — editing the
+    // order afterwards walks straight past it, leaving a negative balance that
+    // `dueTotal <= 0` then reports cheerfully as "Settled" while the supplier
+    // is actually holding an overpayment nobody is tracking.
+    //
+    // Refused rather than absorbed, matching the payment path: the money is a
+    // fact, the paperwork is what's wrong. Delete the payment, fix the order,
+    // record it again.
+    const alreadyPaid = existing.payments.reduce((sum, p) => sum + p.amount, 0);
+    if (alreadyPaid > 0) {
+      const newTotal = purchaseOrderTotal({
+        lines,
+        shippingCost: Math.max(0, Math.round(input.shippingCost ?? 0)),
+        customsCost: Math.max(0, Math.round(input.customsCost ?? 0)),
+      });
+      if (newTotal < alreadyPaid) {
+        const taka = (paisa: number) => (paisa / 100).toLocaleString("en-BD");
+        throw new PurchasingError(
+          `${taka(alreadyPaid)} ৳ has already been paid on this order, so it can't be edited ` +
+            `down to ${taka(newTotal)} ৳. Remove the payment first, then edit.`,
+        );
+      }
+    }
 
     await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: id } });
 

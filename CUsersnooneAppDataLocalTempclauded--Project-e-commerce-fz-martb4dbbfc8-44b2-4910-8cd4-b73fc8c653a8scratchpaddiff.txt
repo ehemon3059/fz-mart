@@ -1,0 +1,4353 @@
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index 2dbc5cc..10648de 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -170,7 +170,6 @@ model Product {
+   variants           ProductVariant[]
+   wishlistItems      WishlistItem[]
+   stockNotifications StockNotification[]
+-  stockAdjustments   StockAdjustment[]
+   stockMovements     StockMovement[]
+   purchaseOrderLines PurchaseOrderLine[]
+   coupons            Coupon[]
+@@ -1349,25 +1348,6 @@ model StockNotification {
+   @@index([productId, notifiedAt])
+ }
+ 
+-// DEPRECATED (Phase A) — superseded by StockMovement, which records EVERY stock
+-// change rather than only hand corrections. Rows were copied across by
+-// migration 20260816120000_add_stock_movement_ledger; nothing writes here any
+-// more. Kept read-only as a safety net so the copy can be verified against the
+-// original before the table is finally dropped.
+-model StockAdjustment {
+-  id        Int      @id @default(autoincrement())
+-  productId Int
+-  variantId Int?
+-  delta     Int
+-  newStock  Int
+-  reason    String
+-  adminName String
+-  createdAt DateTime @default(now())
+-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+-
+-  @@index([productId, createdAt])
+-}
+-
+ // ─────────────────────────────────────────────────────────────
+ // Purchasing (Phase E)
+ // ─────────────────────────────────────────────────────────────
+@@ -1439,11 +1419,45 @@ model PurchaseOrder {
+   updatedAt    DateTime            @updatedAt
+   supplier     Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+   lines        PurchaseOrderLine[]
++  payments     SupplierPayment[]
+ 
+   @@index([status, expectedOn])
+   @@index([supplierId])
+ }
+ 
++// Money actually handed to a supplier against one purchase order.
++//
++// A LEDGER, not a counter: suppliers in this trade are paid in instalments — an
++// advance to start the order, the balance on delivery — and "how much is still
++// owed" is a question about a history, not a single number someone overwrites.
++// Rows accumulate; the amount paid is their sum, and the outstanding balance is
++// the order's total minus that sum.
++//
++// Note this is deliberately NOT part of the P&L. Profit is accrual-based:
++// goods become a cost when they are SOLD (COGS), not when the supplier is paid.
++// This model answers the separate, equally real question an owner asks — "who
++// do I still owe?" — which the finance report was never designed to.
++model SupplierPayment {
++  id              Int           @id @default(autoincrement())
++  purchaseOrderId Int
++  // Paisa, like every other money column. Always positive: a refund from a
++  // supplier is rare enough to record as a note rather than model as a sign.
++  amount          Int
++  // When the money actually moved, which is often not when it was recorded.
++  paidOn          DateTime
++  // "bKash", "Bank transfer", "Cash" — free text on purpose. This is a note to
++  // yourself about a payment already made, not a payment being processed.
++  method          String?
++  note            String?       @db.Text
++  // Admin username who recorded it, for the same reason StockMovement carries
++  // one: money records need to say who wrote them.
++  actorName       String
++  createdAt       DateTime      @default(now())
++  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
++
++  @@index([purchaseOrderId, paidOn])
++}
++
+ // One product (or variant) on a purchase order.
+ //
+ // receivedQty tracks partial deliveries: a supplier who ships 60 of 100 leaves
+@@ -1517,28 +1531,28 @@ enum StockMovementType {
+ // describes, so a movement can never be orphaned from its effect, nor an effect
+ // go unrecorded.
+ model StockMovement {
+-  id        Int               @id @default(autoincrement())
+-  productId Int
++  id         Int               @id @default(autoincrement())
++  productId  Int
+   // Which stock row actually moved: the variant's when set, else the product's.
+   // Mirrors how checkout decrements — a sized product holds stock per variant.
+-  variantId Int?
+-  type      StockMovementType
++  variantId  Int?
++  type       StockMovementType
+   // Signed change (+ added, − removed). Never zero.
+-  delta     Int
++  delta      Int
+   // The level before and after this movement, on the row identified above.
+   // Stored rather than derived so a replay can pinpoint exactly where a
+   // discrepancy entered, instead of only showing that one exists.
+-  beforeQty Int
+-  afterQty  Int
++  beforeQty  Int
++  afterQty   Int
+   // Per-unit sourcing cost in paisa at the time of the movement, SNAPSHOTTED
+   // like OrderItem.purchaseCost — inventory valuation and write-off cost must
+   // use the cost that applied then, not today's supplier price. Null when not
+   // meaningful (a stock-take correction has no cost basis).
+-  unitCost  Int?
++  unitCost   Int?
+   // The order that caused this, for SALE / CANCEL_RESTOCK / RETURN. Null for
+   // PURCHASE / DAMAGE / ADJUSTMENT. SetNull rather than Cascade: deleting an
+   // order must never erase the fact that stock moved.
+-  orderId   Int?
++  orderId    Int?
+   // Free text for the movements a human initiates (ADJUSTMENT, DAMAGE,
+   // PURCHASE). Null for system-generated rows, which explain themselves via
+   // type + orderId.
+@@ -1546,17 +1560,30 @@ model StockMovement {
+   // A PURCHASE receipt puts its PO number here ("PO-0042") rather than carrying
+   // a third nullable FK: the ledger is the hottest table in the inventory
+   // system, and the reference is for a human reading a row, not for joining.
+-  reason    String?
++  reason     String?
+   // Who caused it: an admin username, "customer" for self-service, or "system"
+   // for job- and webhook-driven changes.
+-  actorName String
+-  createdAt DateTime          @default(now())
+-  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+-  variant   ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+-  order     Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
++  actorName  String
++  // WHERE the stock moved, when the shop keeps more than one. Nullable because
++  // every movement written before locations existed genuinely has no answer,
++  // and inventing one would be a lie the reports would then repeat.
++  //
++  // A LABEL, not a level: Product.stock / ProductVariant.stock remain single
++  // shop-wide figures, so availability, reservations and the oversell guard are
++  // untouched by locations. A per-location BALANCE is derived by summing this
++  // ledger's deltas for a location — which is exactly what an append-only
++  // ledger is good for.
++  locationId Int?
++  createdAt  DateTime          @default(now())
++  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
++  variant    ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
++  order      Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
++  location   StockLocation?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+ 
+   // The ledger view for one product, newest first.
+   @@index([productId, createdAt])
++  // Per-location balances and history.
++  @@index([locationId, createdAt])
+   // Per-variant history, and the replay in stock-ledger-verify.
+   @@index([variantId, createdAt])
+   // "What did this order do to stock?" on the order detail page.
+@@ -1578,3 +1605,103 @@ model NewsletterSubscriber {
+ 
+   @@index([createdAt])
+ }
++
++// ─────────────────────────────────────────────────────────────
++// Locations & stock-takes (Phase F)
++// ─────────────────────────────────────────────────────────────
++
++// Somewhere stock physically sits — "Main Shop", "Warehouse", "Shop 2".
++//
++// Deliberately a LABEL rather than a separate stock pool. Splitting
++// Product.stock per location would mean rewriting reservations, checkout
++// availability and the oversell guard, and inventing an answer to "which
++// location fulfils this order?" that a single-counter shop does not need. So a
++// location records WHERE a movement happened; the sellable total stays
++// shop-wide, and a per-location balance is derived from the ledger.
++model StockLocation {
++  id         Int             @id @default(autoincrement())
++  name       String          @unique
++  // Where goods land when nobody says otherwise — receiving a purchase order,
++  // mainly. Exactly one location should carry this; the app keeps it that way.
++  isDefault  Boolean         @default(false)
++  isActive   Boolean         @default(true)
++  sortOrder  Int             @default(0)
++  note       String?         @db.Text
++  createdAt  DateTime        @default(now())
++  updatedAt  DateTime        @updatedAt
++  movements  StockMovement[]
++  stockTakes StockTake[]
++
++  @@index([isActive, sortOrder])
++}
++
++// Lifecycle of a physical count.
++//
++//   OPEN       being counted; nothing has moved yet
++//   COMMITTED  variances applied to stock as ADJUSTMENT movements
++//   CANCELLED  abandoned; the counts are kept as a record, stock untouched
++//
++// A count is never applied twice: only an OPEN session can be committed, and
++// committing is what closes it.
++enum StockTakeStatus {
++  OPEN
++  COMMITTED
++  CANCELLED
++}
++
++// A counting session — walking the shelves with a scanner, then applying what
++// you found.
++//
++// The point of holding this as a session rather than letting someone adjust
++// each product one at a time: a count is only trustworthy as a snapshot. Lines
++// record what the system BELIEVED at the moment they were added, next to what
++// was actually on the shelf, so the variance is visible and reviewable before
++// anything moves — and the whole count lands as one act, attributable to one
++// person and one moment.
++model StockTake {
++  id          Int             @id @default(autoincrement())
++  // Short human reference, "ST-0007".
++  reference   String          @unique
++  locationId  Int?
++  status      StockTakeStatus @default(OPEN)
++  note        String?         @db.Text
++  actorName   String
++  startedAt   DateTime        @default(now())
++  committedAt DateTime?
++  updatedAt   DateTime        @updatedAt
++  location    StockLocation?  @relation(fields: [locationId], references: [id], onDelete: SetNull)
++  lines       StockTakeLine[]
++
++  @@index([status, startedAt])
++}
++
++// One counted line of a stock-take.
++//
++// expectedQty is a SNAPSHOT taken when the line was added, kept so the person
++// counting can see what the system thought at that moment. It is deliberately
++// NOT what the commit trusts: stock can move while a count is in progress (a
++// sale ships, a delivery arrives), so committing re-reads the live level and
++// adjusts to the counted figure from there. Otherwise a long count would
++// silently undo every sale made during it.
++model StockTakeLine {
++  id           Int       @id @default(autoincrement())
++  stockTakeId  Int
++  productId    Int
++  variantId    Int?
++  // Snapshots, so a rename mid-count doesn't rewrite the sheet.
++  productName  String
++  variantLabel String?
++  expectedQty  Int
++  // What was actually on the shelf. Null = added to the sheet but not counted
++  // yet, which is different from a counted zero.
++  countedQty   Int?
++  note         String?
++  createdAt    DateTime  @default(now())
++  updatedAt    DateTime  @updatedAt
++  stockTake    StockTake @relation(fields: [stockTakeId], references: [id], onDelete: Cascade)
++
++  // One line per stock row per session — scanning the same barcode twice
++  // updates the count rather than adding a duplicate to argue with.
++  @@unique([stockTakeId, productId, variantId])
++  @@index([stockTakeId])
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/StockOverviewClient.tsx b/src/app/(admin)/admin/(protected)/inventory/StockOverviewClient.tsx
+index 8e3886a..d5bb8fe 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/StockOverviewClient.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/StockOverviewClient.tsx
+@@ -181,10 +181,22 @@ export default function StockOverviewClient({
+               </>
+             )}
+           </div>
+-          <DigestToggle
+-            enabled={digestEnabled}
+-            labels={{ title: t.digestTitle, sub: t.digestSub, send: t.digestSend }}
+-          />
++          <div className="flex items-center gap-3">
++            {/* A plain link, not fetch(): the browser handles the download and
++                the route re-reads the same filter the screen is showing, so
++                "export" means "export what I'm looking at". */}
++            <a
++              href={filter ? `/admin/inventory/export?filter=${filter}` : "/admin/inventory/export"}
++              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-[13px] font-semibold text-stone-700 transition hover:border-stone-400"
++            >
++              <Icon name="file" size={14} />
++              Export CSV
++            </a>
++            <DigestToggle
++              enabled={digestEnabled}
++              labels={{ title: t.digestTitle, sub: t.digestSub, send: t.digestSend }}
++            />
++          </div>
+         </div>
+ 
+         {writeOffs.units > 0 && (
+diff --git a/src/app/(admin)/admin/(protected)/inventory/actions-locations.ts b/src/app/(admin)/admin/(protected)/inventory/actions-locations.ts
+new file mode 100644
+index 0000000..fcaf3e2
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/actions-locations.ts
+@@ -0,0 +1,55 @@
++"use server";
++
++import { revalidatePath } from "next/cache";
++import { requirePermission } from "@/server/admin/guard";
++import { logActivity } from "@/server/admin/audit";
++import { saveLocation, deleteLocation, LocationError } from "@/server/inventory/locations";
++
++export interface LocationResult {
++  error?: string;
++  success?: string;
++}
++
++export async function saveLocationAction(
++  id: number | null,
++  formData: FormData,
++): Promise<LocationResult> {
++  const admin = await requirePermission("inventory");
++  try {
++    await saveLocation(id, {
++      name: String(formData.get("name") ?? ""),
++      note: String(formData.get("note") ?? ""),
++      isDefault: formData.get("isDefault") === "on",
++      isActive: formData.get("isActive") !== "false",
++    });
++  } catch (err) {
++    if (err instanceof LocationError) return { error: err.message };
++    throw err;
++  }
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: id ? "location.update" : "location.create",
++    detail: String(formData.get("name") ?? ""),
++  });
++  revalidatePath("/admin/inventory/locations");
++  return { success: id ? "Location updated." : "Location added." };
++}
++
++export async function deleteLocationAction(id: number): Promise<LocationResult> {
++  const admin = await requirePermission("inventory");
++  try {
++    await deleteLocation(id);
++  } catch (err) {
++    if (err instanceof LocationError) return { error: err.message };
++    throw err;
++  }
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "location.delete",
++    detail: `#${id}`,
++  });
++  revalidatePath("/admin/inventory/locations");
++  return { success: "Location removed." };
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/export/route.ts b/src/app/(admin)/admin/(protected)/inventory/export/route.ts
+new file mode 100644
+index 0000000..7c8c53c
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/export/route.ts
+@@ -0,0 +1,41 @@
++import { NextResponse } from "next/server";
++import { getActiveAdmin } from "@/server/admin/guard";
++import { hasPermission } from "@/lib/permissions";
++import { getStockOverview, buildStockCsv } from "@/server/inventory/reports";
++
++// CSV download of the stock overview — the list you carry into the warehouse to
++// count against. Guarded here explicitly: route handlers don't run the admin
++// layout, so the area layout's permission check never fires for them.
++export const dynamic = "force-dynamic";
++
++export async function GET(request: Request) {
++  const admin = await getActiveAdmin();
++  if (!admin || !hasPermission(admin.role, "inventory")) {
++    return new NextResponse("Forbidden", { status: 403 });
++  }
++
++  const all = await getStockOverview();
++
++  // Honour the same filter the screen is showing, so "export" means "export
++  // what I am looking at" rather than silently handing back everything.
++  const filter = new URL(request.url).searchParams.get("filter");
++  const rows =
++    filter === "out"
++      ? all.filter((r) => r.status === "OUT")
++      : filter === "reorder"
++        ? all.filter((r) => r.status === "REORDER")
++        : filter === "dead"
++          ? all.filter((r) => r.status === "DEAD")
++          : all;
++
++  const date = new Date().toISOString().slice(0, 10);
++  const name = filter ? `stock-${filter}-${date}.csv` : `stock-${date}.csv`;
++
++  return new NextResponse(buildStockCsv(rows), {
++    headers: {
++      "Content-Type": "text/csv; charset=utf-8",
++      "Content-Disposition": `attachment; filename="${name}"`,
++      "Cache-Control": "no-store",
++    },
++  });
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/locations/LocationsClient.tsx b/src/app/(admin)/admin/(protected)/inventory/locations/LocationsClient.tsx
+new file mode 100644
+index 0000000..a93c897
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/locations/LocationsClient.tsx
+@@ -0,0 +1,264 @@
++"use client";
++
++/**
++ * Where stock sits, and what the ledger says is at each place.
++ *
++ * The balance column is DERIVED from stock movements, not maintained — so it
++ * reports what has actually been recorded rather than a number someone keeps in
++ * step by hand. "Not recorded" is every movement written before locations
++ * existed: real stock whose whereabouts were never captured, shown rather than
++ * hidden so the figures still add up to the shop.
++ */
++
++import { useState, useTransition } from "react";
++import { Icon } from "@/components/icons";
++import { saveLocationAction, deleteLocationAction } from "../actions-locations";
++
++export interface LocationView {
++  id: number;
++  name: string;
++  note: string | null;
++  isDefault: boolean;
++  isActive: boolean;
++}
++
++export interface BalanceView {
++  locationId: number | null;
++  name: string;
++  units: number;
++  movements: number;
++}
++
++const field =
++  "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-accent";
++const label = "mb-1 block text-[12px] font-semibold text-stone-600";
++
++export default function LocationsClient({
++  locations,
++  balances,
++}: {
++  locations: LocationView[];
++  balances: BalanceView[];
++}) {
++  const [editing, setEditing] = useState<number | "new" | null>(null);
++  const [error, setError] = useState<string | null>(null);
++  const [pending, startTransition] = useTransition();
++
++  const balanceOf = new Map(balances.map((b) => [b.locationId, b]));
++
++  function submit(id: number | null, formData: FormData) {
++    setError(null);
++    startTransition(async () => {
++      const res = await saveLocationAction(id, formData);
++      if (res.error) setError(res.error);
++      else setEditing(null);
++    });
++  }
++
++  function remove(id: number, name: string) {
++    if (
++      !confirm(
++        `Remove "${name}"?\n\nPast movements keep their history — they simply stop naming a location.`,
++      )
++    )
++      return;
++    setError(null);
++    startTransition(async () => {
++      const res = await deleteLocationAction(id);
++      if (res.error) setError(res.error);
++    });
++  }
++
++  const unrecorded = balanceOf.get(null);
++
++  return (
++    <div className="space-y-5">
++      {error && (
++        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
++          {error}
++        </p>
++      )}
++
++      <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-card">
++        <table className="w-full text-sm">
++          <thead className="border-b border-stone-200 bg-stone-50 text-[11px] uppercase tracking-wide text-stone-500">
++            <tr>
++              <th className="px-4 py-3 text-left font-semibold">Location</th>
++              <th className="px-4 py-3 text-right font-semibold">Net units</th>
++              <th className="px-4 py-3 text-right font-semibold">Movements</th>
++              <th className="px-4 py-3" />
++            </tr>
++          </thead>
++          <tbody className="divide-y divide-stone-100">
++            {locations.map((l) =>
++              editing === l.id ? (
++                <tr key={l.id}>
++                  <td colSpan={4} className="bg-stone-50 px-4 py-3">
++                    <LocationForm
++                      location={l}
++                      pending={pending}
++                      onCancel={() => setEditing(null)}
++                      onSubmit={(fd) => submit(l.id, fd)}
++                    />
++                  </td>
++                </tr>
++              ) : (
++                <tr key={l.id} className="hover:bg-stone-50/60">
++                  <td className="px-4 py-3">
++                    <span className="font-medium text-stone-900">{l.name}</span>
++                    {l.isDefault && (
++                      <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
++                        Default
++                      </span>
++                    )}
++                    {!l.isActive && (
++                      <span className="ml-2 text-[11.5px] text-stone-400">Inactive</span>
++                    )}
++                    {l.note && <div className="text-[11.5px] text-stone-400">{l.note}</div>}
++                  </td>
++                  <td className="px-4 py-3 text-right tabular-nums text-stone-700">
++                    {balanceOf.get(l.id)?.units ?? 0}
++                  </td>
++                  <td className="px-4 py-3 text-right tabular-nums text-stone-400">
++                    {balanceOf.get(l.id)?.movements ?? 0}
++                  </td>
++                  <td className="px-4 py-3 text-right">
++                    <button
++                      type="button"
++                      onClick={() => setEditing(l.id)}
++                      className="text-[12.5px] font-semibold text-accent underline-offset-2 hover:underline"
++                    >
++                      Edit
++                    </button>
++                    <button
++                      type="button"
++                      onClick={() => remove(l.id, l.name)}
++                      disabled={pending}
++                      className="ml-3 text-[12.5px] text-stone-400 hover:text-danger-fg disabled:opacity-40"
++                    >
++                      Remove
++                    </button>
++                  </td>
++                </tr>
++              ),
++            )}
++
++            {unrecorded && (
++              <tr className="bg-stone-50/40">
++                <td className="px-4 py-3">
++                  <span className="italic text-stone-500">Not recorded</span>
++                  <div className="text-[11.5px] text-stone-400">
++                    Movements from before locations existed
++                  </div>
++                </td>
++                <td className="px-4 py-3 text-right tabular-nums text-stone-500">
++                  {unrecorded.units}
++                </td>
++                <td className="px-4 py-3 text-right tabular-nums text-stone-400">
++                  {unrecorded.movements}
++                </td>
++                <td />
++              </tr>
++            )}
++          </tbody>
++        </table>
++      </div>
++
++      {editing === "new" ? (
++        <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-card">
++          <LocationForm
++            pending={pending}
++            onCancel={() => setEditing(null)}
++            onSubmit={(fd) => submit(null, fd)}
++          />
++        </div>
++      ) : (
++        <button
++          type="button"
++          onClick={() => setEditing("new")}
++          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:border-stone-400"
++        >
++          <Icon name="plus" size={14} />
++          Add a location
++        </button>
++      )}
++
++      <p className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-[12.5px] leading-relaxed text-stone-600">
++        <span className="font-semibold text-stone-700">Locations are labels, not separate stock.</span>{" "}
++        The storefront still sells against one shop-wide figure, so nothing here can oversell or
++        change what a customer sees. What it gives you is a record of where each delivery landed and
++        what each count found.
++      </p>
++    </div>
++  );
++}
++
++function LocationForm({
++  location,
++  pending,
++  onSubmit,
++  onCancel,
++}: {
++  location?: LocationView;
++  pending: boolean;
++  onSubmit: (fd: FormData) => void;
++  onCancel: () => void;
++}) {
++  return (
++    <form action={onSubmit} className="space-y-3">
++      <div className="grid gap-3 sm:grid-cols-2">
++        <div>
++          <label className={label}>Name</label>
++          <input
++            name="name"
++            required
++            autoFocus
++            defaultValue={location?.name ?? ""}
++            placeholder="Warehouse"
++            className={field}
++          />
++        </div>
++        <div>
++          <label className={label}>Note</label>
++          <input
++            name="note"
++            defaultValue={location?.note ?? ""}
++            placeholder="Optional"
++            className={field}
++          />
++        </div>
++      </div>
++      <div className="flex flex-wrap items-center gap-4">
++        <label className="flex items-center gap-2 text-[13px] text-stone-700">
++          <input type="checkbox" name="isDefault" defaultChecked={location?.isDefault ?? false} />
++          Deliveries land here by default
++        </label>
++        <label className="flex items-center gap-2 text-[13px] text-stone-700">
++          <input
++            type="checkbox"
++            name="isActive"
++            value="true"
++            defaultChecked={location?.isActive ?? true}
++          />
++          Active
++        </label>
++      </div>
++      <div className="flex gap-2">
++        <button
++          type="submit"
++          disabled={pending}
++          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
++        >
++          {pending ? "Saving…" : "Save"}
++        </button>
++        <button
++          type="button"
++          onClick={onCancel}
++          className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
++        >
++          Cancel
++        </button>
++      </div>
++    </form>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/locations/page.tsx b/src/app/(admin)/admin/(protected)/inventory/locations/page.tsx
+new file mode 100644
+index 0000000..78854c5
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/locations/page.tsx
+@@ -0,0 +1,36 @@
++import { listLocations, getLocationBalances } from "@/server/inventory/locations";
++import LocationsClient from "./LocationsClient";
++
++export const metadata = { title: "Stock Locations — FZ-Mart Admin" };
++
++export default async function LocationsPage() {
++  const [locations, balances] = await Promise.all([
++    listLocations(true),
++    getLocationBalances(),
++  ]);
++
++  return (
++    <div className="max-w-4xl space-y-6 px-4 py-8 sm:px-7">
++      <div>
++        <h1 className="text-[22px] font-extrabold tracking-tight text-stone-900 sm:text-[26px]">
++          Stock Locations
++        </h1>
++        <p className="mt-1 text-sm text-stone-500">
++          Where your stock physically sits. Each delivery and each count records which place it
++          touched, so you can tell what is where.
++        </p>
++      </div>
++
++      <LocationsClient
++        locations={locations.map((l) => ({
++          id: l.id,
++          name: l.name,
++          note: l.note,
++          isDefault: l.isDefault,
++          isActive: l.isActive,
++        }))}
++        balances={balances}
++      />
++    </div>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/movements/MovementsClient.tsx b/src/app/(admin)/admin/(protected)/inventory/movements/MovementsClient.tsx
+index 8cc14c5..393611d 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/movements/MovementsClient.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/movements/MovementsClient.tsx
+@@ -23,6 +23,7 @@ export interface MovementRowView {
+   orderId: number | null;
+   orderNo: string | null;
+   isBackfill: boolean;
++  locationName: string | null;
+ }
+ 
+ interface Props {
+@@ -250,7 +251,15 @@ export default function MovementsClient({ rows, products, total, page, pageCount
+                         <td className="nums px-4 py-3.5 text-right text-stone-500">
+                           {m.unitCost ?? "—"}
+                         </td>
+-                        <td className="px-5 py-3.5 text-[12px] text-stone-500">{m.actorName}</td>
++                        <td className="px-5 py-3.5 text-[12px] text-stone-500">
++                          {m.actorName}
++                          {/* Where it happened, when the shop records locations.
++                              Absent on every movement written before they existed,
++                              which is shown as nothing rather than as a guess. */}
++                          {m.locationName && (
++                            <span className="block text-[11px] text-stone-400">{m.locationName}</span>
++                          )}
++                        </td>
+                       </tr>
+                     ))}
+                   </tbody>
+diff --git a/src/app/(admin)/admin/(protected)/inventory/movements/page.tsx b/src/app/(admin)/admin/(protected)/inventory/movements/page.tsx
+index 8c352a3..a52c700 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/movements/page.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/movements/page.tsx
+@@ -77,6 +77,7 @@ export default async function StockMovementsPage({
+         orderId: m.orderId,
+         orderNo: m.orderNo,
+         isBackfill: m.isBackfill,
++        locationName: m.locationName,
+       }))}
+       products={products}
+       total={result.total}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/PaymentsPanel.tsx b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/PaymentsPanel.tsx
+new file mode 100644
+index 0000000..f491b00
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/PaymentsPanel.tsx
+@@ -0,0 +1,203 @@
++"use client";
++
++/**
++ * What has been paid to the supplier for this order, and what is still owed.
++ *
++ * A list of payments rather than a single "amount paid" box, because suppliers
++ * here are paid in instalments — an advance to start the order, the balance on
++ * delivery — and the useful question ("what do I still owe?") is answered by
++ * the history, not by a number someone keeps overwriting.
++ */
++
++import { useState, useTransition } from "react";
++import { Icon } from "@/components/icons";
++import { recordPaymentAction, deletePaymentAction } from "../actions";
++
++export interface PaymentRow {
++  id: number;
++  amount: string;
++  paidOn: string;
++  method: string | null;
++  note: string | null;
++  actorName: string;
++}
++
++const field =
++  "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-accent";
++const label = "mb-1 block text-[12px] font-semibold text-stone-600";
++
++export default function PaymentsPanel({
++  purchaseOrderId,
++  payments,
++  total,
++  paid,
++  due,
++  fullyPaid,
++  canRecord,
++  today,
++}: {
++  purchaseOrderId: number;
++  payments: PaymentRow[];
++  total: string;
++  paid: string;
++  due: string;
++  fullyPaid: boolean;
++  /** False for a cancelled order — nothing is owed on goods that won't arrive. */
++  canRecord: boolean;
++  /** "yyyy-mm-dd" from the server, so the default date isn't a hydration risk. */
++  today: string;
++}) {
++  const [open, setOpen] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [pending, startTransition] = useTransition();
++
++  function submit(formData: FormData) {
++    setError(null);
++    startTransition(async () => {
++      const res = await recordPaymentAction(purchaseOrderId, formData);
++      if (res?.error) setError(res.error);
++      else setOpen(false);
++    });
++  }
++
++  function remove(id: number) {
++    startTransition(async () => {
++      const res = await deletePaymentAction(id, purchaseOrderId);
++      if (res?.error) setError(res.error);
++    });
++  }
++
++  return (
++    <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
++      <div className="flex flex-wrap items-baseline justify-between gap-3">
++        <h2 className="text-[13px] font-semibold text-stone-900">Supplier payments</h2>
++        {canRecord && !fullyPaid && !open && (
++          <button
++            type="button"
++            onClick={() => setOpen(true)}
++            className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-accent underline-offset-2 hover:underline"
++          >
++            <Icon name="plus" size={13} />
++            Record a payment
++          </button>
++        )}
++      </div>
++
++      <div className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200">
++        <div className="bg-white px-3 py-2.5">
++          <p className="text-[11px] uppercase tracking-wide text-stone-500">Order total</p>
++          <p className="nums text-[15px] font-bold text-stone-900">{total}</p>
++        </div>
++        <div className="bg-white px-3 py-2.5">
++          <p className="text-[11px] uppercase tracking-wide text-stone-500">Paid</p>
++          <p className="nums text-[15px] font-bold text-stone-900">{paid}</p>
++        </div>
++        <div className="bg-white px-3 py-2.5">
++          <p className="text-[11px] uppercase tracking-wide text-stone-500">Still owed</p>
++          <p
++            className={[
++              "nums text-[15px] font-bold",
++              fullyPaid ? "text-success-fg" : "text-warning-fg",
++            ].join(" ")}
++          >
++            {fullyPaid ? "Settled" : due}
++          </p>
++        </div>
++      </div>
++
++      {open && (
++        <form action={submit} className="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-3">
++          <div className="grid gap-3 sm:grid-cols-3">
++            <div>
++              <label className={label}>Amount ৳</label>
++              <input
++                name="amount"
++                type="number"
++                min="0"
++                step="0.01"
++                required
++                autoFocus
++                className={field}
++              />
++            </div>
++            <div>
++              <label className={label}>Paid on</label>
++              <input type="date" name="paidOn" defaultValue={today} className={field} />
++            </div>
++            <div>
++              <label className={label}>How</label>
++              <input name="method" placeholder="bKash, cash, bank" className={field} />
++            </div>
++          </div>
++          <div className="mt-3">
++            <label className={label}>Note</label>
++            <input name="note" placeholder="Optional" className={field} />
++          </div>
++          <div className="mt-3 flex gap-2">
++            <button
++              type="submit"
++              disabled={pending}
++              className="rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
++            >
++              {pending ? "Saving…" : "Record payment"}
++            </button>
++            <button
++              type="button"
++              onClick={() => {
++                setOpen(false);
++                setError(null);
++              }}
++              className="rounded-lg border border-stone-300 px-3.5 py-2 text-[13px] font-semibold text-stone-700"
++            >
++              Cancel
++            </button>
++          </div>
++        </form>
++      )}
++
++      {error && (
++        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
++          {error}
++        </p>
++      )}
++
++      {payments.length > 0 ? (
++        <ul className="mt-4 divide-y divide-stone-100">
++          {payments.map((p) => (
++            <li key={p.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2">
++              <span className="text-[13px] text-stone-800">
++                <span className="nums font-semibold">{p.amount}</span>
++                <span className="ml-2 text-[12px] text-stone-500">{p.paidOn}</span>
++                {p.method && <span className="ml-2 text-[12px] text-stone-500">· {p.method}</span>}
++                {p.note && <span className="ml-2 text-[12px] text-stone-400">{p.note}</span>}
++              </span>
++              <span className="flex items-center gap-3">
++                <span className="text-[11.5px] text-stone-400">by {p.actorName}</span>
++                <button
++                  type="button"
++                  disabled={pending}
++                  onClick={() => remove(p.id)}
++                  title="Remove this payment record"
++                  className="text-[12px] text-stone-400 transition hover:text-danger-fg disabled:opacity-40"
++                >
++                  Remove
++                </button>
++              </span>
++            </li>
++          ))}
++        </ul>
++      ) : (
++        <p className="mt-3 text-[12.5px] text-stone-500">
++          {canRecord
++            ? "Nothing recorded yet."
++            : "This order was cancelled — nothing is owed on it."}
++        </p>
++      )}
++
++      <p className="mt-3 border-t border-stone-100 pt-2.5 text-[11.5px] text-stone-400">
++        Kept separate from the profit report on purpose: goods count as a cost when they are sold,
++        not when the supplier is paid.
++      </p>
++    </div>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/PurchaseOrderControls.tsx b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/PurchaseOrderControls.tsx
+index 3383a21..1825e76 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/PurchaseOrderControls.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/PurchaseOrderControls.tsx
+@@ -1,8 +1,13 @@
+ "use client";
+ 
++import Link from "next/link";
+ import { useState, useTransition } from "react";
+ import type { PurchaseOrderStatus } from "@prisma/client";
+-import { markOrderedAction, cancelPurchaseOrderAction } from "../actions";
++import {
++  markOrderedAction,
++  cancelPurchaseOrderAction,
++  deletePurchaseOrderAction,
++} from "../actions";
+ 
+ /**
+  * Lifecycle buttons for one purchase order. Which actions exist depends on the
+@@ -33,6 +38,14 @@ export default function PurchaseOrderControls({
+     });
+   }
+ 
++  function remove() {
++    // Deleting is the only irreversible control here, so it names the order and
++    // says what survives: nothing, because only an order that received nothing
++    // can be deleted at all.
++    if (!confirm(`Delete ${poNo} permanently? This can't be undone.`)) return;
++    run(() => deletePurchaseOrderAction(id));
++  }
++
+   function cancel() {
+     const warning = hasReceipts
+       ? `Cancel ${poNo}? Units already received stay on the shelf — only the outstanding ones are dropped.`
+@@ -41,8 +54,12 @@ export default function PurchaseOrderControls({
+     run(() => cancelPurchaseOrderAction(id));
+   }
+ 
+-  const terminal = status === "RECEIVED" || status === "CANCELLED";
+-  if (terminal && !note && !error) return null;
++  // A cancelled order that never received anything is a mistake worth clearing
++  // away; a received one is the ledger's explanation for stock on a shelf and
++  // must stay. RECEIVED is therefore terminal with nothing left to offer.
++  const canDelete = !hasReceipts && (status === "DRAFT" || status === "CANCELLED");
++  const nothingToShow = status === "RECEIVED" || (status === "CANCELLED" && !canDelete);
++  if (nothingToShow && !note && !error) return null;
+ 
+   return (
+     <div className="rounded-lg border border-stone-200 bg-white px-4 py-3 shadow-card">
+@@ -67,6 +84,24 @@ export default function PurchaseOrderControls({
+             Cancel order
+           </button>
+         )}
++        {status === "DRAFT" && (
++          <Link
++            href={`/admin/inventory/purchase-orders/${id}/edit`}
++            className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:border-stone-400"
++          >
++            Edit
++          </Link>
++        )}
++        {canDelete && (
++          <button
++            type="button"
++            onClick={remove}
++            disabled={pending}
++            className="rounded-lg px-3 py-2 text-sm font-semibold text-stone-500 transition hover:text-danger-fg disabled:opacity-50"
++          >
++            Delete
++          </button>
++        )}
+         {status === "DRAFT" && (
+           <span className="text-[12px] text-stone-400">
+             Placing it starts counting these units as incoming.
+diff --git a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/ReceivePanel.tsx b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/ReceivePanel.tsx
+index 89549e6..31199a0 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/ReceivePanel.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/ReceivePanel.tsx
+@@ -18,7 +18,18 @@ interface Line {
+  * require the admin to do arithmetic. "Receive all" fills in whatever is still
+  * outstanding.
+  */
+-export default function ReceivePanel({ id, lines }: { id: number; lines: Line[] }) {
++export default function ReceivePanel({
++  id,
++  lines,
++  locations,
++  defaultLocationId,
++}: {
++  id: number;
++  lines: Line[];
++  /** Empty for a shop that keeps no locations — the picker then hides itself. */
++  locations: { id: number; name: string }[];
++  defaultLocationId: number | null;
++}) {
+   const [quantities, setQuantities] = useState<Record<number, string>>({});
+   const [error, setError] = useState<string | null>(null);
+   const [note, setNote] = useState<string | null>(null);
+@@ -49,6 +60,26 @@ export default function ReceivePanel({ id, lines }: { id: number; lines: Line[]
+ 
+   return (
+     <form action={submit} className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
++      {locations.length > 0 && (
++        <div className="mb-4 max-w-xs">
++          <label className="mb-1 block text-[12px] font-semibold text-stone-600">
++            Landed at
++          </label>
++          <select
++            name="locationId"
++            defaultValue={defaultLocationId != null ? String(defaultLocationId) : ""}
++            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-accent"
++          >
++            <option value="">Not recorded</option>
++            {locations.map((l) => (
++              <option key={l.id} value={l.id}>
++                {l.name}
++              </option>
++            ))}
++          </select>
++        </div>
++      )}
++
+       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+         <div>
+           <h2 className="text-[13px] font-semibold text-stone-900">Receive delivery</h2>
+diff --git a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/edit/page.tsx b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/edit/page.tsx
+new file mode 100644
+index 0000000..fb9c2ee
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/edit/page.tsx
+@@ -0,0 +1,103 @@
++import Link from "next/link";
++import { notFound, redirect } from "next/navigation";
++import { prisma } from "@/lib/prisma";
++import { getPurchaseOrder, listSuppliers } from "@/server/purchasing";
++import { listAllCategories } from "@/server/categories/admin";
++import { ancestorsOf } from "@/server/categories/tree";
++import PurchaseOrderForm from "../../new/PurchaseOrderForm";
++
++export const metadata = { title: "Edit Purchase Order — FZ-Mart Admin" };
++
++/** "2026-08-27" for a date input. */
++function isoDate(d: Date | null): string {
++  if (!d) return "";
++  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
++}
++
++export default async function EditPurchaseOrderPage({
++  params,
++}: {
++  params: Promise<{ id: string }>;
++}) {
++  const { id } = await params;
++  const po = await getPurchaseOrder(Number(id));
++  if (!po) notFound();
++
++  // Only a draft is editable. Anything placed is a document the supplier also
++  // holds — sending them a second, different version of the same PO number is
++  // worse than writing a new order, so the detail page is the end of the road.
++  if (po.status !== "DRAFT") {
++    redirect(`/admin/inventory/purchase-orders/${po.id}`);
++  }
++
++  const [suppliers, products, categories] = await Promise.all([
++    listSuppliers(),
++    prisma.product.findMany({
++      select: {
++        id: true,
++        name: true,
++        status: true,
++        purchaseCost: true,
++        variants: {
++          select: { id: true, size: true, colorName: true, purchaseCost: true },
++          orderBy: { sortOrder: "asc" },
++        },
++      },
++      orderBy: { name: "asc" },
++    }),
++    listAllCategories(),
++  ]);
++
++  const categoryOptions = categories
++    .map((c) => ({
++      id: c.id,
++      path: [...ancestorsOf(c.id, categories).map((a) => a.name), c.name].join(" › "),
++    }))
++    .sort((a, b) => a.path.localeCompare(b.path));
++
++  return (
++    <div className="space-y-6 px-4 py-8 sm:px-7">
++      <div className="flex items-center justify-between gap-4">
++        <h1 className="text-[22px] font-extrabold tracking-tight text-stone-900 sm:text-[26px]">
++          Edit {po.poNo}
++        </h1>
++        <Link
++          href={`/admin/inventory/purchase-orders/${po.id}`}
++          className="text-sm text-stone-500 underline-offset-2 hover:text-accent hover:underline"
++        >
++          Back to order
++        </Link>
++      </div>
++
++      <PurchaseOrderForm
++        suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
++        categories={categoryOptions}
++        products={products.map((p) => ({
++          id: p.id,
++          name: p.status === "DRAFT" ? `${p.name} (draft)` : p.name,
++          purchaseCost: p.purchaseCost,
++          variants: p.variants.map((v) => ({
++            id: v.id,
++            label: [v.colorName, v.size].filter(Boolean).join(" / ") || "Option",
++            purchaseCost: v.purchaseCost,
++          })),
++        }))}
++        order={{
++          id: po.id,
++          supplierId: po.supplierId,
++          expectedOn: isoDate(po.expectedOn),
++          // Money is stored in paisa and typed in taka.
++          shippingCost: po.shippingCost ? String(po.shippingCost / 100) : "",
++          customsCost: po.customsCost ? String(po.customsCost / 100) : "",
++          note: po.note ?? "",
++          lines: po.lines.map((l) => ({
++            productId: String(l.productId),
++            variantId: l.variantId != null ? String(l.variantId) : "",
++            quantity: String(l.quantity),
++            unitCost: String(l.unitCost / 100),
++          })),
++        }}
++      />
++    </div>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/page.tsx b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/page.tsx
+index a48634e..c46542a 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/page.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/[id]/page.tsx
+@@ -1,10 +1,16 @@
+ import Link from "next/link";
+ import { notFound } from "next/navigation";
+-import { getPurchaseOrder, getUnsellableReceived } from "@/server/purchasing";
++import {
++  getPurchaseOrder,
++  getUnsellableReceived,
++  purchaseOrderTotal,
++} from "@/server/purchasing";
+ import { formatTaka } from "@/lib/money";
+ import { Badge } from "@/components/admin/ui/Badge";
+ import PurchaseOrderControls from "./PurchaseOrderControls";
+ import ReceivePanel from "./ReceivePanel";
++import { listLocations, getDefaultLocation } from "@/server/inventory/locations";
++import PaymentsPanel from "./PaymentsPanel";
+ 
+ export const metadata = { title: "Purchase Order — FZ-Mart Admin" };
+ 
+@@ -17,6 +23,10 @@ export default async function PurchaseOrderDetailPage({
+   const po = await getPurchaseOrder(Number(id));
+   if (!po) notFound();
+ 
++  // Where a delivery can land. Empty for a shop that keeps no locations, in
++  // which case the receive panel simply doesn't ask.
++  const [locations, defaultLocation] = await Promise.all([listLocations(), getDefaultLocation()]);
++
+   // Goods that arrived against this order but still cannot be sold. Nothing to
+   // compute until something has actually been received.
+   const unsellable = po.lines.some((l) => l.receivedQty > 0)
+@@ -29,6 +39,15 @@ export default async function PurchaseOrderDetailPage({
+   const receivedUnits = po.lines.reduce((s, l) => s + l.receivedQty, 0);
+   const outstanding = orderedUnits - receivedUnits;
+ 
++  // What the order costs in total, against what has actually been handed over.
++  const orderTotal = purchaseOrderTotal(po);
++  const paidTotal = po.payments.reduce((sum, p) => sum + p.amount, 0);
++  const dueTotal = orderTotal - paidTotal;
++  const today = new Date();
++  const todayIso = new Date(today.getTime() - today.getTimezoneOffset() * 60_000)
++    .toISOString()
++    .slice(0, 10);
++
+   return (
+     <div className="max-w-4xl space-y-6 px-4 py-8 sm:px-7">
+       <div className="flex flex-wrap items-start justify-between gap-4">
+@@ -133,6 +152,8 @@ export default async function PurchaseOrderDetailPage({
+       {po.status === "ORDERED" && (
+         <ReceivePanel
+           id={po.id}
++          locations={locations.map((l) => ({ id: l.id, name: l.name }))}
++          defaultLocationId={defaultLocation?.id ?? null}
+           lines={po.lines.map((l) => ({
+             id: l.id,
+             label: l.variantLabel ? `${l.productName} — ${l.variantLabel}` : l.productName,
+@@ -200,6 +221,28 @@ export default async function PurchaseOrderDetailPage({
+         </div>
+       )}
+ 
++      <PaymentsPanel
++        purchaseOrderId={po.id}
++        total={formatTaka(orderTotal)}
++        paid={formatTaka(paidTotal)}
++        due={formatTaka(dueTotal)}
++        fullyPaid={dueTotal <= 0}
++        canRecord={po.status !== "CANCELLED"}
++        today={todayIso}
++        payments={po.payments.map((p) => ({
++          id: p.id,
++          amount: formatTaka(p.amount),
++          paidOn: p.paidOn.toLocaleDateString("en-BD", {
++            day: "2-digit",
++            month: "short",
++            year: "numeric",
++          }),
++          method: p.method,
++          note: p.note,
++          actorName: p.actorName,
++        }))}
++      />
++
+       {po.note && (
+         <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
+           <h2 className="mb-1 text-[13px] font-semibold text-stone-900">Note</h2>
+diff --git a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/actions.ts b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/actions.ts
+index f0e7d20..a6df1c2 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/actions.ts
++++ b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/actions.ts
+@@ -9,9 +9,13 @@ import {
+   saveSupplier,
+   deleteSupplier,
+   createPurchaseOrder,
++  updatePurchaseOrder,
++  deletePurchaseOrder,
+   markOrdered,
+   cancelPurchaseOrder,
+   receivePurchaseOrder,
++  recordSupplierPayment,
++  deleteSupplierPayment,
+   PurchasingError,
+   type PurchaseOrderLineInput,
+ } from "@/server/purchasing";
+@@ -81,10 +85,12 @@ export async function deleteSupplierAction(id: number): Promise<ActionResult> {
+ 
+ // ── Purchase orders ─────────────────────────────────────────────────────────
+ 
+-export async function createPurchaseOrderAction(formData: FormData): Promise<ActionResult> {
+-  const admin = await requirePermission("inventory");
+-
+-  // Lines arrive as parallel arrays from the repeating row UI.
++/**
++ * Lines arrive as parallel arrays from the repeating row UI, one entry per
++ * rendered row. Blank rows are skipped rather than rejected — the form always
++ * renders one spare, and an empty spare is not a mistake.
++ */
++function parseLines(formData: FormData): PurchaseOrderLineInput[] {
+   const productIds = formData.getAll("lineProductId").map(String);
+   const variantIds = formData.getAll("lineVariantId").map(String);
+   const quantities = formData.getAll("lineQuantity").map(String);
+@@ -94,7 +100,6 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<Act
+   for (let i = 0; i < productIds.length; i++) {
+     const productId = Number(productIds[i]);
+     const quantity = Number(quantities[i]);
+-    // Skip blank rows rather than erroring — the form always renders one spare.
+     if (!productId || !quantity) continue;
+     lines.push({
+       productId,
+@@ -103,17 +108,30 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<Act
+       unitCost: takaToPaisa(Number(unitCosts[i]) || 0),
+     });
+   }
++  return lines;
++}
+ 
++/** "2026-08-27" from a date input, or null when blank/unparseable. */
++function parseDate(value: FormDataEntryValue | null): Date | null {
++  const raw = String(value ?? "").trim();
++  if (!raw) return null;
++  const d = new Date(`${raw}T00:00:00`);
++  return Number.isNaN(d.getTime()) ? null : d;
++}
++
++export async function createPurchaseOrderAction(formData: FormData): Promise<ActionResult> {
++  const admin = await requirePermission("inventory");
++
++  const lines = parseLines(formData);
+   if (lines.length === 0) return { error: "Add at least one product to the order." };
+ 
+-  const expectedRaw = String(formData.get("expectedOn") ?? "").trim();
+-  const expectedOn = expectedRaw ? new Date(`${expectedRaw}T00:00:00`) : null;
++  const expectedOn = parseDate(formData.get("expectedOn"));
+ 
+   let po;
+   try {
+     po = await createPurchaseOrder({
+       supplierId: Number(formData.get("supplierId")),
+-      expectedOn: expectedOn && !Number.isNaN(expectedOn.getTime()) ? expectedOn : null,
++      expectedOn,
+       shippingCost: takaToPaisa(Number(formData.get("shippingCost")) || 0),
+       customsCost: takaToPaisa(Number(formData.get("customsCost")) || 0),
+       note: String(formData.get("note") ?? ""),
+@@ -134,6 +152,116 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<Act
+   redirect(`/admin/inventory/purchase-orders/${po.id}`);
+ }
+ 
++export async function updatePurchaseOrderAction(
++  id: number,
++  formData: FormData,
++): Promise<ActionResult> {
++  const admin = await requirePermission("inventory");
++
++  const lines = parseLines(formData);
++  if (lines.length === 0) return { error: "Add at least one product to the order." };
++
++  let po;
++  try {
++    po = await updatePurchaseOrder(id, {
++      supplierId: Number(formData.get("supplierId")),
++      expectedOn: parseDate(formData.get("expectedOn")),
++      shippingCost: takaToPaisa(Number(formData.get("shippingCost")) || 0),
++      customsCost: takaToPaisa(Number(formData.get("customsCost")) || 0),
++      note: String(formData.get("note") ?? ""),
++      lines,
++    });
++  } catch (err) {
++    if (err instanceof PurchasingError) return { error: err.message };
++    throw err;
++  }
++
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "purchase_order.update",
++    detail: po.poNo,
++  });
++  revalidatePath(`/admin/inventory/purchase-orders/${id}`);
++  revalidatePath("/admin/inventory/purchase-orders");
++  redirect(`/admin/inventory/purchase-orders/${id}`);
++}
++
++export async function deletePurchaseOrderAction(id: number): Promise<ActionResult> {
++  const admin = await requirePermission("inventory");
++  try {
++    await deletePurchaseOrder(id);
++  } catch (err) {
++    if (err instanceof PurchasingError) return { error: err.message };
++    throw err;
++  }
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "purchase_order.delete",
++    detail: `#${id}`,
++  });
++  revalidatePath("/admin/inventory/purchase-orders");
++  redirect("/admin/inventory/purchase-orders");
++}
++
++// ── Supplier payments ───────────────────────────────────────────────────────
++
++export async function recordPaymentAction(
++  purchaseOrderId: number,
++  formData: FormData,
++): Promise<ActionResult> {
++  const admin = await requirePermission("inventory");
++
++  const paidOn = parseDate(formData.get("paidOn")) ?? new Date();
++
++  try {
++    await recordSupplierPayment({
++      purchaseOrderId,
++      amount: takaToPaisa(Number(formData.get("amount")) || 0),
++      paidOn,
++      method: String(formData.get("method") ?? ""),
++      note: String(formData.get("note") ?? ""),
++      actorName: admin.username,
++    });
++  } catch (err) {
++    if (err instanceof PurchasingError) return { error: err.message };
++    throw err;
++  }
++
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "supplier_payment.record",
++    detail: `PO #${purchaseOrderId} · ৳${formData.get("amount")}`,
++  });
++  revalidatePath(`/admin/inventory/purchase-orders/${purchaseOrderId}`);
++  revalidatePath("/admin/inventory/suppliers");
++  return { success: "Payment recorded." };
++}
++
++export async function deletePaymentAction(
++  id: number,
++  purchaseOrderId: number,
++): Promise<ActionResult> {
++  const admin = await requirePermission("inventory");
++  try {
++    await deleteSupplierPayment(id);
++  } catch (err) {
++    if (err instanceof PurchasingError) return { error: err.message };
++    throw err;
++  }
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "supplier_payment.delete",
++    detail: `#${id}`,
++  });
++  revalidatePath(`/admin/inventory/purchase-orders/${purchaseOrderId}`);
++  revalidatePath("/admin/inventory/suppliers");
++  return { success: "Payment removed." };
++}
++
+ export async function markOrderedAction(id: number): Promise<ActionResult> {
+   const admin = await requirePermission("inventory");
+   try {
+@@ -187,7 +315,17 @@ export async function receiveAction(id: number, formData: FormData): Promise<Act
+   }
+ 
+   try {
+-    await receivePurchaseOrder(id, receipts, admin.username);
++    // Where the delivery landed. Blank means the shop keeps no locations, and
++    // the movement records none rather than guessing at one.
++    const rawLocation = String(formData.get("locationId") ?? "").trim();
++    const locationId = rawLocation ? Number(rawLocation) : null;
++
++    await receivePurchaseOrder(
++      id,
++      receipts,
++      admin.username,
++      Number.isFinite(locationId) ? locationId : null,
++    );
+   } catch (err) {
+     if (err instanceof PurchasingError) return { error: err.message };
+     throw err;
+diff --git a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/new/PurchaseOrderForm.tsx b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/new/PurchaseOrderForm.tsx
+index 3535700..e854ae1 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/purchase-orders/new/PurchaseOrderForm.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/purchase-orders/new/PurchaseOrderForm.tsx
+@@ -4,7 +4,7 @@ import Link from "next/link";
+ import { useState, useTransition } from "react";
+ import { formatTaka } from "@/lib/money";
+ import SearchSelect from "@/components/admin/ui/SearchSelect";
+-import { createPurchaseOrderAction } from "../actions";
++import { createPurchaseOrderAction, updatePurchaseOrderAction } from "../actions";
+ import QuickProductPanel, { type CategoryOption } from "./QuickProductPanel";
+ 
+ interface VariantOption {
+@@ -42,24 +42,49 @@ const blankLine = (): LineDraft => ({
+   unitCost: "",
+ });
+ 
++/** An existing DRAFT being edited; omitted when writing a new order. */
++export interface ExistingOrder {
++  id: number;
++  supplierId: number;
++  /** "yyyy-mm-dd" for the date input, or "". */
++  expectedOn: string;
++  /** Taka, as strings for the inputs. */
++  shippingCost: string;
++  customsCost: string;
++  note: string;
++  lines: {
++    productId: string;
++    variantId: string;
++    quantity: string;
++    unitCost: string;
++  }[];
++}
++
+ export default function PurchaseOrderForm({
+   suppliers,
+   products: initialProducts,
+   categories,
++  order,
+ }: {
+   suppliers: { id: number; name: string }[];
+   products: ProductOption[];
+   categories: CategoryOption[];
++  order?: ExistingOrder;
+ }) {
+-  const [lines, setLines] = useState<LineDraft[]>([blankLine()]);
++  const isEdit = !!order;
++  const [lines, setLines] = useState<LineDraft[]>(
++    order && order.lines.length > 0
++      ? order.lines.map((l) => ({ ...blankLine(), ...l }))
++      : [blankLine()],
++  );
+   // Products are state, not a prop: a draft created from this form has to join
+   // the picker immediately, without a round trip that would lose the order
+   // being written.
+   const [products, setProducts] = useState<ProductOption[]>(initialProducts);
+   // Which line opened the "new product" panel, so the result attaches to it.
+   const [creatingFor, setCreatingFor] = useState<number | null>(null);
+-  const [shipping, setShipping] = useState("");
+-  const [customs, setCustoms] = useState("");
++  const [shipping, setShipping] = useState(order?.shippingCost ?? "");
++  const [customs, setCustoms] = useState(order?.customsCost ?? "");
+   const [error, setError] = useState<string | null>(null);
+   const [pending, startTransition] = useTransition();
+ 
+@@ -115,8 +140,10 @@ export default function PurchaseOrderForm({
+   function submit(formData: FormData) {
+     setError(null);
+     startTransition(async () => {
+-      // Success redirects, so anything returned is a failure.
+-      const res = await createPurchaseOrderAction(formData);
++      // Both actions redirect on success, so anything returned is a failure.
++      const res = order
++        ? await updatePurchaseOrderAction(order.id, formData)
++        : await createPurchaseOrderAction(formData);
+       if (res?.error) setError(res.error);
+     });
+   }
+@@ -127,7 +154,7 @@ export default function PurchaseOrderForm({
+         <div className="grid gap-4 sm:grid-cols-3">
+           <div>
+             <label className={label}>Supplier</label>
+-            <select name="supplierId" required className={field}>
++            <select name="supplierId" required defaultValue={order?.supplierId ?? ""} className={field}>
+               {suppliers.map((s) => (
+                 <option key={s.id} value={s.id}>
+                   {s.name}
+@@ -137,12 +164,12 @@ export default function PurchaseOrderForm({
+           </div>
+           <div>
+             <label className={label}>Expected on</label>
+-            <input type="date" name="expectedOn" className={field} />
++            <input type="date" name="expectedOn" defaultValue={order?.expectedOn ?? ""} className={field} />
+             <p className="mt-1 text-[11px] text-stone-400">When the goods should arrive.</p>
+           </div>
+           <div>
+             <label className={label}>Note</label>
+-            <input name="note" className={field} placeholder="Optional" />
++            <input name="note" defaultValue={order?.note ?? ""} className={field} placeholder="Optional" />
+           </div>
+         </div>
+       </div>
+@@ -305,17 +332,23 @@ export default function PurchaseOrderForm({
+           disabled={pending}
+           className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+         >
+-          {pending ? "Saving…" : "Create draft"}
++          {pending ? "Saving…" : isEdit ? "Save changes" : "Create draft"}
+         </button>
+         <Link
+-          href="/admin/inventory/purchase-orders"
++          href={
++            order
++              ? `/admin/inventory/purchase-orders/${order.id}`
++              : "/admin/inventory/purchase-orders"
++          }
+           className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+         >
+           Cancel
+         </Link>
+       </div>
+       <p className="text-[12px] text-stone-400">
+-        Saved as a draft. Nothing counts as incoming until you place it.
++        {isEdit
++          ? "Still a draft. Nothing counts as incoming until you place it."
++          : "Saved as a draft. Nothing counts as incoming until you place it."}
+       </p>
+     </form>
+   );
+diff --git a/src/app/(admin)/admin/(protected)/inventory/stock-takes/StartTakeForm.tsx b/src/app/(admin)/admin/(protected)/inventory/stock-takes/StartTakeForm.tsx
+new file mode 100644
+index 0000000..b9e3f0d
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/stock-takes/StartTakeForm.tsx
+@@ -0,0 +1,53 @@
++"use client";
++
++import { useTransition } from "react";
++import { Icon } from "@/components/icons";
++import { createStockTakeAction } from "./actions";
++
++const field =
++  "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-accent";
++const label = "mb-1 block text-[12px] font-semibold text-stone-600";
++
++export default function StartTakeForm({ locations }: { locations: { id: number; name: string }[] }) {
++  const [pending, startTransition] = useTransition();
++
++  return (
++    <form
++      action={(fd) => {
++        startTransition(async () => {
++          await createStockTakeAction(fd);
++        });
++      }}
++      className="rounded-lg border border-stone-200 bg-white p-5 shadow-card"
++    >
++      <h2 className="mb-3 text-[13px] font-semibold text-stone-900">Start a new count</h2>
++      <div className="grid gap-3 sm:grid-cols-3">
++        {locations.length > 0 && (
++          <div>
++            <label className={label}>Location</label>
++            <select name="locationId" className={field} defaultValue="">
++              <option value="">Whole shop</option>
++              {locations.map((l) => (
++                <option key={l.id} value={l.id}>
++                  {l.name}
++                </option>
++              ))}
++            </select>
++          </div>
++        )}
++        <div className={locations.length > 0 ? "sm:col-span-2" : "sm:col-span-3"}>
++          <label className={label}>Note</label>
++          <input name="note" placeholder="Month-end count" className={field} />
++        </div>
++      </div>
++      <button
++        type="submit"
++        disabled={pending}
++        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
++      >
++        <Icon name="plus" size={14} />
++        {pending ? "Starting…" : "Start counting"}
++      </button>
++    </form>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/stock-takes/[id]/CountClient.tsx b/src/app/(admin)/admin/(protected)/inventory/stock-takes/[id]/CountClient.tsx
+new file mode 100644
+index 0000000..c2a95fe
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/stock-takes/[id]/CountClient.tsx
+@@ -0,0 +1,426 @@
++"use client";
++
++/**
++ * The counting screen.
++ *
++ * Built around a handheld scanner, which is just a keyboard that types a code
++ * and presses Enter. So the scan box keeps focus, accepts the code, resolves it
++ * and asks only for the number on the shelf — nothing else may steal focus, or
++ * the next scan lands in the wrong field.
++ *
++ * Typing works exactly the same way, because plenty of stock in a shop like
++ * this was never labelled, and a count that only accepts barcodes would quietly
++ * skip it.
++ */
++
++import { useEffect, useRef, useState, useTransition } from "react";
++import { Icon } from "@/components/icons";
++import {
++  scanAction,
++  searchRowsAction,
++  countLineAction,
++  removeLineAction,
++  commitStockTakeAction,
++  cancelStockTakeAction,
++} from "../actions";
++import type { ScanHit } from "@/server/inventory/barcode";
++import type { CommitSummary } from "@/server/inventory/stocktake";
++
++export interface LineView {
++  id: number;
++  productId: number;
++  variantId: number | null;
++  productName: string;
++  variantLabel: string | null;
++  expectedQty: number;
++  countedQty: number | null;
++  note: string | null;
++}
++
++const field =
++  "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-accent";
++
++export default function CountClient({
++  stockTakeId,
++  reference,
++  isOpen,
++  lines: initialLines,
++}: {
++  stockTakeId: number;
++  reference: string;
++  isOpen: boolean;
++  lines: LineView[];
++}) {
++  const [lines, setLines] = useState(initialLines);
++  const [code, setCode] = useState("");
++  const [pending, startTransition] = useTransition();
++  const [message, setMessage] = useState<string | null>(null);
++  const [error, setError] = useState<string | null>(null);
++  const [summary, setSummary] = useState<CommitSummary | null>(null);
++  // The row a scan resolved to, waiting for its count.
++  const [target, setTarget] = useState<ScanHit | null>(null);
++  const [choices, setChoices] = useState<ScanHit[]>([]);
++  const [qty, setQty] = useState("");
++
++  const scanRef = useRef<HTMLInputElement>(null);
++  const qtyRef = useRef<HTMLInputElement>(null);
++
++  // Keep the scan box focused whenever nothing else needs the keyboard. A
++  // scanner fires the instant it is pointed at a label; if focus has drifted,
++  // the code is typed into whatever happens to be focused instead.
++  useEffect(() => {
++    if (!isOpen) return;
++    if (target) qtyRef.current?.focus();
++    else scanRef.current?.focus();
++  }, [target, isOpen, lines.length]);
++
++  useEffect(() => {
++    setLines(initialLines);
++  }, [initialLines]);
++
++  function resolve(raw: string) {
++    const value = raw.trim();
++    if (!value) return;
++    setError(null);
++    setMessage(null);
++    setChoices([]);
++
++    startTransition(async () => {
++      const res = await scanAction(value);
++      if (res.kind === "hit") {
++        setTarget(res.row);
++        setCode("");
++        setQty("");
++        return;
++      }
++      if (res.kind === "ambiguous") {
++        setChoices(res.rows);
++        setCode("");
++        return;
++      }
++      // Nothing matched the code — fall back to a name search, since an unlabelled
++      // product is the common case rather than an error.
++      const found = await searchRowsAction(value);
++      if (found.length === 1) {
++        setTarget(found[0]);
++        setCode("");
++        setQty("");
++      } else if (found.length > 1) {
++        setChoices(found);
++        setCode("");
++      } else {
++        setError(`Nothing found for "${value}".`);
++      }
++    });
++  }
++
++  function saveCount() {
++    if (!target) return;
++    const counted = Number(qty);
++    if (!Number.isInteger(counted) || counted < 0) {
++      setError("Enter the number on the shelf — zero or more.");
++      return;
++    }
++    startTransition(async () => {
++      const res = await countLineAction(stockTakeId, {
++        productId: target.productId,
++        variantId: target.variantId,
++        countedQty: counted,
++      });
++      if (res.error) {
++        setError(res.error);
++        return;
++      }
++      const name = [target.productName, target.variantLabel].filter(Boolean).join(" — ");
++      setMessage(`Counted ${counted} × ${name}`);
++      setTarget(null);
++      setQty("");
++    });
++  }
++
++  function drop(lineId: number) {
++    startTransition(async () => {
++      const res = await removeLineAction(stockTakeId, lineId);
++      if (res.error) setError(res.error);
++      else setLines((prev) => prev.filter((l) => l.id !== lineId));
++    });
++  }
++
++  function commit() {
++    const countedLines = lines.filter((l) => l.countedQty != null);
++    const variances = countedLines.filter((l) => l.countedQty !== l.expectedQty);
++    if (
++      !confirm(
++        `Apply ${reference}?\n\n${countedLines.length} line(s) counted, ${variances.length} with a variance.\n` +
++          `Stock will be adjusted to match what you counted. This can't be undone.`,
++      )
++    )
++      return;
++
++    startTransition(async () => {
++      const res = await commitStockTakeAction(stockTakeId);
++      if (res.error) setError(res.error);
++      if (res.summary) setSummary(res.summary);
++    });
++  }
++
++  function abandon() {
++    if (!confirm(`Cancel ${reference}? The counts are kept, but no stock will change.`)) return;
++    startTransition(async () => {
++      const res = await cancelStockTakeAction(stockTakeId);
++      if (res.error) setError(res.error);
++    });
++  }
++
++  const counted = lines.filter((l) => l.countedQty != null);
++  const variances = counted.filter((l) => l.countedQty !== l.expectedQty);
++  const netUnits = variances.reduce((sum, l) => sum + (l.countedQty! - l.expectedQty), 0);
++
++  return (
++    <div className="space-y-5">
++      {isOpen && (
++        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
++          <label className="mb-1 block text-[12px] font-semibold text-stone-600">
++            Scan a barcode, or type a SKU or product name
++          </label>
++          <div className="flex gap-2">
++            <input
++              ref={scanRef}
++              value={code}
++              onChange={(e) => setCode(e.target.value)}
++              onKeyDown={(e) => {
++                // A scanner ends with Enter, which must not submit anything —
++                // only resolve what was typed.
++                if (e.key === "Enter") {
++                  e.preventDefault();
++                  resolve(code);
++                }
++              }}
++              placeholder="SAR-PUR-32"
++              autoComplete="off"
++              className={`${field} font-mono`}
++            />
++            <button
++              type="button"
++              onClick={() => resolve(code)}
++              disabled={pending || !code.trim()}
++              className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
++            >
++              Find
++            </button>
++          </div>
++
++          {choices.length > 0 && (
++            <div className="mt-3 rounded-lg border border-stone-200">
++              <p className="border-b border-stone-100 px-3 py-2 text-[12px] font-semibold text-stone-600">
++                Which one?
++              </p>
++              <ul className="max-h-56 overflow-auto">
++                {choices.map((c) => (
++                  <li key={`${c.productId}-${c.variantId ?? "base"}`}>
++                    <button
++                      type="button"
++                      onClick={() => {
++                        setTarget(c);
++                        setChoices([]);
++                        setQty("");
++                      }}
++                      className="flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left hover:bg-stone-50"
++                    >
++                      <span className="text-[13px] text-stone-800">
++                        {c.productName}
++                        {c.variantLabel && (
++                          <span className="text-stone-500"> — {c.variantLabel}</span>
++                        )}
++                      </span>
++                      <span className="font-mono text-[11.5px] text-stone-400">
++                        {c.sku ?? "no SKU"}
++                      </span>
++                    </button>
++                  </li>
++                ))}
++              </ul>
++            </div>
++          )}
++
++          {target && (
++            <div className="mt-3 rounded-lg border border-accent/30 bg-accent-soft/40 p-3">
++              <p className="text-[13px] font-semibold text-stone-900">
++                {target.productName}
++                {target.variantLabel && (
++                  <span className="font-normal text-stone-600"> — {target.variantLabel}</span>
++                )}
++              </p>
++              <p className="mt-0.5 text-[12px] text-stone-500">
++                System says {target.stock} on hand
++                {target.reserved > 0 && ` · ${target.reserved} reserved`}
++              </p>
++              <div className="mt-2.5 flex gap-2">
++                <input
++                  ref={qtyRef}
++                  type="number"
++                  min="0"
++                  step="1"
++                  value={qty}
++                  onChange={(e) => setQty(e.target.value)}
++                  onKeyDown={(e) => {
++                    if (e.key === "Enter") {
++                      e.preventDefault();
++                      saveCount();
++                    }
++                    if (e.key === "Escape") setTarget(null);
++                  }}
++                  placeholder="Count on shelf"
++                  className={field}
++                />
++                <button
++                  type="button"
++                  onClick={saveCount}
++                  disabled={pending}
++                  className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
++                >
++                  Save
++                </button>
++                <button
++                  type="button"
++                  onClick={() => setTarget(null)}
++                  className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-600"
++                >
++                  Skip
++                </button>
++              </div>
++            </div>
++          )}
++
++          {message && <p className="mt-2 text-[12.5px] text-success-fg">{message}</p>}
++          {error && <p className="mt-2 text-[12.5px] text-danger-fg">{error}</p>}
++        </div>
++      )}
++
++      {summary && (
++        <div className="rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-[13px] text-success-fg">
++          <p className="font-semibold">Count applied.</p>
++          <p className="mt-0.5">
++            {summary.applied} line(s) adjusted, {summary.unchanged} already correct, net{" "}
++            {summary.netUnits > 0 ? "+" : ""}
++            {summary.netUnits} unit(s).
++          </p>
++          {summary.failures.length > 0 && (
++            <ul className="mt-2 list-disc pl-5 text-danger-fg">
++              {summary.failures.map((f) => (
++                <li key={f.label}>
++                  {f.label}: {f.reason}
++                </li>
++              ))}
++            </ul>
++          )}
++        </div>
++      )}
++
++      {/* ── The sheet ── */}
++      <div className="rounded-lg border border-stone-200 bg-white shadow-card">
++        <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-stone-200 px-5 py-3">
++          <h2 className="text-[13px] font-semibold text-stone-900">
++            Counted {counted.length} of {lines.length}
++          </h2>
++          <p className="text-[12.5px] text-stone-500">
++            {variances.length} variance(s) · net {netUnits > 0 ? "+" : ""}
++            {netUnits} unit(s)
++          </p>
++        </div>
++
++        {lines.length === 0 ? (
++          <p className="px-5 py-10 text-center text-[13px] text-stone-500">
++            Nothing counted yet. Scan a barcode to begin.
++          </p>
++        ) : (
++          <div className="overflow-x-auto">
++            <table className="w-full min-w-[36rem] text-sm">
++              <thead className="border-b border-stone-100 bg-stone-50 text-[11px] uppercase tracking-wide text-stone-500">
++                <tr>
++                  <th className="px-4 py-2.5 text-left font-semibold">Item</th>
++                  <th className="px-4 py-2.5 text-right font-semibold">System</th>
++                  <th className="px-4 py-2.5 text-right font-semibold">Counted</th>
++                  <th className="px-4 py-2.5 text-right font-semibold">Variance</th>
++                  {isOpen && <th className="px-4 py-2.5" />}
++                </tr>
++              </thead>
++              <tbody className="divide-y divide-stone-100">
++                {lines.map((l) => {
++                  const variance = l.countedQty == null ? null : l.countedQty - l.expectedQty;
++                  return (
++                    <tr key={l.id} className="hover:bg-stone-50/60">
++                      <td className="px-4 py-2.5">
++                        <span className="text-stone-800">{l.productName}</span>
++                        {l.variantLabel && (
++                          <span className="text-stone-500"> — {l.variantLabel}</span>
++                        )}
++                      </td>
++                      <td className="px-4 py-2.5 text-right tabular-nums text-stone-500">
++                        {l.expectedQty}
++                      </td>
++                      <td className="px-4 py-2.5 text-right tabular-nums text-stone-800">
++                        {l.countedQty ?? "—"}
++                      </td>
++                      <td
++                        className={[
++                          "px-4 py-2.5 text-right font-semibold tabular-nums",
++                          variance == null
++                            ? "text-stone-300"
++                            : variance === 0
++                              ? "text-stone-400"
++                              : variance > 0
++                                ? "text-success-fg"
++                                : "text-danger-fg",
++                        ].join(" ")}
++                      >
++                        {variance == null ? "—" : variance === 0 ? "0" : variance > 0 ? `+${variance}` : variance}
++                      </td>
++                      {isOpen && (
++                        <td className="px-4 py-2.5 text-right">
++                          <button
++                            type="button"
++                            onClick={() => drop(l.id)}
++                            disabled={pending}
++                            className="text-[12px] text-stone-400 hover:text-danger-fg disabled:opacity-40"
++                          >
++                            Remove
++                          </button>
++                        </td>
++                      )}
++                    </tr>
++                  );
++                })}
++              </tbody>
++            </table>
++          </div>
++        )}
++      </div>
++
++      {isOpen && (
++        <div className="flex flex-wrap items-center gap-2">
++          <button
++            type="button"
++            onClick={commit}
++            disabled={pending || counted.length === 0}
++            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
++          >
++            <Icon name="check" size={14} className="mr-1.5 inline" />
++            Apply count
++          </button>
++          <button
++            type="button"
++            onClick={abandon}
++            disabled={pending}
++            className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 disabled:opacity-50"
++          >
++            Cancel stock-take
++          </button>
++          <span className="text-[12px] text-stone-400">
++            Applying adjusts stock to your counts, and records each change in the ledger.
++          </span>
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/stock-takes/[id]/page.tsx b/src/app/(admin)/admin/(protected)/inventory/stock-takes/[id]/page.tsx
+new file mode 100644
+index 0000000..889ff20
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/stock-takes/[id]/page.tsx
+@@ -0,0 +1,71 @@
++import Link from "next/link";
++import { notFound } from "next/navigation";
++import { getStockTake } from "@/server/inventory/stocktake";
++import { Badge } from "@/components/admin/ui/Badge";
++import CountClient from "./CountClient";
++
++export const metadata = { title: "Stock-take — FZ-Mart Admin" };
++
++const STATUS_TONE = {
++  OPEN: "warning",
++  COMMITTED: "success",
++  CANCELLED: "neutral",
++} as const;
++
++export default async function StockTakePage({ params }: { params: Promise<{ id: string }> }) {
++  const { id } = await params;
++  const take = await getStockTake(Number(id));
++  if (!take) notFound();
++
++  return (
++    <div className="max-w-4xl space-y-6 px-4 py-8 sm:px-7">
++      <div className="flex flex-wrap items-start justify-between gap-4">
++        <div>
++          <h1 className="font-spline-mono text-[22px] font-extrabold tracking-tight text-stone-900 sm:text-[26px]">
++            {take.reference}
++          </h1>
++          <p className="mt-1 text-sm text-stone-500">
++            {take.location?.name ?? "No location"} · started{" "}
++            {take.startedAt.toLocaleDateString("en-BD", {
++              day: "2-digit",
++              month: "short",
++              year: "numeric",
++            })}{" "}
++            by {take.actorName}
++            {take.committedAt &&
++              ` · applied ${take.committedAt.toLocaleDateString("en-BD", {
++                day: "2-digit",
++                month: "short",
++              })}`}
++          </p>
++          {take.note && <p className="mt-1 text-[13px] text-stone-500">{take.note}</p>}
++        </div>
++        <div className="flex items-center gap-3">
++          <Badge tone={STATUS_TONE[take.status]}>{take.status}</Badge>
++          <Link
++            href="/admin/inventory/stock-takes"
++            className="text-sm text-stone-500 underline-offset-2 hover:text-accent hover:underline"
++          >
++            All stock-takes
++          </Link>
++        </div>
++      </div>
++
++      <CountClient
++        stockTakeId={take.id}
++        reference={take.reference}
++        isOpen={take.status === "OPEN"}
++        lines={take.lines.map((l) => ({
++          id: l.id,
++          productId: l.productId,
++          variantId: l.variantId,
++          productName: l.productName,
++          variantLabel: l.variantLabel,
++          expectedQty: l.expectedQty,
++          countedQty: l.countedQty,
++          note: l.note,
++        }))}
++      />
++    </div>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/stock-takes/actions.ts b/src/app/(admin)/admin/(protected)/inventory/stock-takes/actions.ts
+new file mode 100644
+index 0000000..4ace7be
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/stock-takes/actions.ts
+@@ -0,0 +1,123 @@
++"use server";
++
++import { revalidatePath } from "next/cache";
++import { redirect } from "next/navigation";
++import { requirePermission } from "@/server/admin/guard";
++import { logActivity } from "@/server/admin/audit";
++import {
++  createStockTake,
++  countLine,
++  removeLine,
++  commitStockTake,
++  cancelStockTake,
++  StockTakeError,
++  type CommitSummary,
++} from "@/server/inventory/stocktake";
++import { scanCode, searchStockRows, type ScanResult, type ScanHit } from "@/server/inventory/barcode";
++
++export interface TakeResult {
++  error?: string;
++  success?: string;
++}
++
++export async function createStockTakeAction(formData: FormData): Promise<TakeResult> {
++  const admin = await requirePermission("inventory");
++  const rawLocation = String(formData.get("locationId") ?? "").trim();
++
++  const take = await createStockTake({
++    locationId: rawLocation ? Number(rawLocation) : null,
++    note: String(formData.get("note") ?? ""),
++    actorName: admin.username,
++  });
++
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "stock_take.start",
++    detail: take.reference,
++  });
++  revalidatePath("/admin/inventory/stock-takes");
++  redirect(`/admin/inventory/stock-takes/${take.id}`);
++}
++
++/** Resolve a scanned code. Pure lookup — nothing is written. */
++export async function scanAction(code: string): Promise<ScanResult> {
++  await requirePermission("inventory");
++  return scanCode(code);
++}
++
++/** Name search, for the stock that was never labelled with a SKU. */
++export async function searchRowsAction(query: string): Promise<ScanHit[]> {
++  await requirePermission("inventory");
++  return searchStockRows(query);
++}
++
++export async function countLineAction(
++  stockTakeId: number,
++  input: { productId: number; variantId: number | null; countedQty: number; note?: string },
++): Promise<TakeResult> {
++  await requirePermission("inventory");
++  try {
++    await countLine({ stockTakeId, ...input });
++  } catch (err) {
++    if (err instanceof StockTakeError) return { error: err.message };
++    throw err;
++  }
++  revalidatePath(`/admin/inventory/stock-takes/${stockTakeId}`);
++  return {};
++}
++
++export async function removeLineAction(stockTakeId: number, lineId: number): Promise<TakeResult> {
++  await requirePermission("inventory");
++  try {
++    await removeLine(stockTakeId, lineId);
++  } catch (err) {
++    if (err instanceof StockTakeError) return { error: err.message };
++    throw err;
++  }
++  revalidatePath(`/admin/inventory/stock-takes/${stockTakeId}`);
++  return {};
++}
++
++export interface CommitResult extends TakeResult {
++  summary?: CommitSummary;
++}
++
++export async function commitStockTakeAction(id: number): Promise<CommitResult> {
++  const admin = await requirePermission("inventory");
++  let summary: CommitSummary;
++  try {
++    summary = await commitStockTake(id, admin.username);
++  } catch (err) {
++    if (err instanceof StockTakeError) return { error: err.message };
++    throw err;
++  }
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "stock_take.commit",
++    detail: `#${id} · ${summary.applied} line(s), net ${summary.netUnits}`,
++  });
++  revalidatePath(`/admin/inventory/stock-takes/${id}`);
++  revalidatePath("/admin/inventory");
++  revalidatePath("/admin/inventory/movements");
++  return { summary, success: "Count applied." };
++}
++
++export async function cancelStockTakeAction(id: number): Promise<TakeResult> {
++  const admin = await requirePermission("inventory");
++  try {
++    await cancelStockTake(id);
++  } catch (err) {
++    if (err instanceof StockTakeError) return { error: err.message };
++    throw err;
++  }
++  await logActivity({
++    adminId: admin.id,
++    actorName: admin.username,
++    action: "stock_take.cancel",
++    detail: `#${id}`,
++  });
++  revalidatePath(`/admin/inventory/stock-takes/${id}`);
++  return { success: "Stock-take cancelled." };
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/stock-takes/page.tsx b/src/app/(admin)/admin/(protected)/inventory/stock-takes/page.tsx
+new file mode 100644
+index 0000000..5262e57
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/inventory/stock-takes/page.tsx
+@@ -0,0 +1,84 @@
++import Link from "next/link";
++import { listStockTakes } from "@/server/inventory/stocktake";
++import { listLocations } from "@/server/inventory/locations";
++import { Badge } from "@/components/admin/ui/Badge";
++import { EmptyState } from "@/components/admin/ui/EmptyState";
++import StartTakeForm from "./StartTakeForm";
++
++export const metadata = { title: "Stock-takes — FZ-Mart Admin" };
++
++const STATUS_TONE = {
++  OPEN: "warning",
++  COMMITTED: "success",
++  CANCELLED: "neutral",
++} as const;
++
++export default async function StockTakesPage() {
++  const [takes, locations] = await Promise.all([listStockTakes(), listLocations()]);
++
++  return (
++    <div className="max-w-4xl space-y-6 px-4 py-8 sm:px-7">
++      <div>
++        <h1 className="text-[22px] font-extrabold tracking-tight text-stone-900 sm:text-[26px]">
++          Stock-takes
++        </h1>
++        <p className="mt-1 text-sm text-stone-500">
++          Count the shelves with a scanner, review every variance together, then apply the lot as
++          one recorded act.
++        </p>
++      </div>
++
++      <StartTakeForm locations={locations.map((l) => ({ id: l.id, name: l.name }))} />
++
++      {takes.length === 0 ? (
++        <EmptyState
++          icon="box"
++          title="No stock-takes yet"
++          description="A stock-take is the honest way to correct a count: everything you find, applied together and recorded in the ledger."
++        />
++      ) : (
++        <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-card">
++          <table className="w-full text-sm">
++            <thead className="border-b border-stone-200 bg-stone-50 text-[11px] uppercase tracking-wide text-stone-500">
++              <tr>
++                <th className="px-4 py-3 text-left font-semibold">Reference</th>
++                <th className="px-4 py-3 text-left font-semibold">Location</th>
++                <th className="px-4 py-3 text-right font-semibold">Lines</th>
++                <th className="px-4 py-3 text-left font-semibold">Started</th>
++                <th className="px-4 py-3 text-left font-semibold">By</th>
++                <th className="px-4 py-3 text-left font-semibold">Status</th>
++              </tr>
++            </thead>
++            <tbody className="divide-y divide-stone-100">
++              {takes.map((t) => (
++                <tr key={t.id} className="hover:bg-stone-50/60">
++                  <td className="px-4 py-3">
++                    <Link
++                      href={`/admin/inventory/stock-takes/${t.id}`}
++                      className="font-mono font-medium text-stone-900 hover:text-accent hover:underline"
++                    >
++                      {t.reference}
++                    </Link>
++                  </td>
++                  <td className="px-4 py-3 text-stone-500">
++                    {t.location?.name ?? <span className="text-stone-300">—</span>}
++                  </td>
++                  <td className="px-4 py-3 text-right tabular-nums text-stone-500">
++                    {t._count.lines}
++                  </td>
++                  <td className="px-4 py-3 text-stone-500">
++                    {t.startedAt.toLocaleDateString("en-BD", { day: "2-digit", month: "short" })}
++                  </td>
++                  <td className="px-4 py-3 text-stone-500">{t.actorName}</td>
++                  <td className="px-4 py-3">
++                    <Badge tone={STATUS_TONE[t.status]}>{t.status}</Badge>
++                  </td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/inventory/suppliers/page.tsx b/src/app/(admin)/admin/(protected)/inventory/suppliers/page.tsx
+index 659cc3a..264741d 100644
+--- a/src/app/(admin)/admin/(protected)/inventory/suppliers/page.tsx
++++ b/src/app/(admin)/admin/(protected)/inventory/suppliers/page.tsx
+@@ -1,5 +1,6 @@
+ import Link from "next/link";
+-import { listSuppliers } from "@/server/purchasing";
++import { listSuppliers, getSupplierBalances } from "@/server/purchasing";
++import { formatTaka } from "@/lib/money";
+ import { DataTable, Th, Td, Tr, TableEmpty } from "@/components/admin/ui/DataTable";
+ import { EmptyState } from "@/components/admin/ui/EmptyState";
+ import { Badge } from "@/components/admin/ui/Badge";
+@@ -8,7 +9,10 @@ import SupplierActions from "./SupplierActions";
+ export const metadata = { title: "Suppliers — FZ-Mart Admin" };
+ 
+ export default async function SuppliersPage() {
+-  const suppliers = await listSuppliers(true);
++  const [suppliers, balances] = await Promise.all([listSuppliers(true), getSupplierBalances()]);
++  // Outstanding balance per supplier, so "who do I still owe?" is answerable
++  // from the list rather than by opening every order one at a time.
++  const dueBySupplier = new Map(balances.map((b) => [b.supplierId, b.due]));
+ 
+   return (
+     <div className="space-y-6 px-4 py-8 sm:px-7">
+@@ -45,6 +49,7 @@ export default async function SuppliersPage() {
+               <Th>Contact</Th>
+               <Th align="right">Lead time</Th>
+               <Th align="right">Orders</Th>
++              <Th align="right">Still owed</Th>
+               <Th>Status</Th>
+               <Th />
+             </tr>
+@@ -70,6 +75,13 @@ export default async function SuppliersPage() {
+               <Td numeric className="text-stone-500">
+                 {s._count.purchaseOrders}
+               </Td>
++              <Td numeric>
++                {(() => {
++                  const due = dueBySupplier.get(s.id) ?? 0;
++                  if (due <= 0) return <span className="text-stone-300">—</span>;
++                  return <span className="font-semibold text-warning-fg">{formatTaka(due)}</span>;
++                })()}
++              </Td>
+               <Td>
+                 <Badge tone={s.isActive ? "success" : "neutral"}>
+                   {s.isActive ? "Active" : "Inactive"}
+diff --git a/src/app/(admin)/admin/(protected)/reports/cashflow/page.tsx b/src/app/(admin)/admin/(protected)/reports/cashflow/page.tsx
+new file mode 100644
+index 0000000..88b6f64
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/reports/cashflow/page.tsx
+@@ -0,0 +1,171 @@
++import Link from "next/link";
++import { getCashFlowReport } from "@/server/finance/cashflow";
++import { getMonthlyFinancialReport, monthRange } from "@/server/finance/report";
++import { formatTaka } from "@/lib/money";
++
++export const metadata = { title: "Cash Flow — FZ-Mart Admin" };
++
++/** ?month=YYYY-MM → year + 0-based month, defaulting to the current month. */
++function resolveMonth(raw?: string): { year: number; month: number; value: string } {
++  const now = new Date();
++  let year = now.getFullYear();
++  let month = now.getMonth();
++
++  if (raw && /^\d{4}-\d{2}$/.test(raw)) {
++    const [y, m] = raw.split("-").map(Number);
++    if (m >= 1 && m <= 12) {
++      year = y;
++      month = m - 1;
++    }
++  }
++
++  return { year, month, value: `${year}-${String(month + 1).padStart(2, "0")}` };
++}
++
++export default async function CashFlowPage({
++  searchParams,
++}: {
++  searchParams: Promise<{ month?: string }>;
++}) {
++  const { month: monthParam } = await searchParams;
++  const { year, month, value } = resolveMonth(monthParam);
++  const { start, end } = monthRange(year, month);
++
++  // The P&L alongside it, because the interesting fact about cash flow is
++  // usually how far it diverges from profit — and why.
++  const [cash, pnl] = await Promise.all([
++    getCashFlowReport(start, end),
++    getMonthlyFinancialReport(year, month),
++  ]);
++
++  const monthLabel = new Date(year, month, 1).toLocaleDateString("en-BD", {
++    month: "long",
++    year: "numeric",
++  });
++
++  const positive = cash.net >= 0;
++  const gap = cash.net - pnl.netProfit;
++
++  return (
++    <div className="space-y-6">
++      <div className="flex flex-wrap items-start justify-between gap-4">
++        <div>
++          <h1 className="text-2xl font-bold text-gray-900">Cash Flow</h1>
++          <p className="mt-1 text-sm text-gray-500">{monthLabel} · money in and out, by the day it moved</p>
++        </div>
++        <div className="flex items-end gap-3">
++          <form method="get" className="flex items-end gap-2">
++            <div>
++              <label className="mb-1 block text-sm font-medium">Month</label>
++              <input
++                type="month"
++                name="month"
++                defaultValue={value}
++                className="rounded border px-3 py-2"
++              />
++            </div>
++            <button type="submit" className="rounded bg-black px-4 py-2 font-medium text-white">
++              View
++            </button>
++          </form>
++          <Link
++            href="/admin/reports/finance"
++            className="rounded border px-4 py-2 text-sm font-medium hover:border-black"
++          >
++            Profit &amp; Loss
++          </Link>
++        </div>
++      </div>
++
++      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-3">
++        <div className="bg-white px-4 py-3">
++          <p className="text-[11px] uppercase tracking-wide text-stone-500">Money in</p>
++          <p className="nums text-lg font-bold text-success-fg">{formatTaka(cash.totalIn)}</p>
++        </div>
++        <div className="bg-white px-4 py-3">
++          <p className="text-[11px] uppercase tracking-wide text-stone-500">Money out</p>
++          <p className="nums text-lg font-bold text-stone-900">{formatTaka(cash.totalOut)}</p>
++        </div>
++        <div className="bg-white px-4 py-3">
++          <p className="text-[11px] uppercase tracking-wide text-stone-500">Net movement</p>
++          <p
++            className={[
++              "nums text-lg font-bold",
++              positive ? "text-success-fg" : "text-danger-fg",
++            ].join(" ")}
++          >
++            {formatTaka(cash.net)}
++          </p>
++        </div>
++      </div>
++
++      <div className="grid gap-5 lg:grid-cols-2">
++        {[
++          { title: "Money in", lines: cash.inflows, total: cash.totalIn },
++          { title: "Money out", lines: cash.outflows, total: cash.totalOut },
++        ].map((section) => (
++          <div
++            key={section.title}
++            className="rounded-lg border border-stone-200 bg-white p-5 shadow-card"
++          >
++            <h2 className="text-[13px] font-semibold text-stone-900">{section.title}</h2>
++            <ul className="mt-3 divide-y divide-stone-100">
++              {section.lines.map((l) => (
++                <li key={l.label} className="flex items-baseline justify-between gap-3 py-2.5">
++                  <span className="text-[13px] text-stone-700">
++                    {l.label}
++                    {l.note && <span className="block text-[11.5px] text-stone-400">{l.note}</span>}
++                  </span>
++                  <span className="nums text-[13.5px] font-medium text-stone-900">
++                    {formatTaka(l.amount)}
++                  </span>
++                </li>
++              ))}
++            </ul>
++            <div className="mt-2 flex items-baseline justify-between border-t-2 border-stone-200 pt-2.5">
++              <span className="text-[13px] font-semibold text-stone-900">Total</span>
++              <span className="nums text-[15px] font-bold text-stone-900">
++                {formatTaka(section.total)}
++              </span>
++            </div>
++          </div>
++        ))}
++      </div>
++
++      {/* The comparison is the point of having both reports. */}
++      <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
++        <h2 className="text-[13px] font-semibold text-stone-900">Cash vs. profit</h2>
++        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
++          <div>
++            <p className="text-[11px] uppercase tracking-wide text-stone-500">Net profit (P&amp;L)</p>
++            <p className="nums text-[15px] font-bold text-stone-900">{formatTaka(pnl.netProfit)}</p>
++          </div>
++          <div>
++            <p className="text-[11px] uppercase tracking-wide text-stone-500">Net cash</p>
++            <p className="nums text-[15px] font-bold text-stone-900">{formatTaka(cash.net)}</p>
++          </div>
++          <div>
++            <p className="text-[11px] uppercase tracking-wide text-stone-500">Difference</p>
++            <p className="nums text-[15px] font-bold text-stone-900">{formatTaka(gap)}</p>
++          </div>
++        </div>
++        <p className="mt-3 text-[12.5px] leading-relaxed text-stone-600">
++          These two are <strong>meant</strong> to differ. Profit counts goods as a cost when they
++          are <em>sold</em>; cash counts money on the day it <em>moves</em>. Paying a supplier for
++          next season shows here as cash out but as no cost at all until those goods sell — which
++          is exactly how a profitable month can still leave you short.
++        </p>
++      </div>
++
++      <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-[12.5px] leading-relaxed text-stone-600">
++        <p className="font-semibold text-stone-700">One caveat worth knowing</p>
++        <p className="mt-1">
++          Couriers usually hand over cash-on-delivery money <em>net</em> of their own charge, so
++          &ldquo;COD collected&rdquo; and &ldquo;Courier charges&rdquo; often move as a single
++          settlement rather than two. The net figure is right either way; the two gross figures are
++          each a little overstated.
++        </p>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/app/(admin)/admin/(protected)/reports/suppliers/page.tsx b/src/app/(admin)/admin/(protected)/reports/suppliers/page.tsx
+new file mode 100644
+index 0000000..d445ae9
+--- /dev/null
++++ b/src/app/(admin)/admin/(protected)/reports/suppliers/page.tsx
+@@ -0,0 +1,173 @@
++import Link from "next/link";
++import { getSupplierProfitReport } from "@/server/finance/supplier-profit";
++import { monthRange } from "@/server/finance/report";
++import { formatTaka } from "@/lib/money";
++
++export const metadata = { title: "Profit by Supplier — FZ-Mart Admin" };
++
++/** ?month=YYYY-MM → year + 0-based month, defaulting to the current month. */
++function resolveMonth(raw?: string): { year: number; month: number; value: string } {
++  const now = new Date();
++  let year = now.getFullYear();
++  let month = now.getMonth();
++
++  if (raw && /^\d{4}-\d{2}$/.test(raw)) {
++    const [y, m] = raw.split("-").map(Number);
++    if (m >= 1 && m <= 12) {
++      year = y;
++      month = m - 1;
++    }
++  }
++
++  return { year, month, value: `${year}-${String(month + 1).padStart(2, "0")}` };
++}
++
++export default async function SupplierProfitPage({
++  searchParams,
++}: {
++  searchParams: Promise<{ month?: string }>;
++}) {
++  const { month: monthParam } = await searchParams;
++  const { year, month, value } = resolveMonth(monthParam);
++  const { start, end } = monthRange(year, month);
++  const report = await getSupplierProfitReport(start, end);
++
++  const monthLabel = new Date(year, month, 1).toLocaleDateString("en-BD", {
++    month: "long",
++    year: "numeric",
++  });
++
++  const totalMargin =
++    report.totals.revenue > 0
++      ? Math.round((report.totals.grossProfit / report.totals.revenue) * 100)
++      : null;
++
++  return (
++    <div className="space-y-6">
++      <div className="flex flex-wrap items-start justify-between gap-4">
++        <div>
++          <h1 className="text-2xl font-bold text-gray-900">Profit by Supplier</h1>
++          <p className="mt-1 text-sm text-gray-500">
++            {monthLabel} · {report.totals.unitsSold.toLocaleString("en-BD")} unit(s) sold
++          </p>
++        </div>
++        <div className="flex items-end gap-3">
++          <form method="get" className="flex items-end gap-2">
++            <div>
++              <label className="mb-1 block text-sm font-medium">Month</label>
++              <input
++                type="month"
++                name="month"
++                defaultValue={value}
++                className="rounded border px-3 py-2"
++              />
++            </div>
++            <button type="submit" className="rounded bg-black px-4 py-2 font-medium text-white">
++              View
++            </button>
++          </form>
++          <Link
++            href="/admin/reports/finance"
++            className="rounded border px-4 py-2 text-sm font-medium hover:border-black"
++          >
++            Profit &amp; Loss
++          </Link>
++        </div>
++      </div>
++
++      {report.rows.length === 0 ? (
++        <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-10 text-center text-sm text-stone-500">
++          Nothing was delivered in {monthLabel}.
++        </p>
++      ) : (
++        <>
++          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-4">
++            {[
++              { label: "Revenue", value: formatTaka(report.totals.revenue) },
++              { label: "Cost of goods", value: formatTaka(report.totals.cogs) },
++              { label: "Gross profit", value: formatTaka(report.totals.grossProfit) },
++              { label: "Margin", value: totalMargin == null ? "—" : `${totalMargin}%` },
++            ].map((c) => (
++              <div key={c.label} className="bg-white px-4 py-3">
++                <p className="text-[11px] uppercase tracking-wide text-stone-500">{c.label}</p>
++                <p className="nums text-lg font-bold text-stone-900">{c.value}</p>
++              </div>
++            ))}
++          </div>
++
++          <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white shadow-card">
++            <table className="w-full min-w-[42rem] text-sm">
++              <thead className="border-b border-stone-200 bg-stone-50 text-[11px] uppercase tracking-wide text-stone-500">
++                <tr>
++                  <th className="px-4 py-3 text-left font-semibold">Supplier</th>
++                  <th className="px-4 py-3 text-right font-semibold">Products</th>
++                  <th className="px-4 py-3 text-right font-semibold">Units</th>
++                  <th className="px-4 py-3 text-right font-semibold">Revenue</th>
++                  <th className="px-4 py-3 text-right font-semibold">Cost</th>
++                  <th className="px-4 py-3 text-right font-semibold">Gross profit</th>
++                  <th className="px-4 py-3 text-right font-semibold">Margin</th>
++                </tr>
++              </thead>
++              <tbody className="divide-y divide-stone-100">
++                {report.rows.map((r) => (
++                  <tr key={r.supplierId ?? "none"} className="hover:bg-stone-50/60">
++                    <td className="px-4 py-3">
++                      {r.supplierId != null ? (
++                        <Link
++                          href={`/admin/inventory/suppliers/${r.supplierId}/edit`}
++                          className="font-medium text-stone-900 hover:text-accent hover:underline"
++                        >
++                          {r.supplierName}
++                        </Link>
++                      ) : (
++                        <span className="text-stone-500 italic">{r.supplierName}</span>
++                      )}
++                    </td>
++                    <td className="px-4 py-3 text-right tabular-nums text-stone-500">
++                      {r.productCount}
++                    </td>
++                    <td className="px-4 py-3 text-right tabular-nums text-stone-500">
++                      {r.unitsSold}
++                    </td>
++                    <td className="px-4 py-3 text-right tabular-nums">{formatTaka(r.revenue)}</td>
++                    <td className="px-4 py-3 text-right tabular-nums text-stone-500">
++                      {formatTaka(r.cogs)}
++                    </td>
++                    <td
++                      className={[
++                        "px-4 py-3 text-right font-semibold tabular-nums",
++                        r.grossProfit >= 0 ? "text-success-fg" : "text-danger-fg",
++                      ].join(" ")}
++                    >
++                      {formatTaka(r.grossProfit)}
++                    </td>
++                    <td className="px-4 py-3 text-right tabular-nums text-stone-500">
++                      {r.marginPct == null ? "—" : `${r.marginPct}%`}
++                    </td>
++                  </tr>
++                ))}
++              </tbody>
++            </table>
++          </div>
++        </>
++      )}
++
++      <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-[12.5px] leading-relaxed text-stone-600">
++        <p className="font-semibold text-stone-700">How a product is tied to a supplier</p>
++        <p className="mt-1">
++          By the most recent purchase order it was <strong>received</strong> against. A product
++          bought from more than one supplier counts entirely towards the latest, so treat these as
++          a strong guide rather than an exact split.
++        </p>
++        {report.hasUnattributed && (
++          <p className="mt-1.5">
++            Products never received against a purchase order — anything from before you started
++            recording them, or stock entered by hand — are grouped under{" "}
++            <em>Not linked to a supplier</em> rather than dropped, so these totals still reconcile
++            with Profit &amp; Loss.
++          </p>
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/admin/AdminSidebar.tsx b/src/components/admin/AdminSidebar.tsx
+index 147b367..d127fc1 100644
+--- a/src/components/admin/AdminSidebar.tsx
++++ b/src/components/admin/AdminSidebar.tsx
+@@ -28,6 +28,8 @@ const NAV_SECTIONS: NavSection[] = [
+       { href: "/admin/inventory/movements", label: "Stock Movements", icon: "file", area: "inventory" },
+       { href: "/admin/inventory/purchase-orders", label: "Purchase Orders", icon: "box", area: "inventory" },
+       { href: "/admin/inventory/suppliers", label: "Suppliers", icon: "users", area: "inventory" },
++      { href: "/admin/inventory/stock-takes", label: "Stock-takes", icon: "check", area: "inventory" },
++      { href: "/admin/inventory/locations", label: "Locations", icon: "grid", area: "inventory" },
+     ],
+   },
+   {
+@@ -52,6 +54,8 @@ const NAV_SECTIONS: NavSection[] = [
+     heading: "Reports",
+     links: [
+       { href: "/admin/reports/finance", label: "Profit & Loss", icon: "tag", area: "reports" },
++      { href: "/admin/reports/cashflow", label: "Cash Flow", icon: "cart", area: "reports" },
++      { href: "/admin/reports/suppliers", label: "Profit by Supplier", icon: "users", area: "reports" },
+       { href: "/admin/reports/orders", label: "Order Reports", icon: "grid", area: "reports" },
+       { href: "/admin/reports/delivery", label: "Delivery", icon: "box", area: "reports" },
+       { href: "/admin/reports/abandoned-carts", label: "Abandoned Carts", icon: "cart", area: "reports" },
+diff --git a/src/server/finance/cashflow.ts b/src/server/finance/cashflow.ts
+new file mode 100644
+index 0000000..9bf3fac
+--- /dev/null
++++ b/src/server/finance/cashflow.ts
+@@ -0,0 +1,137 @@
++import { prisma } from "@/lib/prisma";
++import { getOrSetCache } from "@/lib/cache";
++
++// ─────────────────────────────────────────────────────────────
++// Cash flow
++// ─────────────────────────────────────────────────────────────
++//
++// "How much money came in and went out?" — deliberately NOT the same question
++// as the monthly P&L, and the two are expected to disagree.
++//
++//   PROFIT is accrual: goods become a cost when they are SOLD, whenever the
++//   supplier was actually paid.
++//   CASH is timing: money counts on the day it moves, whether or not the goods
++//   have sold — or even arrived.
++//
++// A month can be profitable and cash-negative (you paid for next season's stock
++// in advance) or the reverse (you sold from stock paid for months ago). Both
++// numbers are true; they answer different questions, and a shop that watches
++// only profit can run out of money while doing well.
++//
++// WHAT COUNTS AS CASH IN
++//   • Online payments, on the day they were confirmed.
++//   • COD, on the day the order was DELIVERED — that is when the courier
++//     collects. The COD portion is total − paidAmount, so an order paid part
++//     online and part on delivery isn't counted twice.
++//
++// WHAT COUNTS AS CASH OUT
++//   • Supplier payments, on their paidOn date.
++//   • Manual expenses, on incurredOn.
++//   • Advertising, on spentOn.
++//   • Courier charges for orders delivered in the period.
++//
++// ONE HONEST LIMITATION, stated rather than hidden: couriers here typically
++// remit COD net of their own fee, so the two courier figures above often move
++// as a single settlement rather than as separate cash events. The NET is right
++// either way; the gross in/out are slightly overstated on both sides.
++
++const TTL_SECONDS = 300;
++
++export interface CashFlowLine {
++  label: string;
++  amount: number;
++  /** A short "why this figure is what it is", shown under the label. */
++  note?: string;
++}
++
++export interface CashFlowReport {
++  inflows: CashFlowLine[];
++  outflows: CashFlowLine[];
++  totalIn: number;
++  totalOut: number;
++  /** totalIn − totalOut. Negative means the month consumed cash. */
++  net: number;
++}
++
++/**
++ * Cash movement over a date range.
++ *
++ * `start`/`end` bound the date the money moved, not the date an order was
++ * placed — which is the whole distinction this report exists to draw.
++ */
++export async function getCashFlowReport(start: Date, end: Date): Promise<CashFlowReport> {
++  const key = `report:cashflow:${start.toISOString().slice(0, 10)}:${end
++    .toISOString()
++    .slice(0, 10)}`;
++
++  return getOrSetCache(key, TTL_SECONDS, async () => {
++    // Orders delivered in the window — the moment COD cash is collected.
++    const deliveredLogs = await prisma.orderStatusLog.findMany({
++      where: { toStatus: "DELIVERED", createdAt: { gte: start, lte: end } },
++      select: { orderId: true },
++      distinct: ["orderId"],
++    });
++    const deliveredIds = deliveredLogs.map((l) => l.orderId);
++
++    const [deliveredOrders, onlinePayments, supplierPayments, expenses, adSpend] =
++      await Promise.all([
++        deliveredIds.length
++          ? prisma.order.findMany({
++              where: { id: { in: deliveredIds } },
++              select: { total: true, paidAmount: true, shippingCost: true },
++            })
++          : Promise.resolve([]),
++        // Only payments that actually succeeded moved money.
++        prisma.payment.aggregate({
++          where: { status: "SUCCESS", updatedAt: { gte: start, lte: end } },
++          _sum: { amount: true },
++        }),
++        prisma.supplierPayment.aggregate({
++          where: { paidOn: { gte: start, lte: end } },
++          _sum: { amount: true },
++        }),
++        prisma.expense.aggregate({
++          where: { incurredOn: { gte: start, lte: end } },
++          _sum: { amount: true },
++        }),
++        prisma.adSpend.aggregate({
++          where: { spentOn: { gte: start, lte: end } },
++          _sum: { amount: true },
++        }),
++      ]);
++
++    // COD collected = what the customer still owed on delivery. Clamped at zero
++    // so an over-recorded prepayment can't subtract from the day's takings.
++    const codCollected = deliveredOrders.reduce(
++      (sum, o) => sum + Math.max(0, o.total - o.paidAmount),
++      0,
++    );
++    const courierCost = deliveredOrders.reduce((sum, o) => sum + o.shippingCost, 0);
++
++    const onlineIn = onlinePayments._sum?.amount ?? 0;
++    const suppliersOut = supplierPayments._sum?.amount ?? 0;
++    const expensesOut = expenses._sum?.amount ?? 0;
++    const adsOut = adSpend._sum?.amount ?? 0;
++
++    const inflows: CashFlowLine[] = [
++      {
++        label: "Cash on delivery collected",
++        amount: codCollected,
++        note: `${deliveredOrders.length} order(s) delivered`,
++      },
++      { label: "Online payments received", amount: onlineIn },
++    ];
++
++    const outflows: CashFlowLine[] = [
++      { label: "Paid to suppliers", amount: suppliersOut, note: "Recorded against purchase orders" },
++      { label: "Courier charges", amount: courierCost, note: "On orders delivered in this period" },
++      { label: "Advertising", amount: adsOut },
++      { label: "Other expenses", amount: expensesOut },
++    ];
++
++    const totalIn = inflows.reduce((s, l) => s + l.amount, 0);
++    const totalOut = outflows.reduce((s, l) => s + l.amount, 0);
++
++    return { inflows, outflows, totalIn, totalOut, net: totalIn - totalOut };
++  });
++}
+diff --git a/src/server/finance/supplier-profit.ts b/src/server/finance/supplier-profit.ts
+new file mode 100644
+index 0000000..6b94927
+--- /dev/null
++++ b/src/server/finance/supplier-profit.ts
+@@ -0,0 +1,182 @@
++import { prisma } from "@/lib/prisma";
++import { getOrSetCache } from "@/lib/cache";
++
++// ─────────────────────────────────────────────────────────────
++// Profit by supplier
++// ─────────────────────────────────────────────────────────────
++//
++// "Whose goods actually earn?" — a question the monthly P&L can't answer,
++// because it totals the shop rather than splitting it by where stock came from.
++//
++// ATTRIBUTION, AND ITS LIMIT
++// An OrderItem records what a product cost (purchaseCost, snapshotted at
++// checkout) but not who supplied it — the link runs Product → PurchaseOrderLine
++// → PurchaseOrder → Supplier. A product bought from two suppliers over time
++// therefore has no single true owner, so this report attributes each product to
++// the supplier of its MOST RECENT RECEIVED purchase order, and says so in the
++// UI rather than presenting an approximation as fact.
++//
++// Products never received against a PO (everything predating purchasing, or
++// stock entered by hand) have no supplier at all. They are reported as one
++// explicit "Not linked to a supplier" row rather than being dropped, because a
++// silent omission would make the totals disagree with the P&L for no visible
++// reason.
++//
++// Revenue and cost follow the SAME rules as the monthly P&L (see report.ts), so
++// the two agree: recognised on the DELIVERED date, and goods that were later
++// returned contribute no COGS.
++
++const TTL_SECONDS = 300;
++
++export interface SupplierProfitRow {
++  /** Null for products never received against a purchase order. */
++  supplierId: number | null;
++  supplierName: string;
++  /** Merchandise value of what sold, paisa. Excludes shipping. */
++  revenue: number;
++  /** Cost of those goods, paisa — the snapshotted purchase cost. */
++  cogs: number;
++  /** revenue − cogs, paisa. */
++  grossProfit: number;
++  /** Percentage of revenue kept as gross profit; null when nothing sold. */
++  marginPct: number | null;
++  unitsSold: number;
++  /** How many distinct products of theirs sold in the period. */
++  productCount: number;
++}
++
++export interface SupplierProfitReport {
++  rows: SupplierProfitRow[];
++  totals: { revenue: number; cogs: number; grossProfit: number; unitsSold: number };
++  /** True when at least one row couldn't be tied to a supplier. */
++  hasUnattributed: boolean;
++}
++
++/**
++ * Which supplier each product came from most recently.
++ *
++ * Built from received PO lines only: an order that was written or placed but
++ * never delivered says nothing about where the goods on the shelf came from.
++ */
++async function primarySupplierByProduct(): Promise<Map<number, { id: number; name: string }>> {
++  const lines = await prisma.purchaseOrderLine.findMany({
++    where: { receivedQty: { gt: 0 } },
++    select: {
++      productId: true,
++      purchaseOrder: {
++        select: { receivedAt: true, orderedAt: true, id: true, supplier: { select: { id: true, name: true } } },
++      },
++    },
++  });
++
++  // Latest wins. receivedAt is the honest date; fall back to orderedAt, then to
++  // the PO id, so a part-received order still ranks sensibly.
++  const best = new Map<number, { rank: number; id: number; name: string }>();
++  for (const line of lines) {
++    const po = line.purchaseOrder;
++    const rank = po.receivedAt?.getTime() ?? po.orderedAt?.getTime() ?? po.id;
++    const current = best.get(line.productId);
++    if (!current || rank > current.rank) {
++      best.set(line.productId, { rank, id: po.supplier.id, name: po.supplier.name });
++    }
++  }
++
++  return new Map([...best].map(([productId, s]) => [productId, { id: s.id, name: s.name }]));
++}
++
++/**
++ * Gross profit per supplier over a date range.
++ *
++ * `start`/`end` bound the DELIVERED date, matching the monthly P&L.
++ */
++export async function getSupplierProfitReport(
++  start: Date,
++  end: Date,
++): Promise<SupplierProfitReport> {
++  const key = `report:supplier-profit:${start.toISOString().slice(0, 10)}:${end
++    .toISOString()
++    .slice(0, 10)}`;
++
++  return getOrSetCache(key, TTL_SECONDS, async () => {
++    // Orders delivered in the window, by the audit trail — the same source the
++    // P&L uses, so the two reports can never disagree about what "sold" means.
++    const deliveredLogs = await prisma.orderStatusLog.findMany({
++      where: { toStatus: "DELIVERED", createdAt: { gte: start, lte: end } },
++      select: { orderId: true },
++      distinct: ["orderId"],
++    });
++    const orderIds = deliveredLogs.map((l) => l.orderId);
++
++    if (orderIds.length === 0) {
++      return {
++        rows: [],
++        totals: { revenue: 0, cogs: 0, grossProfit: 0, unitsSold: 0 },
++        hasUnattributed: false,
++      };
++    }
++
++    const [items, supplierOf] = await Promise.all([
++      prisma.orderItem.findMany({
++        // Goods that came back are excluded outright: the P&L gives them no
++        // COGS, so counting their revenue here would invent margin.
++        where: { orderId: { in: orderIds }, order: { status: "DELIVERED" } },
++        select: { productId: true, quantity: true, unitPrice: true, purchaseCost: true },
++      }),
++      primarySupplierByProduct(),
++    ]);
++
++    // Accumulate per supplier, keyed by id — with null for the unattributed.
++    const acc = new Map<
++      number | null,
++      { name: string; revenue: number; cogs: number; units: number; products: Set<number> }
++    >();
++
++    for (const item of items) {
++      // A deleted product keeps its order line but loses the link that would
++      // name a supplier; it lands in the unattributed row.
++      const supplier = item.productId != null ? supplierOf.get(item.productId) : undefined;
++      const key = supplier?.id ?? null;
++      const name = supplier?.name ?? "Not linked to a supplier";
++
++      let row = acc.get(key);
++      if (!row) {
++        row = { name, revenue: 0, cogs: 0, units: 0, products: new Set<number>() };
++        acc.set(key, row);
++      }
++
++      row.revenue += item.unitPrice * item.quantity;
++      row.cogs += item.purchaseCost * item.quantity;
++      row.units += item.quantity;
++      if (item.productId != null) row.products.add(item.productId);
++    }
++
++    const rows: SupplierProfitRow[] = [...acc].map(([supplierId, r]) => {
++      const grossProfit = r.revenue - r.cogs;
++      return {
++        supplierId,
++        supplierName: r.name,
++        revenue: r.revenue,
++        cogs: r.cogs,
++        grossProfit,
++        marginPct: r.revenue > 0 ? Math.round((grossProfit / r.revenue) * 100) : null,
++        unitsSold: r.units,
++        productCount: r.products.size,
++      };
++    });
++
++    // Best earners first — the ordering the question is actually asked in.
++    rows.sort((a, b) => b.grossProfit - a.grossProfit);
++
++    const totals = rows.reduce(
++      (t, r) => ({
++        revenue: t.revenue + r.revenue,
++        cogs: t.cogs + r.cogs,
++        grossProfit: t.grossProfit + r.grossProfit,
++        unitsSold: t.unitsSold + r.unitsSold,
++      }),
++      { revenue: 0, cogs: 0, grossProfit: 0, unitsSold: 0 },
++    );
++
++    return { rows, totals, hasUnattributed: rows.some((r) => r.supplierId === null) };
++  });
++}
+diff --git a/src/server/inventory/barcode.ts b/src/server/inventory/barcode.ts
+new file mode 100644
+index 0000000..2feb1cb
+--- /dev/null
++++ b/src/server/inventory/barcode.ts
+@@ -0,0 +1,186 @@
++import { prisma } from "@/lib/prisma";
++
++// ─────────────────────────────────────────────────────────────
++// Barcode / SKU lookup
++// ─────────────────────────────────────────────────────────────
++//
++// A handheld scanner is a keyboard: it types the code and presses Enter. So
++// "barcode support" is not a device integration — it is resolving whatever was
++// typed to exactly one stock row, fast, and saying clearly when it can't.
++//
++// The code IS the SKU. ProductVariant.sku is already unique shop-wide and
++// generated as ROOT-COLOUR-SIZE, so it is the natural barcode value: no second
++// identifier to print, keep in step, or get out of step. A product with no
++// variants is matched on its baseSku.
++//
++// Matching is case-insensitive and trims whitespace, because scanners vary and
++// a code typed by hand at 11pm should still find the shirt.
++
++export interface ScanHit {
++  productId: number;
++  variantId: number | null;
++  productName: string;
++  variantLabel: string | null;
++  sku: string | null;
++  /** Current shop-wide on-hand for this row — what a count is measured against. */
++  stock: number;
++  reserved: number;
++}
++
++export type ScanResult =
++  | { kind: "hit"; row: ScanHit }
++  /** More than one row answers to this code — the admin picks. */
++  | { kind: "ambiguous"; rows: ScanHit[] }
++  | { kind: "miss"; code: string };
++
++function label(colorName: string | null, size: string | null): string | null {
++  return [colorName, size].filter(Boolean).join(" / ") || null;
++}
++
++/**
++ * Resolve a scanned or typed code to a stock row.
++ *
++ * Order matters: an exact variant SKU wins outright, because that is the
++ * precise thing someone scanned off a shelf. Only when nothing matches exactly
++ * does this fall back to a product-level baseSku or a name search, which is a
++ * convenience for hand-typing rather than for scanning.
++ */
++export async function scanCode(raw: string): Promise<ScanResult> {
++  const code = raw.trim();
++  if (!code) return { kind: "miss", code };
++
++  // 1. Exact variant SKU. Unique shop-wide, so at most one row.
++  const variant = await prisma.productVariant.findFirst({
++    where: { sku: code },
++    select: {
++      id: true,
++      sku: true,
++      size: true,
++      colorName: true,
++      stock: true,
++      reserved: true,
++      productId: true,
++      product: { select: { name: true } },
++    },
++  });
++  if (variant) {
++    return {
++      kind: "hit",
++      row: {
++        productId: variant.productId,
++        variantId: variant.id,
++        productName: variant.product.name,
++        variantLabel: label(variant.colorName, variant.size),
++        sku: variant.sku,
++        stock: variant.stock,
++        reserved: variant.reserved,
++      },
++    };
++  }
++
++  // 2. A product's SKU root. A product WITH variants can't be counted as one
++  //    row — its units live on the options — so this returns them all for the
++  //    admin to choose from rather than guessing.
++  const products = await prisma.product.findMany({
++    where: { baseSku: code },
++    select: {
++      id: true,
++      name: true,
++      stock: true,
++      reserved: true,
++      baseSku: true,
++      variants: {
++        select: { id: true, sku: true, size: true, colorName: true, stock: true, reserved: true },
++        orderBy: { sortOrder: "asc" },
++      },
++    },
++  });
++
++  const rows: ScanHit[] = [];
++  for (const p of products) {
++    if (p.variants.length === 0) {
++      rows.push({
++        productId: p.id,
++        variantId: null,
++        productName: p.name,
++        variantLabel: null,
++        sku: p.baseSku,
++        stock: p.stock,
++        reserved: p.reserved,
++      });
++    } else {
++      for (const v of p.variants) {
++        rows.push({
++          productId: p.id,
++          variantId: v.id,
++          productName: p.name,
++          variantLabel: label(v.colorName, v.size),
++          sku: v.sku,
++          stock: v.stock,
++          reserved: v.reserved,
++        });
++      }
++    }
++  }
++
++  if (rows.length === 1) return { kind: "hit", row: rows[0] };
++  if (rows.length > 1) return { kind: "ambiguous", rows };
++
++  return { kind: "miss", code };
++}
++
++/**
++ * Name search, for the rows that have no SKU at all.
++ *
++ * Plenty of stock in a shop like this was never labelled, and a stock-take that
++ * only accepts barcodes would simply not cover it. Capped, because this feeds a
++ * picker rather than a report.
++ */
++export async function searchStockRows(query: string, take = 20): Promise<ScanHit[]> {
++  const q = query.trim();
++  if (q.length < 2) return [];
++
++  const products = await prisma.product.findMany({
++    where: { name: { contains: q } },
++    select: {
++      id: true,
++      name: true,
++      stock: true,
++      reserved: true,
++      baseSku: true,
++      variants: {
++        select: { id: true, sku: true, size: true, colorName: true, stock: true, reserved: true },
++        orderBy: { sortOrder: "asc" },
++      },
++    },
++    take,
++  });
++
++  const rows: ScanHit[] = [];
++  for (const p of products) {
++    if (p.variants.length === 0) {
++      rows.push({
++        productId: p.id,
++        variantId: null,
++        productName: p.name,
++        variantLabel: null,
++        sku: p.baseSku,
++        stock: p.stock,
++        reserved: p.reserved,
++      });
++    } else {
++      for (const v of p.variants) {
++        rows.push({
++          productId: p.id,
++          variantId: v.id,
++          productName: p.name,
++          variantLabel: label(v.colorName, v.size),
++          sku: v.sku,
++          stock: v.stock,
++          reserved: v.reserved,
++        });
++      }
++    }
++  }
++  return rows.slice(0, take);
++}
+diff --git a/src/server/inventory/ledger.ts b/src/server/inventory/ledger.ts
+index 9427a31..234c976 100644
+--- a/src/server/inventory/ledger.ts
++++ b/src/server/inventory/ledger.ts
+@@ -33,6 +33,14 @@ export interface MovementInput {
+   reason?: string | null;
+   /** Admin username, "customer", or "system". */
+   actorName: string;
++  /**
++   * Where the stock physically moved, when the shop keeps more than one
++   * location. Omitted/null for the movements nobody can place — a customer
++   * order shipping, historical rows — which is why it is nullable rather than
++   * defaulted to the main location: a guess here would be repeated as fact by
++   * every per-location report.
++   */
++  locationId?: number | null;
+ }
+ 
+ export class LedgerError extends Error {
+@@ -56,7 +64,8 @@ export async function recordMovement(
+   tx: TxClient,
+   input: MovementInput,
+ ): Promise<number> {
+-  const { productId, variantId, type, delta, unitCost, orderId, reason, actorName } = input;
++  const { productId, variantId, type, delta, unitCost, orderId, reason, actorName, locationId } =
++    input;
+ 
+   if (!Number.isInteger(delta) || delta === 0) {
+     throw new LedgerError("A stock movement must have a non-zero whole delta.");
+@@ -111,6 +120,7 @@ export async function recordMovement(
+       orderId: orderId ?? null,
+       reason: reason?.trim() || null,
+       actorName,
++      locationId: locationId ?? null,
+     },
+   });
+ 
+diff --git a/src/server/inventory/locations.ts b/src/server/inventory/locations.ts
+new file mode 100644
+index 0000000..9166ffd
+--- /dev/null
++++ b/src/server/inventory/locations.ts
+@@ -0,0 +1,174 @@
++import { prisma } from "@/lib/prisma";
++
++// ─────────────────────────────────────────────────────────────
++// Stock locations
++// ─────────────────────────────────────────────────────────────
++//
++// Where stock physically sits. A LABEL on movements rather than a separate
++// stock pool — see the note on StockLocation in the schema for why.
++//
++// The one invariant maintained here: exactly one location is the default, so
++// "where did this delivery land?" always has an answer without asking.
++
++export class LocationError extends Error {
++  constructor(message: string) {
++    super(message);
++    this.name = "LocationError";
++  }
++}
++
++export interface LocationInput {
++  name: string;
++  note?: string | null;
++  isDefault?: boolean;
++  isActive?: boolean;
++}
++
++export async function listLocations(includeInactive = false) {
++  return prisma.stockLocation.findMany({
++    where: includeInactive ? {} : { isActive: true },
++    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
++  });
++}
++
++export async function getLocation(id: number) {
++  return prisma.stockLocation.findUnique({ where: { id } });
++}
++
++/**
++ * The location goods land in when nobody says otherwise.
++ *
++ * Returns null when the shop has never set one up, which is the normal state
++ * for a single-location shop: callers then record no location at all rather
++ * than inventing one.
++ */
++export async function getDefaultLocation() {
++  return (
++    (await prisma.stockLocation.findFirst({ where: { isDefault: true, isActive: true } })) ??
++    (await prisma.stockLocation.findFirst({
++      where: { isActive: true },
++      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
++    }))
++  );
++}
++
++export async function saveLocation(id: number | null, input: LocationInput) {
++  const name = input.name.trim();
++  if (!name) throw new LocationError("Give the location a name.");
++
++  return prisma.$transaction(async (tx) => {
++    const clash = await tx.stockLocation.findFirst({
++      where: { name, ...(id ? { id: { not: id } } : {}) },
++      select: { id: true },
++    });
++    if (clash) throw new LocationError(`There is already a location called "${name}".`);
++
++    const data = {
++      name,
++      note: input.note?.trim() || null,
++      isActive: input.isActive ?? true,
++    };
++
++    const saved = id
++      ? await tx.stockLocation.update({ where: { id }, data })
++      : await tx.stockLocation.create({ data });
++
++    // Exactly one default. Claiming it clears every other, so the invariant is
++    // enforced by the write rather than hoped for.
++    if (input.isDefault) {
++      await tx.stockLocation.updateMany({
++        where: { id: { not: saved.id } },
++        data: { isDefault: false },
++      });
++      await tx.stockLocation.update({ where: { id: saved.id }, data: { isDefault: true } });
++    }
++
++    // The shop must never be left with no default while a location exists.
++    const anyDefault = await tx.stockLocation.count({ where: { isDefault: true, isActive: true } });
++    if (anyDefault === 0) {
++      const first = await tx.stockLocation.findFirst({
++        where: { isActive: true },
++        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
++      });
++      if (first) {
++        await tx.stockLocation.update({ where: { id: first.id }, data: { isDefault: true } });
++      }
++    }
++
++    return saved;
++  });
++}
++
++/**
++ * Delete a location.
++ *
++ * Allowed even when movements reference it: the FK is SetNull, so the history
++ * survives with its location forgotten rather than the rows being destroyed.
++ * That is the right trade — a movement is a fact about stock, and a location is
++ * only a note about where it happened.
++ */
++export async function deleteLocation(id: number): Promise<void> {
++  const open = await prisma.stockTake.count({ where: { locationId: id, status: "OPEN" } });
++  if (open > 0) {
++    throw new LocationError(
++      "A stock-take is still open at this location. Finish or cancel it first.",
++    );
++  }
++  await prisma.stockLocation.delete({ where: { id } });
++
++  // Deleting the default hands the role on rather than leaving none.
++  const anyDefault = await prisma.stockLocation.count({ where: { isDefault: true } });
++  if (anyDefault === 0) {
++    const first = await prisma.stockLocation.findFirst({
++      where: { isActive: true },
++      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
++    });
++    if (first) {
++      await prisma.stockLocation.update({ where: { id: first.id }, data: { isDefault: true } });
++    }
++  }
++}
++
++export interface LocationBalanceRow {
++  locationId: number | null;
++  name: string;
++  /** Net units the ledger attributes to this location. */
++  units: number;
++  movements: number;
++}
++
++/**
++ * Net stock per location, DERIVED from the ledger.
++ *
++ * Honest by construction: it sums the movements that name each location, so it
++ * reports what has been recorded rather than a level someone maintains. The
++ * "Not recorded" row is every movement written before locations existed — real
++ * stock whose whereabouts simply were never captured, shown rather than hidden
++ * so the totals still add up to the shop.
++ */
++export async function getLocationBalances(): Promise<LocationBalanceRow[]> {
++  const [grouped, locations] = await Promise.all([
++    prisma.stockMovement.groupBy({
++      by: ["locationId"],
++      _sum: { delta: true },
++      _count: { _all: true },
++    }),
++    prisma.stockLocation.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
++  ]);
++
++  const byId = new Map(locations.map((l) => [l.id, l.name]));
++
++  return grouped
++    .map((g) => ({
++      locationId: g.locationId,
++      name: g.locationId == null ? "Not recorded" : (byId.get(g.locationId) ?? "Deleted location"),
++      units: g._sum.delta ?? 0,
++      movements: g._count._all,
++    }))
++    .sort((a, b) => {
++      // Real locations first, "Not recorded" last — it's context, not a place.
++      if (a.locationId == null) return 1;
++      if (b.locationId == null) return -1;
++      return b.units - a.units;
++    });
++}
+diff --git a/src/server/inventory/reports.ts b/src/server/inventory/reports.ts
+index 9cd5d09..47c7142 100644
+--- a/src/server/inventory/reports.ts
++++ b/src/server/inventory/reports.ts
+@@ -366,6 +366,8 @@ export interface MovementFilter {
+   type?: StockMovementType;
+   from?: Date;
+   to?: Date;
++  /** Restrict to one location; "none" finds the rows that never recorded one. */
++  locationId?: number | "none";
+   page?: number;
+   pageSize?: number;
+ }
+@@ -391,6 +393,8 @@ export interface MovementRow {
+   orderNo: string | null;
+   /** True for rows synthesised by the Phase A backfill, whose levels are unknown. */
+   isBackfill: boolean;
++  /** Where it happened; null for movements that never recorded a location. */
++  locationName: string | null;
+ }
+ 
+ /** Paginated ledger view, newest first. */
+@@ -406,6 +410,9 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
+   const where: Record<string, unknown> = {};
+   if (filter.productId) where.productId = filter.productId;
+   if (filter.type) where.type = filter.type;
++  if (filter.locationId != null) {
++    where.locationId = filter.locationId === "none" ? null : filter.locationId;
++  }
+   if (filter.from || filter.to) {
+     where.createdAt = {
+       ...(filter.from ? { gte: filter.from } : {}),
+@@ -434,6 +441,7 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
+         variant: { select: { size: true, colorName: true, sku: true } },
+         orderId: true,
+         order: { select: { orderNo: true } },
++        location: { select: { name: true } },
+       },
+     }),
+     prisma.stockMovement.count({ where }),
+@@ -460,6 +468,7 @@ export async function listMovements(filter: MovementFilter = {}): Promise<{
+       sku: m.variant?.sku ?? m.product.baseSku ?? null,
+       orderId: m.orderId,
+       orderNo: m.order?.orderNo ?? null,
++      locationName: m.location?.name ?? null,
+       // The backfill could not know historical levels and wrote 0/0 with an
+       // accurate delta. Flagged so the UI shows "—" instead of a false "0 → 0".
+       isBackfill: m.beforeQty === 0 && m.afterQty === 0 && m.reason === "Backfilled from order history",
+@@ -512,3 +521,68 @@ export async function listMovementProducts(): Promise<{ id: number; name: string
+     orderBy: { name: "asc" },
+   });
+ }
++
++/** RFC-4180 cell: quote when the value contains a comma, quote or newline. */
++function csvCell(value: string): string {
++  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
++  return value;
++}
++
++/**
++ * The stock overview as a spreadsheet.
++ *
++ * Money is written in TAKA with two decimals rather than paisa: this file is
++ * opened by a person, and an unexplained ×100 is exactly the kind of thing that
++ * turns a stock-take into an argument. Unknown costs are left blank, not zero —
++ * "we don't know" and "it was free" are different facts, and a zero would
++ * quietly understate the value of the shelf.
++ */
++export function buildStockCsv(rows: StockRow[]): string {
++  const header = [
++    "Product",
++    "Option",
++    "SKU",
++    "Category",
++    "On hand",
++    "Reserved",
++    "Available",
++    "Incoming",
++    "Expected on",
++    "Unit cost (Tk)",
++    "Stock value (Tk)",
++    "Reorder point",
++    "Low-stock alert",
++    "Sold per day (30d)",
++    "Days since last sale",
++    "Status",
++  ];
++
++  const taka = (paisa: number | null) => (paisa == null ? "" : (paisa / 100).toFixed(2));
++
++  const lines = [header.map(csvCell).join(",")];
++  for (const r of rows) {
++    lines.push(
++      [
++        csvCell(r.name),
++        csvCell(r.option ?? ""),
++        csvCell(r.sku ?? ""),
++        csvCell(r.categoryPath),
++        String(r.onHand),
++        String(r.reserved),
++        String(r.available),
++        String(r.incoming),
++        csvCell(r.incomingOn ? r.incomingOn.toISOString().slice(0, 10) : ""),
++        taka(r.unitCost),
++        taka(r.stockValue),
++        String(r.reorderPoint),
++        String(r.lowStockThreshold),
++        r.dailyVelocity.toFixed(2),
++        r.daysSinceLastSale == null ? "" : String(r.daysSinceLastSale),
++        csvCell(r.status),
++      ].join(","),
++    );
++  }
++
++  // UTF-8 BOM so Excel opens Bangla product names correctly.
++  return "\ufeff" + lines.join("\r\n");
++}
+diff --git a/src/server/inventory/stocktake.ts b/src/server/inventory/stocktake.ts
+new file mode 100644
+index 0000000..925d040
+--- /dev/null
++++ b/src/server/inventory/stocktake.ts
+@@ -0,0 +1,296 @@
++import type { Prisma } from "@prisma/client";
++import { prisma } from "@/lib/prisma";
++import { recordMovement, LedgerError } from "./ledger";
++
++// ─────────────────────────────────────────────────────────────
++// Stock-take sessions
++// ─────────────────────────────────────────────────────────────
++//
++// Counting the shelves, then applying what you found.
++//
++// The admin could already correct one product at a time from the Stock panel,
++// so why a session? Because a count is only trustworthy as a SNAPSHOT. A
++// session lets someone walk the shop scanning, see every variance together
++// before anything moves, and apply the lot as one reviewable act attributable
++// to one person and one moment — instead of thirty scattered adjustments that
++// nobody can later tell apart from a mistake.
++//
++// THE RULE THAT MATTERS AT COMMIT: the adjustment is computed against the LIVE
++// stock level, not against the expectedQty captured when the line was added.
++// Stock moves while a count is in progress — an order ships, a delivery
++// arrives — and adjusting to a stale expectation would silently undo those.
++// expectedQty is kept for the human reviewing the sheet, never for the maths.
++
++export class StockTakeError extends Error {
++  constructor(message: string) {
++    super(message);
++    this.name = "StockTakeError";
++  }
++}
++
++/** Next "ST-0007". Sequential per shop, generated inside the transaction. */
++async function nextReference(tx: Prisma.TransactionClient): Promise<string> {
++  const last = await tx.stockTake.findFirst({
++    orderBy: { id: "desc" },
++    select: { reference: true },
++  });
++  const n = last ? Number(last.reference.replace(/\D/g, "")) + 1 : 1;
++  return `ST-${String(Number.isFinite(n) ? n : 1).padStart(4, "0")}`;
++}
++
++export async function createStockTake(input: {
++  locationId?: number | null;
++  note?: string | null;
++  actorName: string;
++}) {
++  return prisma.$transaction(async (tx) => {
++    return tx.stockTake.create({
++      data: {
++        reference: await nextReference(tx),
++        locationId: input.locationId ?? null,
++        note: input.note?.trim() || null,
++        actorName: input.actorName,
++      },
++    });
++  });
++}
++
++export async function listStockTakes() {
++  return prisma.stockTake.findMany({
++    orderBy: [{ status: "asc" }, { startedAt: "desc" }],
++    include: {
++      location: { select: { name: true } },
++      _count: { select: { lines: true } },
++    },
++  });
++}
++
++export async function getStockTake(id: number) {
++  return prisma.stockTake.findUnique({
++    where: { id },
++    include: {
++      location: true,
++      lines: { orderBy: { id: "asc" } },
++    },
++  });
++}
++
++async function assertOpen(tx: Prisma.TransactionClient, id: number) {
++  const take = await tx.stockTake.findUnique({ where: { id }, select: { status: true } });
++  if (!take) throw new StockTakeError("Stock-take not found.");
++  if (take.status !== "OPEN") {
++    throw new StockTakeError("This stock-take is closed. Start a new one to count again.");
++  }
++}
++
++/**
++ * Add a counted row, or update the count if it is already on the sheet.
++ *
++ * Scanning the same barcode twice is normal — someone recounts a shelf — so the
++ * second scan REPLACES the count rather than adding a second line to argue
++ * with. The unique index on (session, product, variant) makes that structural
++ * rather than a convention.
++ */
++export async function countLine(input: {
++  stockTakeId: number;
++  productId: number;
++  variantId?: number | null;
++  countedQty: number;
++  note?: string | null;
++}) {
++  const { stockTakeId, productId, variantId = null, countedQty } = input;
++  if (!Number.isInteger(countedQty) || countedQty < 0) {
++    throw new StockTakeError("A count must be zero or a positive whole number.");
++  }
++
++  return prisma.$transaction(async (tx) => {
++    await assertOpen(tx, stockTakeId);
++
++    // Snapshot what the system believes right now, plus the labels, so the
++    // sheet reads correctly even if the product is renamed mid-count.
++    let expectedQty = 0;
++    let productName = "";
++    let variantLabel: string | null = null;
++
++    if (variantId != null) {
++      const v = await tx.productVariant.findUnique({
++        where: { id: variantId },
++        select: {
++          stock: true,
++          size: true,
++          colorName: true,
++          productId: true,
++          product: { select: { name: true } },
++        },
++      });
++      if (!v || v.productId !== productId) throw new StockTakeError("Option not found.");
++      expectedQty = v.stock;
++      productName = v.product.name;
++      variantLabel = [v.colorName, v.size].filter(Boolean).join(" / ") || null;
++    } else {
++      const p = await tx.product.findUnique({
++        where: { id: productId },
++        select: { stock: true, name: true, variants: { select: { id: true }, take: 1 } },
++      });
++      if (!p) throw new StockTakeError("Product not found.");
++      if (p.variants.length > 0) {
++        throw new StockTakeError(
++          "This product is sold by option — count each option rather than the product.",
++        );
++      }
++      expectedQty = p.stock;
++      productName = p.name;
++    }
++
++    // Find-then-write rather than upsert(). The unique index covers a NULLABLE
++    // variantId, and MySQL treats every NULL as distinct — so it does NOT stop
++    // a second product-level line for the same product, and Prisma won't accept
++    // a null inside a compound-unique lookup either. Matching explicitly is
++    // both correct for those rows and safe here: this runs in a transaction,
++    // and one person is holding the scanner.
++    const existing = await tx.stockTakeLine.findFirst({
++      where: { stockTakeId, productId, variantId },
++      select: { id: true },
++    });
++
++    if (existing) {
++      // A recount replaces the figure. expectedQty is refreshed too, so the
++      // variance shown always compares like with like.
++      return tx.stockTakeLine.update({
++        where: { id: existing.id },
++        data: { countedQty, expectedQty, note: input.note?.trim() || null },
++      });
++    }
++
++    return tx.stockTakeLine.create({
++      data: {
++        stockTakeId,
++        productId,
++        variantId,
++        productName,
++        variantLabel,
++        expectedQty,
++        countedQty,
++        note: input.note?.trim() || null,
++      },
++    });
++  });
++}
++
++export async function removeLine(stockTakeId: number, lineId: number): Promise<void> {
++  await prisma.$transaction(async (tx) => {
++    await assertOpen(tx, stockTakeId);
++    await tx.stockTakeLine.deleteMany({ where: { id: lineId, stockTakeId } });
++  });
++}
++
++export interface CommitSummary {
++  /** Lines that moved stock. */
++  applied: number;
++  /** Counted lines that already agreed with the shelf. */
++  unchanged: number;
++  /** Net units added (positive) or written off (negative). */
++  netUnits: number;
++  /** Lines that could not be applied, with why. */
++  failures: { label: string; reason: string }[];
++}
++
++/**
++ * Apply the count: every variance becomes an ADJUSTMENT movement.
++ *
++ * ADJUSTMENT rather than DAMAGE even when units are missing, because a
++ * stock-take establishes that the count was wrong — it does not establish that
++ * anything was broken. Shrinkage that is known to be breakage should be written
++ * off explicitly from the Stock panel, where it carries a cost.
++ *
++ * Each line commits in its own transaction: one bad row (a variant deleted
++ * mid-count) must not roll back an afternoon of counting. Failures are
++ * reported, not swallowed.
++ */
++export async function commitStockTake(id: number, actorName: string): Promise<CommitSummary> {
++  const take = await prisma.stockTake.findUnique({
++    where: { id },
++    include: { lines: true },
++  });
++  if (!take) throw new StockTakeError("Stock-take not found.");
++  if (take.status !== "OPEN") throw new StockTakeError("This stock-take has already been closed.");
++
++  const counted = take.lines.filter((l) => l.countedQty != null);
++  if (counted.length === 0) {
++    throw new StockTakeError("Nothing has been counted yet.");
++  }
++
++  const summary: CommitSummary = { applied: 0, unchanged: 0, netUnits: 0, failures: [] };
++
++  for (const line of counted) {
++    const label = [line.productName, line.variantLabel].filter(Boolean).join(" — ");
++    try {
++      const moved = await prisma.$transaction(async (tx) => {
++        // Live level, NOT line.expectedQty — see the note at the top of this
++        // file. A sale that shipped during the count must survive it.
++        const current =
++          line.variantId != null
++            ? await tx.productVariant.findUnique({
++                where: { id: line.variantId },
++                select: { stock: true },
++              })
++            : await tx.product.findUnique({
++                where: { id: line.productId },
++                select: { stock: true },
++              });
++        if (!current) throw new StockTakeError("The product or option no longer exists.");
++
++        const delta = line.countedQty! - current.stock;
++        if (delta === 0) return 0;
++
++        await recordMovement(tx, {
++          productId: line.productId,
++          variantId: line.variantId,
++          type: "ADJUSTMENT",
++          delta,
++          // A counting correction has no cost basis of its own — the units were
++          // always there (or never were), so nothing was bought or lost today.
++          unitCost: null,
++          reason: `${take.reference}${line.note ? ` · ${line.note}` : ""}`,
++          actorName,
++          locationId: take.locationId,
++        });
++        return delta;
++      });
++
++      if (moved === 0) summary.unchanged++;
++      else {
++        summary.applied++;
++        summary.netUnits += moved;
++      }
++    } catch (err) {
++      const reason =
++        err instanceof LedgerError || err instanceof StockTakeError
++          ? err.message
++          : "Could not be applied.";
++      summary.failures.push({ label, reason });
++    }
++  }
++
++  // Closed even when some lines failed: the count happened, and its outcome —
++  // including what could not be applied — is the record. Re-counting the
++  // failures belongs in a new session, not a half-open old one.
++  await prisma.stockTake.update({
++    where: { id },
++    data: { status: "COMMITTED", committedAt: new Date() },
++  });
++
++  return summary;
++}
++
++/**
++ * Abandon a count. The lines are kept: someone spent an afternoon producing
++ * them, and "we counted and decided not to act" is itself worth having.
++ */
++export async function cancelStockTake(id: number): Promise<void> {
++  const updated = await prisma.stockTake.updateMany({
++    where: { id, status: "OPEN" },
++    data: { status: "CANCELLED" },
++  });
++  if (updated.count === 0) throw new StockTakeError("Only an open stock-take can be cancelled.");
++}
+diff --git a/src/server/purchasing/index.ts b/src/server/purchasing/index.ts
+index 178f070..6e79373 100644
+--- a/src/server/purchasing/index.ts
++++ b/src/server/purchasing/index.ts
+@@ -109,6 +109,53 @@ async function nextPoNo(tx: Prisma.TransactionClient): Promise<string> {
+   return `PO-${String((last?.id ?? 0) + 1).padStart(4, "0")}`;
+ }
+ 
++/**
++ * Validate the submitted lines and snapshot what they refer to.
++ *
++ * The snapshot is the point: productName/variantLabel are frozen here so a
++ * later rename in the catalogue never rewrites paperwork already sent to a
++ * supplier. Shared by create and update so both agree on what a valid line is.
++ */
++async function resolveLines(tx: Prisma.TransactionClient, input: PurchaseOrderLineInput[]) {
++  return Promise.all(
++    input.map(async (line) => {
++      const product = await tx.product.findUnique({
++        where: { id: line.productId },
++        select: { id: true, name: true },
++      });
++      if (!product) throw new PurchasingError("A product on this order no longer exists.");
++
++      let variantLabel: string | null = null;
++      if (line.variantId != null) {
++        const variant = await tx.productVariant.findUnique({
++          where: { id: line.variantId },
++          select: { productId: true, size: true, colorName: true },
++        });
++        if (!variant || variant.productId !== product.id) {
++          throw new PurchasingError("A chosen option no longer belongs to its product.");
++        }
++        variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ") || null;
++      }
++
++      if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
++        throw new PurchasingError(`Quantity for ${product.name} must be a positive whole number.`);
++      }
++      if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
++        throw new PurchasingError(`Unit cost for ${product.name} can't be negative.`);
++      }
++
++      return {
++        productId: product.id,
++        variantId: line.variantId ?? null,
++        productName: product.name,
++        variantLabel,
++        quantity: line.quantity,
++        unitCost: Math.round(line.unitCost),
++      };
++    }),
++  );
++}
++
+ export async function createPurchaseOrder(input: PurchaseOrderInput) {
+   if (input.lines.length === 0) {
+     throw new PurchasingError("Add at least one product to the order.");
+@@ -118,45 +165,7 @@ export async function createPurchaseOrder(input: PurchaseOrderInput) {
+     const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
+     if (!supplier) throw new PurchasingError("Supplier not found.");
+ 
+-    // Snapshot product/variant names now, so a later rename doesn't rewrite the
+-    // paperwork already sent to the supplier.
+-    const lines = await Promise.all(
+-      input.lines.map(async (line) => {
+-        const product = await tx.product.findUnique({
+-          where: { id: line.productId },
+-          select: { id: true, name: true },
+-        });
+-        if (!product) throw new PurchasingError("A product on this order no longer exists.");
+-
+-        let variantLabel: string | null = null;
+-        if (line.variantId != null) {
+-          const variant = await tx.productVariant.findUnique({
+-            where: { id: line.variantId },
+-            select: { productId: true, size: true, colorName: true },
+-          });
+-          if (!variant || variant.productId !== product.id) {
+-            throw new PurchasingError("A chosen option no longer belongs to its product.");
+-          }
+-          variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ") || null;
+-        }
+-
+-        if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+-          throw new PurchasingError(`Quantity for ${product.name} must be a positive whole number.`);
+-        }
+-        if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
+-          throw new PurchasingError(`Unit cost for ${product.name} can't be negative.`);
+-        }
+-
+-        return {
+-          productId: product.id,
+-          variantId: line.variantId ?? null,
+-          productName: product.name,
+-          variantLabel,
+-          quantity: line.quantity,
+-          unitCost: Math.round(line.unitCost),
+-        };
+-      }),
+-    );
++    const lines = await resolveLines(tx, input.lines);
+ 
+     return tx.purchaseOrder.create({
+       data: {
+@@ -191,6 +200,7 @@ export async function getPurchaseOrder(id: number) {
+     include: {
+       supplier: true,
+       lines: { orderBy: { id: "asc" } },
++      payments: { orderBy: [{ paidOn: "desc" }, { id: "desc" }] },
+     },
+   });
+ }
+@@ -249,6 +259,12 @@ export async function receivePurchaseOrder(
+   id: number,
+   receipts: ReceiptLineInput[],
+   actorName: string,
++  /**
++   * Where the goods physically landed. Null when the shop keeps no locations —
++   * recorded on the movement rather than guessed, so per-location reporting
++   * never invents a shelf.
++   */
++  locationId: number | null = null,
+ ): Promise<void> {
+   if (receipts.length === 0) throw new PurchasingError("Nothing to receive.");
+ 
+@@ -300,6 +316,7 @@ export async function receivePurchaseOrder(
+         unitCost: landedUnitCost,
+         reason: po.poNo,
+         actorName,
++        locationId,
+       });
+ 
+       await tx.purchaseOrderLine.update({
+@@ -507,3 +524,220 @@ export async function getUnsellableReceived(purchaseOrderId: number): Promise<Un
+ 
+   return [...byProduct.values()].sort((a, b) => a.name.localeCompare(b.name));
+ }
++
++// ── Editing, deleting, and paying ───────────────────────────────────────────
++
++/**
++ * Rewrite a DRAFT purchase order.
++ *
++ * DRAFT only, and that restriction is what makes replacing the lines wholesale
++ * safe: a draft has never been received, so no PurchaseOrderLine id is
++ * referenced by a receipt or a stock movement. (Contrast ProductVariant, where
++ * delete-and-recreate destroyed reservations and ledger links — the difference
++ * is that nothing points at a draft's lines.)
++ *
++ * Once an order is placed it is a document the supplier also holds, so editing
++ * stops there: cancel it and write a new one instead.
++ */
++export async function updatePurchaseOrder(id: number, input: PurchaseOrderInput) {
++  if (input.lines.length === 0) {
++    throw new PurchasingError("Add at least one product to the order.");
++  }
++
++  return prisma.$transaction(async (tx) => {
++    const existing = await tx.purchaseOrder.findUnique({
++      where: { id },
++      select: { status: true },
++    });
++    if (!existing) throw new PurchasingError("Purchase order not found.");
++    if (existing.status !== "DRAFT") {
++      throw new PurchasingError(
++        "Only a draft can be edited. Cancel this order and write a new one instead.",
++      );
++    }
++
++    const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
++    if (!supplier) throw new PurchasingError("Supplier not found.");
++
++    const lines = await resolveLines(tx, input.lines);
++
++    await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: id } });
++
++    return tx.purchaseOrder.update({
++      where: { id },
++      data: {
++        supplierId: input.supplierId,
++        expectedOn: input.expectedOn ?? null,
++        shippingCost: Math.max(0, Math.round(input.shippingCost ?? 0)),
++        customsCost: Math.max(0, Math.round(input.customsCost ?? 0)),
++        note: input.note?.trim() || null,
++        lines: { createMany: { data: lines } },
++      },
++      include: { lines: true },
++    });
++  });
++}
++
++/**
++ * Delete a purchase order outright.
++ *
++ * Only when nothing was ever received against it. A received order is the
++ * explanation for stock that is physically on a shelf — its poNo is what the
++ * PURCHASE movements name as their reason — so deleting one would leave the
++ * ledger pointing at paperwork that no longer exists. Cancel those instead;
++ * cancelling is reversible reading, deletion is not.
++ *
++ * Its payment history goes with it (cascade), which is correct precisely
++ * because an order that received nothing and is being deleted was a mistake.
++ */
++export async function deletePurchaseOrder(id: number): Promise<void> {
++  const po = await prisma.purchaseOrder.findUnique({
++    where: { id },
++    select: { status: true, poNo: true, lines: { select: { receivedQty: true } } },
++  });
++  if (!po) throw new PurchasingError("Purchase order not found.");
++
++  const received = po.lines.reduce((sum, l) => sum + l.receivedQty, 0);
++  if (received > 0) {
++    throw new PurchasingError(
++      `${po.poNo} has already received ${received} unit(s). It can be cancelled, but not deleted — ` +
++        `the stock ledger refers to it for why those goods arrived.`,
++    );
++  }
++  if (po.status === "ORDERED") {
++    throw new PurchasingError(
++      "This order has been placed with the supplier. Cancel it first, then delete it.",
++    );
++  }
++
++  await prisma.purchaseOrder.delete({ where: { id } });
++}
++
++export interface PaymentInput {
++  purchaseOrderId: number;
++  /** Paisa. Must be positive. */
++  amount: number;
++  paidOn: Date;
++  method?: string | null;
++  note?: string | null;
++  actorName: string;
++}
++
++/** What a purchase order costs in total: goods plus the overheads on top. */
++export function purchaseOrderTotal(po: {
++  lines: { quantity: number; unitCost: number }[];
++  shippingCost: number;
++  customsCost: number;
++}): number {
++  const goods = po.lines.reduce((sum, l) => sum + l.unitCost * l.quantity, 0);
++  return goods + po.shippingCost + po.customsCost;
++}
++
++/**
++ * Record money paid to a supplier against one order.
++ *
++ * Overpayment is refused rather than absorbed: paying more than an order is
++ * worth is almost always a typo (a digit too many, or the same instalment
++ * entered twice), and silently accepting it turns the outstanding figure — the
++ * only number this feature exists to produce — into fiction.
++ */
++export async function recordSupplierPayment(input: PaymentInput) {
++  const amount = Math.round(input.amount);
++  if (!Number.isFinite(amount) || amount <= 0) {
++    throw new PurchasingError("Enter a payment amount greater than zero.");
++  }
++
++  return prisma.$transaction(async (tx) => {
++    const po = await tx.purchaseOrder.findUnique({
++      where: { id: input.purchaseOrderId },
++      select: {
++        status: true,
++        shippingCost: true,
++        customsCost: true,
++        lines: { select: { quantity: true, unitCost: true } },
++        payments: { select: { amount: true } },
++      },
++    });
++    if (!po) throw new PurchasingError("Purchase order not found.");
++    if (po.status === "CANCELLED") {
++      throw new PurchasingError("This order was cancelled. Payments can't be recorded against it.");
++    }
++
++    const total = purchaseOrderTotal(po);
++    const paid = po.payments.reduce((sum, p) => sum + p.amount, 0);
++    if (paid + amount > total) {
++      const remaining = Math.max(0, total - paid);
++      throw new PurchasingError(
++        remaining === 0
++          ? "This order is already fully paid."
++          : `That is more than the ${(remaining / 100).toLocaleString("en-BD")} \u09f3 still outstanding.`,
++      );
++    }
++
++    return tx.supplierPayment.create({
++      data: {
++        purchaseOrderId: input.purchaseOrderId,
++        amount,
++        paidOn: input.paidOn,
++        method: input.method?.trim() || null,
++        note: input.note?.trim() || null,
++        actorName: input.actorName,
++      },
++    });
++  });
++}
++
++/** Remove a recorded payment — for when one was entered by mistake. */
++export async function deleteSupplierPayment(id: number): Promise<void> {
++  await prisma.supplierPayment.delete({ where: { id } }).catch(() => {
++    throw new PurchasingError("That payment record no longer exists.");
++  });
++}
++
++export interface SupplierBalance {
++  supplierId: number;
++  name: string;
++  /** Value of every live (non-cancelled) order placed with them, paisa. */
++  ordered: number;
++  paid: number;
++  /** ordered − paid: what is still owed. */
++  due: number;
++}
++
++/**
++ * What is still owed to each supplier, across all their live orders.
++ *
++ * Cancelled orders are excluded — nothing is owed on an order that will never
++ * arrive. Drafts ARE included: an order you have written but not yet placed is
++ * money you are about to commit, and hiding it makes the figure optimistic.
++ */
++export async function getSupplierBalances(): Promise<SupplierBalance[]> {
++  const suppliers = await prisma.supplier.findMany({
++    select: {
++      id: true,
++      name: true,
++      purchaseOrders: {
++        where: { status: { not: "CANCELLED" } },
++        select: {
++          shippingCost: true,
++          customsCost: true,
++          lines: { select: { quantity: true, unitCost: true } },
++          payments: { select: { amount: true } },
++        },
++      },
++    },
++    orderBy: { name: "asc" },
++  });
++
++  return suppliers
++    .map((s) => {
++      let ordered = 0;
++      let paid = 0;
++      for (const po of s.purchaseOrders) {
++        ordered += purchaseOrderTotal(po);
++        paid += po.payments.reduce((sum, p) => sum + p.amount, 0);
++      }
++      return { supplierId: s.id, name: s.name, ordered, paid, due: ordered - paid };
++    })
++    .filter((s) => s.ordered > 0);
++}

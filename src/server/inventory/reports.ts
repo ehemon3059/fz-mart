@@ -524,8 +524,19 @@ export async function listMovementProducts(): Promise<{ id: number; name: string
 
 /** RFC-4180 cell: quote when the value contains a comma, quote or newline. */
 function csvCell(value: string): string {
-  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
+  // Neutralise spreadsheet formulas before quoting. Excel and Calc treat a
+  // cell opening with = + - @ (or a leading tab/CR, which they strip first) as
+  // an expression, so a product NAMED "=HYPERLINK(...)" would execute on open.
+  // Names here are admin-entered free text, so this is a real path rather than
+  // a theoretical one. A leading apostrophe is the standard defusal: the
+  // spreadsheet shows the literal text and never evaluates it.
+  //
+  // Safe to apply to every cell because numeric columns are written straight
+  // to the row without passing through here — nothing that reaches this
+  // function is a figure whose leading "-" needs to survive.
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  if (/[",\n\r]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+  return safe;
 }
 
 /**

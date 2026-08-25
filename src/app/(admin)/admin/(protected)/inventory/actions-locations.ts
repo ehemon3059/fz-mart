@@ -20,7 +20,12 @@ export async function saveLocationAction(
       name: String(formData.get("name") ?? ""),
       note: String(formData.get("note") ?? ""),
       isDefault: formData.get("isDefault") === "on",
-      isActive: formData.get("isActive") !== "false",
+      // An UNCHECKED checkbox posts nothing at all — it does not post "false".
+      // So this has to test for the checked value: `!== "false"` was true
+      // whether the box was ticked or not, which pinned every location to
+      // active and made both the "Inactive" badge and the active-only filter
+      // in listLocations() unreachable.
+      isActive: formData.get("isActive") === "true",
     });
   } catch (err) {
     if (err instanceof LocationError) return { error: err.message };

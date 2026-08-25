@@ -703,12 +703,23 @@ model Payment {
   // provider's idempotency anchor for IPN retries.
   providerTxnId String?
   rawPayload    Json?
+  // WHEN the money moved, as distinct from when the row last changed.
+  //
+  // `updatedAt` cannot answer this: it tracks the most recent write, so a
+  // payment taken in June and refunded in August reports August for both
+  // events. Cash-flow reporting needs each to keep its own date, or refunding
+  // something today silently rewrites a month that already closed.
+  paidAt        DateTime?
+  refundedAt    DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   order         Order         @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
   @@index([provider, providerTxnId])
+  // Cash-flow reports scan by when money moved, over a date window.
+  @@index([status, paidAt])
+  @@index([refundedAt])
 }
 
 model OrderItem {
@@ -1645,6 +1656,13 @@ model StockLocation {
 // committing is what closes it.
 enum StockTakeStatus {
   OPEN
+  // Claimed by a commit that is applying its lines. Exists so the claim is
+  // atomic: commit moves OPEN -> COMMITTING in one conditional write, and the
+  // assertOpen guard on countLine/removeLine then rejects every concurrent
+  // write for free. It also keeps an interrupted commit honest — a process
+  // that dies mid-loop leaves the session visibly stuck here rather than
+  // reading as a clean COMMITTED with only half its lines applied.
+  COMMITTING
   COMMITTED
   CANCELLED
 }

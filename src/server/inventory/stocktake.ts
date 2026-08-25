@@ -99,7 +99,12 @@ export async function countLine(input: {
   note?: string | null;
 }) {
   const { stockTakeId, productId, variantId = null, countedQty } = input;
-  if (!Number.isInteger(countedQty) || countedQty < 0) {
+  // Guarded here as well as in the form, because this is where the damage
+  // would land: a count of 0 writes an item's entire stock off at commit, so a
+  // malformed value must never be coerced into one. `Number.isInteger` already
+  // rejects NaN and Infinity; the explicit typeof keeps a stringified number
+  // from a hand-made request from ever reaching the coercion.
+  if (typeof countedQty !== "number" || !Number.isInteger(countedQty) || countedQty < 0) {
     throw new StockTakeError("A count must be zero or a positive whole number.");
   }
 
@@ -206,6 +211,10 @@ export interface CommitSummary {
  * Each line commits in its own transaction: one bad row (a variant deleted
  * mid-count) must not roll back an afternoon of counting. Failures are
  * reported, not swallowed.
+ *
+ * The session is claimed (OPEN -> COMMITTING) before any line is applied, so
+ * the whole commit is exclusive: a concurrent count, removal, cancel or second
+ * commit is refused for its duration rather than interleaving with it.
  */
 export async function commitStockTake(id: number, actorName: string): Promise<CommitSummary> {
   const take = await prisma.stockTake.findUnique({
@@ -215,70 +224,113 @@ export async function commitStockTake(id: number, actorName: string): Promise<Co
   if (!take) throw new StockTakeError("Stock-take not found.");
   if (take.status !== "OPEN") throw new StockTakeError("This stock-take has already been closed.");
 
-  const counted = take.lines.filter((l) => l.countedQty != null);
-  if (counted.length === 0) {
+  if (!take.lines.some((l) => l.countedQty != null)) {
     throw new StockTakeError("Nothing has been counted yet.");
   }
 
-  const summary: CommitSummary = { applied: 0, unchanged: 0, netUnits: 0, failures: [] };
-
-  for (const line of counted) {
-    const label = [line.productName, line.variantLabel].filter(Boolean).join(" — ");
-    try {
-      const moved = await prisma.$transaction(async (tx) => {
-        // Live level, NOT line.expectedQty — see the note at the top of this
-        // file. A sale that shipped during the count must survive it.
-        const current =
-          line.variantId != null
-            ? await tx.productVariant.findUnique({
-                where: { id: line.variantId },
-                select: { stock: true },
-              })
-            : await tx.product.findUnique({
-                where: { id: line.productId },
-                select: { stock: true },
-              });
-        if (!current) throw new StockTakeError("The product or option no longer exists.");
-
-        const delta = line.countedQty! - current.stock;
-        if (delta === 0) return 0;
-
-        await recordMovement(tx, {
-          productId: line.productId,
-          variantId: line.variantId,
-          type: "ADJUSTMENT",
-          delta,
-          // A counting correction has no cost basis of its own — the units were
-          // always there (or never were), so nothing was bought or lost today.
-          unitCost: null,
-          reason: `${take.reference}${line.note ? ` · ${line.note}` : ""}`,
-          actorName,
-          locationId: take.locationId,
-        });
-        return delta;
-      });
-
-      if (moved === 0) summary.unchanged++;
-      else {
-        summary.applied++;
-        summary.netUnits += moved;
-      }
-    } catch (err) {
-      const reason =
-        err instanceof LedgerError || err instanceof StockTakeError
-          ? err.message
-          : "Could not be applied.";
-      summary.failures.push({ label, reason });
-    }
+  // CLAIM THE SESSION BEFORE APPLYING ANYTHING.
+  //
+  // The check above is only advisory — it reads outside any transaction, so on
+  // its own it races. This conditional update is the real gate: exactly one
+  // caller can move a session out of OPEN, so a second commit fired from a
+  // double-clicked button loses here and applies nothing.
+  //
+  // Claiming also shuts the door on writes for the duration. countLine and
+  // removeLine both go through assertOpen, which demands OPEN — so once the
+  // status is COMMITTING they are rejected by a guard that already existed.
+  // Without this, a line counted during the loop was written and then closed
+  // out unapplied, and a cancel during the loop was overwritten back to a
+  // committed state.
+  const claimed = await prisma.stockTake.updateMany({
+    where: { id, status: "OPEN" },
+    data: { status: "COMMITTING" },
+  });
+  if (claimed.count === 0) {
+    throw new StockTakeError("This stock-take has already been closed.");
   }
 
-  // Closed even when some lines failed: the count happened, and its outcome —
-  // including what could not be applied — is the record. Re-counting the
-  // failures belongs in a new session, not a half-open old one.
-  await prisma.stockTake.update({
-    where: { id },
-    data: { status: "COMMITTED", committedAt: new Date() },
-  });
+  // Re-read the lines now the session is sealed. The set read above could have
+  // grown or shrunk between that read and the claim, and applying a stale set
+  // would silently drop a line someone counted seconds before hitting Apply.
+  const counted = (await prisma.stockTakeLine.findMany({ where: { stockTakeId: id } })).filter(
+    (l) => l.countedQty != null,
+  );
+
+  const summary: CommitSummary = { applied: 0, unchanged: 0, netUnits: 0, failures: [] };
+
+  // Anything thrown from here on must release the claim, or the session is
+  // sealed in COMMITTING with no way back to counting. Per-line failures are
+  // caught inside the loop and reported; this is the backstop for the rest.
+  try {
+    for (const line of counted) {
+      const label = [line.productName, line.variantLabel].filter(Boolean).join(" — ");
+      try {
+        const moved = await prisma.$transaction(async (tx) => {
+          // Live level, NOT line.expectedQty — see the note at the top of this
+          // file. A sale that shipped during the count must survive it.
+          const current =
+            line.variantId != null
+              ? await tx.productVariant.findUnique({
+                  where: { id: line.variantId },
+                  select: { stock: true },
+                })
+              : await tx.product.findUnique({
+                  where: { id: line.productId },
+                  select: { stock: true },
+                });
+          if (!current) throw new StockTakeError("The product or option no longer exists.");
+
+          const delta = line.countedQty! - current.stock;
+          if (delta === 0) return 0;
+
+          await recordMovement(tx, {
+            productId: line.productId,
+            variantId: line.variantId,
+            type: "ADJUSTMENT",
+            delta,
+            // A counting correction has no cost basis of its own — the units were
+            // always there (or never were), so nothing was bought or lost today.
+            unitCost: null,
+            reason: `${take.reference}${line.note ? ` · ${line.note}` : ""}`,
+            actorName,
+            locationId: take.locationId,
+          });
+          return delta;
+        });
+
+        if (moved === 0) summary.unchanged++;
+        else {
+          summary.applied++;
+          summary.netUnits += moved;
+        }
+      } catch (err) {
+        const reason =
+          err instanceof LedgerError || err instanceof StockTakeError
+            ? err.message
+            : "Could not be applied.";
+        summary.failures.push({ label, reason });
+      }
+    }
+
+    // Closed even when some lines failed: the count happened, and its outcome —
+    // including what could not be applied — is the record. Re-counting the
+    // failures belongs in a new session, not a half-open old one.
+    //
+    // Conditional on still holding the claim, so this can only ever close the
+    // session it opened — it can never force a COMMITTED over some other state.
+    await prisma.stockTake.updateMany({
+      where: { id, status: "COMMITTING" },
+      data: { status: "COMMITTED", committedAt: new Date() },
+    });
+  } catch (err) {
+    // Hand the session back so the count is not lost. Only ever releases a
+    // claim this call still holds.
+    await prisma.stockTake.updateMany({
+      where: { id, status: "COMMITTING" },
+      data: { status: "OPEN" },
+    });
+    throw err;
+  }
 
   return summary;
 }

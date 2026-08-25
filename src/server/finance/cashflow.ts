@@ -68,22 +68,48 @@ export async function getCashFlowReport(start: Date, end: Date): Promise<CashFlo
     // Orders delivered in the window — the moment COD cash is collected.
     const deliveredLogs = await prisma.orderStatusLog.findMany({
       where: { toStatus: "DELIVERED", createdAt: { gte: start, lte: end } },
-      select: { orderId: true },
+      select: { orderId: true, createdAt: true },
       distinct: ["orderId"],
     });
     const deliveredIds = deliveredLogs.map((l) => l.orderId);
+    const deliveredAt = new Map(deliveredLogs.map((l) => [l.orderId, l.createdAt]));
 
-    const [deliveredOrders, onlinePayments, supplierPayments, expenses, adSpend] =
+    const [deliveredOrders, onlinePayments, refundedPayments, supplierPayments, expenses, adSpend] =
       await Promise.all([
         deliveredIds.length
           ? prisma.order.findMany({
               where: { id: { in: deliveredIds } },
-              select: { total: true, paidAmount: true, shippingCost: true },
+              select: {
+                id: true,
+                total: true,
+                shippingCost: true,
+                // Dated payments rather than the order's mutable paidAmount —
+                // see the note on codCollected below.
+                payments: {
+                  where: { paidAt: { not: null } },
+                  select: { amount: true, paidAt: true },
+                },
+              },
             })
           : Promise.resolve([]),
-        // Only payments that actually succeeded moved money.
+        // Money that came IN, dated by paidAt — when the payment actually
+        // succeeded. A payment later refunded still came in on that day, so
+        // REFUNDED rows count here too and the refund is subtracted as an
+        // outflow in ITS OWN period below. Excluding them instead would
+        // rewrite a closed period: last month's takings shrinking because of
+        // something done today.
         prisma.payment.aggregate({
-          where: { status: "SUCCESS", updatedAt: { gte: start, lte: end } },
+          where: {
+            status: { in: ["SUCCESS", "REFUNDED"] },
+            paidAt: { gte: start, lte: end },
+          },
+          _sum: { amount: true },
+        }),
+        // Money that went back OUT, dated by refundedAt rather than by the
+        // row's last-modified stamp, so it lands in the period the refund was
+        // actually made.
+        prisma.payment.aggregate({
+          where: { refundedAt: { gte: start, lte: end } },
           _sum: { amount: true },
         }),
         prisma.supplierPayment.aggregate({
@@ -100,15 +126,29 @@ export async function getCashFlowReport(start: Date, end: Date): Promise<CashFlo
         }),
       ]);
 
-    // COD collected = what the customer still owed on delivery. Clamped at zero
-    // so an over-recorded prepayment can't subtract from the day's takings.
-    const codCollected = deliveredOrders.reduce(
-      (sum, o) => sum + Math.max(0, o.total - o.paidAmount),
-      0,
-    );
+    // COD collected = what the customer still owed ON THE DAY OF DELIVERY.
+    //
+    // Deliberately NOT `total - paidAmount`: paidAmount is a live column that a
+    // refund decrements, so reading it recomputes history — refunding an online
+    // payment today would raise the COD figure reported for the month the order
+    // was delivered in, a number that was never true in a period that closed.
+    // Summing payments stamped at or before the delivery reconstructs what was
+    // genuinely outstanding when the courier knocked, and stays fixed forever.
+    //
+    // Clamped at zero so an over-recorded prepayment can't subtract from the
+    // day's takings.
+    const codCollected = deliveredOrders.reduce((sum, o) => {
+      const on = deliveredAt.get(o.id);
+      const prepaid = o.payments.reduce(
+        (paid, p) => (on && p.paidAt && p.paidAt <= on ? paid + p.amount : paid),
+        0,
+      );
+      return sum + Math.max(0, o.total - prepaid);
+    }, 0);
     const courierCost = deliveredOrders.reduce((sum, o) => sum + o.shippingCost, 0);
 
     const onlineIn = onlinePayments._sum?.amount ?? 0;
+    const refundsOut = refundedPayments._sum?.amount ?? 0;
     const suppliersOut = supplierPayments._sum?.amount ?? 0;
     const expensesOut = expenses._sum?.amount ?? 0;
     const adsOut = adSpend._sum?.amount ?? 0;
@@ -127,6 +167,9 @@ export async function getCashFlowReport(start: Date, end: Date): Promise<CashFlo
       { label: "Courier charges", amount: courierCost, note: "On orders delivered in this period" },
       { label: "Advertising", amount: adsOut },
       { label: "Other expenses", amount: expensesOut },
+      // Without this line refunded money simply vanished from the report: it
+      // left the bank, but appeared nowhere as having gone.
+      { label: "Refunds paid out", amount: refundsOut, note: "Online payments returned" },
     ];
 
     const totalIn = inflows.reduce((s, l) => s + l.amount, 0);
