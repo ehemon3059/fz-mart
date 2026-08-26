@@ -149,6 +149,12 @@ export default function AdminGuidePage() {
           {MASTHEAD.lede}
         </p>
         <p className={`mt-3 text-[13px] text-stone-500 ${bn}`}>{MASTHEAD.note}</p>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className={`text-[13px] text-stone-600 ${bn}`}>
+            টাকা কোথায় যায় ছবিতে দেখতে চাইলে:
+          </span>
+          <RouteChip href="/admin/guide/easy-inventory" label="ছবিতে হিসাব" />
+        </div>
       </div>
 
       {/* Where things live — the sidebar, in one screen */}

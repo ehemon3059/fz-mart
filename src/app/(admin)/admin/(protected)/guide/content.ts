@@ -773,6 +773,7 @@ export const LEDGER_ROWS: { type: string; sign: string; tone: "in" | "out" | "mu
 
 /** Every route the guide references, for the closing quick-reference table. */
 export const ROUTE_INDEX: { label: string; href: string }[] = [
+  { label: "ছবিতে হিসাব (Easy Inventory)", href: "/admin/guide/easy-inventory" },
   { label: "সাপ্লায়ার তালিকা", href: "/admin/inventory/suppliers" },
   { label: "নতুন সাপ্লায়ার", href: "/admin/inventory/suppliers/new" },
   { label: "ক্রয় আদেশ তালিকা", href: "/admin/inventory/purchase-orders" },

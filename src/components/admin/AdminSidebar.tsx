@@ -101,6 +101,7 @@ export default function AdminSidebar({ username, role }: { username: string; rol
   const allHrefs = [
     "/admin/dashboard",
     "/admin/guide",
+    "/admin/guide/easy-inventory",
     ...NAV_SECTIONS.flatMap((s) => s.links.map((l) => l.href)),
   ];
   const isActive = (href: string) => {
@@ -205,6 +206,35 @@ export default function AdminSidebar({ username, role }: { username: string; rol
               )}
               <Icon name="info" size={18} className={isActive("/admin/guide") ? "text-brand-400" : "text-stone-400 group-hover:text-stone-200"} />
               <span className="truncate">কর্মপদ্ধতি (Guide)</span>
+            </Link>
+
+            {/* The illustrated version of the same material. Listed separately
+                because it answers a different question — "where does the money
+                go" rather than "which button" — and a new admin usually wants
+                this one first. */}
+            <Link
+              href="/admin/guide/easy-inventory"
+              onClick={() => setOpen(false)}
+              aria-current={isActive("/admin/guide/easy-inventory") ? "page" : undefined}
+              className={`group relative flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                isActive("/admin/guide/easy-inventory")
+                  ? "bg-brand-600/20 text-white font-medium"
+                  : "text-stone-300 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              {isActive("/admin/guide/easy-inventory") && (
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-400" />
+              )}
+              <Icon
+                name="grid"
+                size={18}
+                className={
+                  isActive("/admin/guide/easy-inventory")
+                    ? "text-brand-400"
+                    : "text-stone-400 group-hover:text-stone-200"
+                }
+              />
+              <span className="truncate">ছবিতে হিসাব (Easy Inventory)</span>
             </Link>
           </div>
           {visibleSections.map((section, i) => (
