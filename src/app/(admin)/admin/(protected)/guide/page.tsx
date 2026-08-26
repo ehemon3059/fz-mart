@@ -1,7 +1,10 @@
 import Link from "next/link";
 import {
+  MASTHEAD,
+  NAV_MAP,
   STAGES,
   LOOP_NODES,
+  TRACE_ROWS,
   PL_ROWS,
   LEDGER_ROWS,
   ROUTE_INDEX,
@@ -135,20 +138,34 @@ export default function AdminGuidePage() {
       {/* Masthead */}
       <div className="border-b-2 border-stone-900 pb-6">
         <p className={`text-[12px] font-semibold tracking-wide text-stone-500 ${bn}`}>
-          FZ-Mart · কর্মপদ্ধতি
+          {MASTHEAD.eyebrow}
         </p>
         <h1
           className={`mt-2 text-[26px] font-extrabold leading-tight text-stone-900 sm:text-[32px] ${bn}`}
         >
-          সাপ্লায়ার থেকে লাভ পর্যন্ত
+          {MASTHEAD.title}
         </h1>
         <p className={`mt-2 max-w-[62ch] text-[15px] leading-relaxed text-stone-600 ${bn}`}>
-          পণ্য কেনা, স্টকে রাখা, বিক্রি করা এবং মাস শেষে লাভ-লোকসান বের করা — পুরো কাজটা ৫টি
-          ধাপে। প্রতিটি ধাপে প্যানেলের সংশ্লিষ্ট পাতার লিংক দেওয়া আছে।
+          {MASTHEAD.lede}
         </p>
-        <p className={`mt-3 text-[13px] text-stone-500 ${bn}`}>
-          ফর্মের ফিল্ড ও বাটনের নাম ইংরেজিতেই রাখা হয়েছে, যেভাবে সেগুলো পর্দায় দেখা যায়।
+        <p className={`mt-3 text-[13px] text-stone-500 ${bn}`}>{MASTHEAD.note}</p>
+      </div>
+
+      {/* Where things live — the sidebar, in one screen */}
+      <div>
+        <p className={`text-[14px] text-stone-600 ${bn}`}>
+          বাঁ পাশের মেনু ছয়টি ভাগে সাজানো। এই নির্দেশিকার কাজগুলো প্রথম চারটির মধ্যেই।
         </p>
+        <div className="mt-3 grid gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-2 lg:grid-cols-4">
+          {NAV_MAP.map((n) => (
+            <div key={n.heading} className="bg-white px-4 py-3">
+              <p className="font-mono text-[11px] font-semibold tracking-wider text-accent">
+                {n.heading}
+              </p>
+              <p className={`mt-1 text-[13px] leading-snug text-stone-600 ${bn}`}>{n.body}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* The loop */}
@@ -273,8 +290,8 @@ export default function AdminGuidePage() {
 
             {stage.tables?.map((t, i) => <GuideTableBlock key={i} table={t} />)}
 
-            {/* The ledger table only belongs to stage 3. */}
-            {stage.numeral === "০৩" && (
+            {/* The ledger table belongs to whichever stage explains stock. */}
+            {stage.showLedger && (
               <>
                 <div className="mt-5 overflow-x-auto rounded-lg border border-stone-200 bg-white">
                   <table className="w-full border-collapse">
@@ -346,8 +363,8 @@ export default function AdminGuidePage() {
               </>
             )}
 
-            {/* The example P&L only belongs to stage 5. */}
-            {stage.numeral === "০৫" && (
+            {/* The example P&L belongs to the stage that teaches the report. */}
+            {stage.showPl && (
               <div className="mt-5 overflow-x-auto rounded-lg border border-stone-200 bg-white">
                 <table className="w-full border-collapse">
                   <caption
@@ -426,7 +443,7 @@ export default function AdminGuidePage() {
               <div className="mt-5 grid overflow-hidden rounded-lg border border-stone-200 md:grid-cols-2">
                 <div className="bg-white p-5">
                   <p className={`mb-3 text-[12px] font-bold text-stone-500 ${bnLabel}`}>
-                    {stage.numeral === "০৫" ? "যা আপনাকে হাতে লিখতে হবে" : "আপনি যা করবেন"}
+                    {stage.doPanelLabels?.you ?? "আপনি যা করবেন"}
                   </p>
                   <ul className="list-disc space-y-2 pl-5">
                     {stage.doPanel.you.map((li) => (
@@ -441,7 +458,7 @@ export default function AdminGuidePage() {
                 </div>
                 <div className="border-t border-stone-200 bg-stone-50 p-5 md:border-l md:border-t-0">
                   <p className={`mb-3 text-[12px] font-bold text-stone-500 ${bnLabel}`}>
-                    {stage.numeral === "০৫" ? "যা নিজে থেকেই আসে" : "প্যানেল যা করবে"}
+                    {stage.doPanelLabels?.panel ?? "প্যানেল যা করবে"}
                   </p>
                   <ul className="list-disc space-y-2 pl-5">
                     {stage.doPanel.panel.map((li) => (
@@ -468,8 +485,62 @@ export default function AdminGuidePage() {
         </section>
       ))}
 
-      {/* Quick reference */}
+      {/* One product, end to end — which screen answers which question */}
       <section className="border-t-2 border-stone-900 pt-8">
+        <p className={`text-[12px] font-semibold tracking-wide text-stone-500 ${bn}`}>
+          কেনা থেকে বিক্রি
+        </p>
+        <h2 className={`mt-2 text-[21px] font-bold text-stone-900 ${bn}`}>
+          একটি পণ্যের পুরো হিসাব কোথায় দেখবেন
+        </h2>
+        <p className={`mt-2 max-w-[68ch] text-[15px] leading-relaxed text-stone-700 ${bn}`}>
+          “এই পণ্যটা কত দিয়ে কিনেছিলাম, কত দিয়ে বিক্রি হলো, আর তাতে লাভ কত?” — এক পাতায় এর
+          পুরো উত্তর নেই, কারণ প্রতিটি ধাপ আলাদা জায়গায় লেখা হয়। ক্রম অনুযায়ী পাতাগুলো এই।
+        </p>
+        <div className="mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                {["প্রশ্ন", "কোন পাতায়", "যা দেখাবে"].map((h) => (
+                  <th
+                    key={h}
+                    className={`border-b border-stone-200 px-4 py-2.5 text-left text-[12px] font-semibold text-stone-600 ${bnLabel}`}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TRACE_ROWS.map((r) => (
+                <tr key={r.step}>
+                  <td
+                    className={`border-b border-stone-100 px-4 py-2.5 text-[14px] font-semibold text-stone-900 ${bn}`}
+                  >
+                    {r.step}
+                  </td>
+                  <td className="border-b border-stone-100 px-4 py-2.5">
+                    <Link
+                      href={r.href}
+                      className={`text-[14px] font-semibold text-accent hover:underline ${bn}`}
+                    >
+                      {r.where}
+                    </Link>
+                  </td>
+                  <td
+                    className={`border-b border-stone-100 px-4 py-2.5 text-[14px] text-stone-700 ${bn}`}
+                  >
+                    {r.shows}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Quick reference */}
+      <section className="pt-8">
         <p className={`text-[12px] font-semibold tracking-wide text-stone-500 ${bn}`}>
           দ্রুত রেফারেন্স
         </p>

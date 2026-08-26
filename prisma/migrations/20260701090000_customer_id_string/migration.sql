@@ -12,10 +12,34 @@ ALTER TABLE `Order` DROP FOREIGN KEY `Order_customerId_fkey`;
 ALTER TABLE `ProductReview` DROP FOREIGN KEY `ProductReview_customerId_fkey`;
 
 -- 2. Widen the primary key and both foreign-key columns to VARCHAR(191)
---    (Prisma's default String length on MySQL). MODIFY also drops the
---    AUTO_INCREMENT from Customer.id. Existing integers become their decimal
---    string form ('1', '2', '4'), so references still match textually.
-ALTER TABLE `Customer` MODIFY `id` VARCHAR(191) NOT NULL;
+--    (Prisma's default String length on MySQL). Existing integers become their
+--    decimal string form ('1', '2', '4'), so references still match textually.
+--
+--    TiDB builds the primary key as a CLUSTERED index, which can neither be
+--    dropped nor retyped in place (error 8200: "Unsupported modify column: this
+--    column has primary key flag" / "Unsupported drop primary key when the table
+--    is using clustered index"). MySQL's plain `MODIFY` therefore cannot work
+--    here, so Customer is rebuilt: create the retyped table, copy every row
+--    across casting the id to text, drop the original, and rename into place.
+--    Order/ProductReview keep plain MODIFY -- customerId is not their PK.
+CREATE TABLE `Customer_new` (
+    `id` VARCHAR(191) NOT NULL,
+    `email` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(191) NULL,
+    `avatarUrl` VARCHAR(191) NULL,
+    `provider` ENUM('GOOGLE','EMAIL') NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `Customer_email_key`(`email`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+INSERT INTO `Customer_new` (`id`, `email`, `name`, `avatarUrl`, `provider`, `createdAt`)
+    SELECT CAST(`id` AS CHAR), `email`, `name`, `avatarUrl`, `provider`, `createdAt` FROM `Customer`;
+
+DROP TABLE `Customer`;
+RENAME TABLE `Customer_new` TO `Customer`;
+
 ALTER TABLE `Order` MODIFY `customerId` VARCHAR(191) NULL;
 ALTER TABLE `ProductReview` MODIFY `customerId` VARCHAR(191) NOT NULL;
 

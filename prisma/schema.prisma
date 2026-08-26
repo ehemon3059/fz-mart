@@ -182,15 +182,12 @@ model Product {
   @@index([baseSku])
   @@index([categoryId, status])
   @@index([isFeatured, status])
-  // Full-text search over name + description. The default parser is
-  // whitespace/punctuation based, which handles space-separated Bangla words;
-  // querying is via MATCH … AGAINST in server/products/search.ts.
-  //
-  // TiDB only supports single-column FULLTEXT indexes, so name and description
-  // are indexed separately and the search queries MATCH each column on its own
-  // (summing the two AGAINST scores for relevance).
-  @@fulltext([name])
-  @@fulltext([description])
+  // No FULLTEXT index on name/description. TiDB parses but cannot execute
+  // MATCH … AGAINST, and building a FULLTEXT index needs a TiFlash columnar
+  // replica that this Serverless cluster does not have. server/products/
+  // search.ts therefore searches with LIKE plus a synthesised relevance score,
+  // which also sidesteps the FULLTEXT minimum-token-length floor so short
+  // terms and Bangla substrings match. See prisma/README-tidb.md.
 }
 
 // Purchasable option of a product — one cell of the (color × size) matrix.
