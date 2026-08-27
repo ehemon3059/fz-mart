@@ -651,10 +651,31 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
 
           {ready && (
           <>
-          {/* ── 3. Photos ───────────────────────────────────── */}
+          {/* ── 3. Sizing ───────────────────────────────────── */}
+          {form.sellingType === "sizes" && (
+            <Card
+              icon="specGrid"
+              title="3 · Sizing"
+              hint="Which sizes this product offers, what to call them, and the chart behind the link."
+            >
+              <SizeGuidePanel
+                guides={sizeGuides}
+                value={form.sizeGuideId}
+                onChange={(v) => set("sizeGuideId", v)}
+                inherited={inheritedGuide}
+                resolved={resolvedGuide}
+                labelOverride={form.sizeLabel}
+                chartOverride={form.sizeChart}
+                onLabelChange={(v) => set("sizeLabel", v)}
+                onChartChange={(v) => set("sizeChart", v)}
+              />
+            </Card>
+          )}
+
+          {/* ── 4. Photos ───────────────────────────────────── */}
           <Card
             icon="image"
-            title="3 · Photos"
+            title={`${form.sellingType === "sizes" ? "4" : "3"} · Photos`}
             hint={
               hasOptions
                 ? "The shared gallery. Each colour also carries its own photo in the next step."
@@ -671,10 +692,10 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
             />
           </Card>
 
-          {/* ── 4. Options & pricing ────────────────────────── */}
+          {/* ── 5. Options & pricing ────────────────────────── */}
           <Card
             icon="grid"
-            title="4 · Options & pricing"
+            title={`${form.sellingType === "sizes" ? "5" : "4"} · Options & pricing`}
             hint={
               form.sellingType === "single"
                 ? "One price and one stock for the whole product."
@@ -962,27 +983,6 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
               </div>
             </div>
           </Card>
-
-          {/* ── 5. Sizing ───────────────────────────────────── */}
-          {form.sellingType === "sizes" && (
-            <Card
-              icon="specGrid"
-              title="5 · Sizing"
-              hint="Which sizes this product offers, what to call them, and the chart behind the link."
-            >
-              <SizeGuidePanel
-                guides={sizeGuides}
-                value={form.sizeGuideId}
-                onChange={(v) => set("sizeGuideId", v)}
-                inherited={inheritedGuide}
-                resolved={resolvedGuide}
-                labelOverride={form.sizeLabel}
-                chartOverride={form.sizeChart}
-                onLabelChange={(v) => set("sizeLabel", v)}
-                onChartChange={(v) => set("sizeChart", v)}
-              />
-            </Card>
-          )}
 
           {/* ── 6. Content ──────────────────────────────────── */}
           <Card
