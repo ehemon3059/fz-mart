@@ -27,6 +27,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/inventory", label: "Stock Overview", icon: "grid", area: "inventory" },
       { href: "/admin/inventory/movements", label: "Stock Movements", icon: "file", area: "inventory" },
       { href: "/admin/inventory/purchase-orders", label: "Purchase Orders", icon: "box", area: "inventory" },
+      { href: "/admin/inventory/buy-sell", label: "Buy & Sell Equal", icon: "specGrid", area: "inventory" },
       { href: "/admin/inventory/suppliers", label: "Suppliers", icon: "users", area: "inventory" },
       { href: "/admin/inventory/stock-takes", label: "Stock-takes", icon: "check", area: "inventory" },
       { href: "/admin/inventory/locations", label: "Locations", icon: "grid", area: "inventory" },

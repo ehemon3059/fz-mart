@@ -101,7 +101,7 @@ export interface PurchaseOrderInput {
  * Next PO number. Sequential rather than random: a supplier reads this over the
  * phone, and "PO-0042" survives that better than a hash.
  */
-async function nextPoNo(tx: Prisma.TransactionClient): Promise<string> {
+export async function nextPoNo(tx: Prisma.TransactionClient): Promise<string> {
   const last = await tx.purchaseOrder.findFirst({
     orderBy: { id: "desc" },
     select: { id: true },

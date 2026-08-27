@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getPurchaseOrder, listSuppliers } from "@/server/purchasing";
 import { listAllCategories } from "@/server/categories/admin";
-import { ancestorsOf } from "@/server/categories/tree";
+import { listActiveSizeGuides } from "@/server/size-guides";
 import PurchaseOrderForm from "../../new/PurchaseOrderForm";
 
 export const metadata = { title: "Edit Purchase Order — FZ-Mart Admin" };
@@ -30,7 +30,7 @@ export default async function EditPurchaseOrderPage({
     redirect(`/admin/inventory/purchase-orders/${po.id}`);
   }
 
-  const [suppliers, products, categories] = await Promise.all([
+  const [suppliers, products, categories, sizeGuides] = await Promise.all([
     listSuppliers(),
     prisma.product.findMany({
       select: {
@@ -46,14 +46,8 @@ export default async function EditPurchaseOrderPage({
       orderBy: { name: "asc" },
     }),
     listAllCategories(),
+    listActiveSizeGuides(),
   ]);
-
-  const categoryOptions = categories
-    .map((c) => ({
-      id: c.id,
-      path: [...ancestorsOf(c.id, categories).map((a) => a.name), c.name].join(" › "),
-    }))
-    .sort((a, b) => a.path.localeCompare(b.path));
 
   return (
     <div className="space-y-6 px-4 py-8 sm:px-7">
@@ -71,7 +65,14 @@ export default async function EditPurchaseOrderPage({
 
       <PurchaseOrderForm
         suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
-        categories={categoryOptions}
+        categories={categories}
+        sizeGuides={sizeGuides.map((g) => ({
+          id: g.id,
+          name: g.name,
+          sizeLabel: g.sizeLabel,
+          chart: g.chart,
+          values: g.values.map((v) => v.value),
+        }))}
         products={products.map((p) => ({
           id: p.id,
           name: p.status === "DRAFT" ? `${p.name} (draft)` : p.name,

@@ -367,9 +367,13 @@ export interface QuickProductResult {
  * A purchase-order line needs a product row to point at, so ordering stock for
  * something new used to mean leaving the form, inventing a price and a stock
  * figure the product doesn't have yet, and coming back. This captures only what
- * a PO actually needs — a name, a category, and the options being ordered —
- * and leaves the product DRAFT so it can't reach the storefront until someone
+ * a PO actually needs — how it sells, a category, and the options being ordered
+ * — and leaves the product DRAFT so it can't reach the storefront until someone
  * photographs and prices it.
+ *
+ * `sellingType` is authoritative over the two option lists: it is what the
+ * admin picked first, and colours/sizes that don't belong to that shape are
+ * discarded rather than quietly turned into variants.
  *
  * Opening stock is deliberately zero: the units are being ORDERED, not held.
  * They arrive through the ledger when the PO is received, which is the whole
@@ -383,6 +387,14 @@ export async function quickCreateProductAction(formData: FormData): Promise<Quic
   if (!name) return { error: "Give the product a name." };
   if (!categoryId) return { error: "Choose a category." };
 
+  // How it is sold is picked FIRST on the panel, and it decides which of the
+  // two lists below is allowed to contribute rows — mirroring the product
+  // form, where the same three cards drive the whole Options step.
+  const sellingType = String(formData.get("sellingType") ?? "");
+  if (sellingType !== "single" && sellingType !== "colors" && sellingType !== "sizes") {
+    return { error: "Choose how the product is sold." };
+  }
+
   // Colours and sizes arrive as comma-separated text — the fastest thing to
   // type while you have a supplier on the phone. The full matrix editor is on
   // the product form, for when the product is finished.
@@ -392,8 +404,18 @@ export async function quickCreateProductAction(formData: FormData): Promise<Quic
       .map((s) => s.trim())
       .filter(Boolean);
 
-  const colors = [...new Set(split("colors"))];
-  const sizes = [...new Set(split("sizes"))];
+  // A SINGLE product carries no options at all, and a COLORS one carries no
+  // sizes — dropping them here rather than trusting the panel keeps a stale
+  // field from silently becoming a variant matrix nobody asked for.
+  const colors = sellingType === "single" ? [] : [...new Set(split("colors"))];
+  const sizes = sellingType === "sizes" ? [...new Set(split("sizes"))] : [];
+
+  if (sellingType === "colors" && colors.length === 0) {
+    return { error: "Name at least one colour, or sell it as a single item." };
+  }
+  if (sellingType === "sizes" && sizes.length === 0) {
+    return { error: "Name at least one size, or sell it as a single item." };
+  }
 
   // Every combination that was named. With neither list this is a simple
   // product and carries no variants at all.
@@ -408,6 +430,14 @@ export async function quickCreateProductAction(formData: FormData): Promise<Quic
     }
   }
 
+  // Sizing travels with the product so the finished form and the storefront
+  // resolve the same chips, label and chart. "" means inherit the category's,
+  // which is the normal case — an explicit guide here is the override.
+  const sizeGuideRaw = String(formData.get("sizeGuideId") ?? "").trim();
+  const sizeGuideId = sellingType === "sizes" && sizeGuideRaw ? Number(sizeGuideRaw) : null;
+  const sizeLabel = sellingType === "sizes" ? String(formData.get("sizeLabel") ?? "").trim() : "";
+  const sizeChart = sellingType === "sizes" ? String(formData.get("sizeChart") ?? "").trim() : "";
+
   try {
     const created = await createProduct(
       {
@@ -421,6 +451,9 @@ export async function quickCreateProductAction(formData: FormData): Promise<Quic
         status: "DRAFT",
         variants: variants.length > 0 ? variants : undefined,
         colors: colors.map((c) => ({ name: c, hexCode: "#000000" })),
+        sizeGuideId,
+        sizeLabel: sizeLabel || null,
+        sizeChart: sizeChart || null,
       },
       admin.username,
     );

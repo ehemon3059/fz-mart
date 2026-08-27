@@ -1411,6 +1411,17 @@ model PurchaseOrder {
   poNo         String              @unique
   supplierId   Int
   status       PurchaseOrderStatus @default(DRAFT)
+  // TRUE when this order was written AFTER the fact, to record a purchase that
+  // had already happened — goods that were sitting on the shelf before anyone
+  // wrote a PO for them. Two consequences, both deliberate:
+  //
+  //   • A backfill NEVER moves stock. The units were already counted, so
+  //     receiving them again would double them (see recordHistoricalPurchase).
+  //     Its lines are created already-received for the same reason.
+  //   • A cost typed in from memory months later is weaker evidence than one
+  //     captured at the time. The flag is stored rather than inferred from
+  //     dates so a margin that looks wrong can say why on its face.
+  isBackfill   Boolean             @default(false)
   // When the goods are expected. The single most useful field on this model:
   // it turns "we ordered more" into "cover until the 20th".
   expectedOn   DateTime?

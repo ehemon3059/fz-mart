@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { formatTaka } from "@/lib/money";
 import SearchSelect from "@/components/admin/ui/SearchSelect";
 import { createPurchaseOrderAction, updatePurchaseOrderAction } from "../actions";
-import QuickProductPanel, { type CategoryOption } from "./QuickProductPanel";
+import QuickProductPanel, { type CategoryOption, type GuideOption } from "./QuickProductPanel";
 
 interface VariantOption {
   id: number;
@@ -64,11 +64,14 @@ export default function PurchaseOrderForm({
   suppliers,
   products: initialProducts,
   categories,
+  sizeGuides = [],
   order,
 }: {
   suppliers: { id: number; name: string }[];
   products: ProductOption[];
   categories: CategoryOption[];
+  /** Active size guides, for the quick-create panel's sizing step. */
+  sizeGuides?: GuideOption[];
   order?: ExistingOrder;
 }) {
   const isEdit = !!order;
@@ -263,6 +266,7 @@ export default function PurchaseOrderForm({
                   <div className="sm:col-span-12">
                     <QuickProductPanel
                       categories={categories}
+                      sizeGuides={sizeGuides}
                       onCreated={(created) => adoptNewProduct(line.key, created)}
                       onCancel={() => setCreatingFor(null)}
                     />

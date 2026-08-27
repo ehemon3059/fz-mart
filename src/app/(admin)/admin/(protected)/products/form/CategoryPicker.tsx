@@ -22,6 +22,7 @@ import { useMemo } from "react";
 import { Icon } from "@/components/icons";
 import { inheritedSellingType, type SellingType } from "@/lib/category-inheritance";
 import { buildTree, type TreeNode } from "@/server/categories/tree";
+import DropSelect from "./DropSelect";
 import type { Category } from "./types";
 
 const KINDS: { key: SellingType; title: string; blurb: string }[] = [
@@ -102,13 +103,6 @@ export default function CategoryPicker({
   // as a container for its sized children but never as the answer itself.
   const rootIsValidTarget = activeRoot ? typeOf(activeRoot.id) === kind : false;
 
-  const selectClass = [
-    "w-full appearance-none rounded-lg border bg-white px-3 py-2.5 pr-9 text-[14px] text-stone-800 outline-none transition focus:ring-4",
-    error
-      ? "border-red-300 focus:border-red-500 focus:ring-red-50"
-      : "border-stone-200 focus:border-brand-500 focus:ring-brand-50",
-  ].join(" ");
-
   return (
     <div className="space-y-4">
       {/* ── 1. the shape ── */}
@@ -158,31 +152,20 @@ export default function CategoryPicker({
               {rootOptions.length} that sell this way
             </span>
           </label>
-          <div className="relative flex items-center">
-            <select
-              value={rootId}
-              onChange={(e) => {
-                const next = e.target.value;
-                if (!next) return onChange("");
-                // Land on the root when it is itself a valid target, otherwise
-                // leave the choice empty so the sub-category step must answer.
-                const node = roots.find((r) => String(r.id) === next);
-                const ok = node && typeOf(node.id) === kind;
-                onChange(ok ? next : "");
-              }}
-              className={selectClass}
-            >
-              <option value="">Select category…</option>
-              {rootOptions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-3 text-stone-400">
-              <Icon name="chevronDown" size={16} />
-            </span>
-          </div>
+          <DropSelect
+            value={rootId}
+            onChange={(next) => {
+              if (!next) return onChange("");
+              // Land on the root when it is itself a valid target, otherwise
+              // leave the choice empty so the sub-category step must answer.
+              const node = roots.find((r) => String(r.id) === next);
+              const ok = node && typeOf(node.id) === kind;
+              onChange(ok ? next : "");
+            }}
+            placeholder="Select category…"
+            error={!!error}
+            options={rootOptions.map((r) => ({ value: String(r.id), label: r.name }))}
+          />
           {rootOptions.length === 0 && (
             <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-medium text-amber-600">
               <Icon name="warn" size={13} />
@@ -202,29 +185,21 @@ export default function CategoryPicker({
               <span className="ml-auto text-[12px] font-normal text-stone-400">optional</span>
             )}
           </label>
-          <div className="relative flex items-center">
-            <select
-              value={subId}
-              onChange={(e) => onChange(e.target.value || String(activeRoot.id))}
-              className={selectClass}
-            >
-              {rootIsValidTarget ? (
-                <option value="">— None, put it in “{activeRoot.name}” —</option>
-              ) : (
-                <option value="">Select sub-category…</option>
-              )}
-              {subOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {"  ".repeat(o.depth)}
-                  {o.depth ? "└ " : ""}
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-3 text-stone-400">
-              <Icon name="chevronDown" size={16} />
-            </span>
-          </div>
+          <DropSelect
+            value={subId}
+            onChange={(next) => onChange(next || String(activeRoot.id))}
+            placeholder={
+              rootIsValidTarget
+                ? `— None, put it in “${activeRoot.name}” —`
+                : "Select sub-category…"
+            }
+            error={!!error && !rootIsValidTarget && !subId}
+            options={subOptions.map((o) => ({
+              value: String(o.id),
+              label: o.depth ? `└ ${o.label}` : o.label,
+              depth: o.depth,
+            }))}
+          />
           {!rootIsValidTarget && !subId && (
             <p className="mt-1.5 text-[12px] text-stone-400">
               “{activeRoot.name}” itself is not sold this way — pick one of its sub-categories.
