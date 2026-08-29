@@ -173,6 +173,9 @@ export const UTIL_INK_DEFAULT = "#ffffff";
 /** Footer colour when unset — the card surface, as storefront.css has it. */
 export const FOOTER_BG_DEFAULT = "#ffffff";
 
+/** Footer text when unset — the ink derived from the default white footer. */
+export const FOOTER_INK_DEFAULT = "#23211e";
+
 export interface ElementColorSlot {
   key: string;
   /** Name shown in Settings → Appearance. */
@@ -197,15 +200,9 @@ export const ELEMENT_COLOR_SLOTS = [
     fallback: () => NAV_BG_DEFAULT,
   },
   {
-    key: "utilLeftInk",
-    label: "Top bar text (left)",
-    help: "Text in the left side of the thin top strip — the free-delivery note (.util-left).",
-    fallback: () => UTIL_INK_DEFAULT,
-  },
-  {
-    key: "utilRightInk",
-    label: "Top bar text (right)",
-    help: "Language switcher, Track Order and Help Center links on the right of the top strip (.util-right).",
+    key: "utilInk",
+    label: "Top bar text",
+    help: "All text in the thin top strip — the delivery note on the left and the language switcher, Track Order and Help Center links on the right.",
     fallback: () => UTIL_INK_DEFAULT,
   },
   {
@@ -256,6 +253,12 @@ export const ELEMENT_COLOR_SLOTS = [
     help: "The whole footer block. Headings, links, borders and payment chips re-colour automatically to stay readable — including on a dark footer.",
     fallback: () => FOOTER_BG_DEFAULT,
   },
+  {
+    key: "footerInk",
+    label: "Footer text",
+    help: "All footer text in one colour — the brand blurb, contact rows and their icons, column headings and every footer link. Leave empty to derive it from the footer background automatically.",
+    fallback: () => FOOTER_INK_DEFAULT,
+  },
 ] as const satisfies readonly ElementColorSlot[];
 
 export type ElementColorKey = (typeof ELEMENT_COLOR_SLOTS)[number]["key"];
@@ -266,8 +269,7 @@ export type ElementColors = Record<ElementColorKey, string | null>;
 export const DEFAULT_ELEMENT_COLORS: ElementColors = {
   headerBg: null,
   utilBg: null,
-  utilLeftInk: null,
-  utilRightInk: null,
+  utilInk: null,
   btnPrimary: null,
   badgeNew: null,
   chipBg: null,
@@ -276,6 +278,7 @@ export const DEFAULT_ELEMENT_COLORS: ElementColors = {
   mobileSearchBtn: null,
   mobileTabBg: null,
   footerBg: null,
+  footerInk: null,
 };
 
 /**
@@ -359,8 +362,7 @@ export function elementColorVars(c: ElementColors): Record<string, string> {
   const vars: Record<string, string> = {};
   if (c.headerBg) vars["--nav-bg"] = c.headerBg;
   if (c.utilBg) vars["--util-bg"] = c.utilBg;
-  if (c.utilLeftInk) vars["--util-left-ink"] = c.utilLeftInk;
-  if (c.utilRightInk) vars["--util-right-ink"] = c.utilRightInk;
+  if (c.utilInk) vars["--util-ink"] = c.utilInk;
   if (c.btnPrimary) {
     vars["--btn-primary"] = c.btnPrimary;
     vars["--btn-primary-dark"] = mix(c.btnPrimary, "#000000", 0.82);
@@ -383,6 +385,13 @@ export function elementColorVars(c: ElementColors): Record<string, string> {
     vars["--mtab-line"] = mix(c.mobileTabBg, "#000000", 0.82);
   }
   if (c.footerBg) Object.assign(vars, footerVars(c.footerBg));
+  // A picked footer text colour flattens the derived heading/body pair into one
+  // ink, so every string in the footer renders in exactly that colour. Applied
+  // after footerVars so it wins over the shades derived from the background.
+  if (c.footerInk) {
+    vars["--footer-ink"] = c.footerInk;
+    vars["--footer-soft"] = c.footerInk;
+  }
   return vars;
 }
 

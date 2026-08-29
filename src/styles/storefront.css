@@ -44,12 +44,12 @@
 /* ---------- top utility bar ---------- */
 /* Top utility bar sits on the masthead colour with a white hairline separating
    it from the main header below. Text is white + semibold on the dark ground. */
-.fz .util{background:var(--util-bg,var(--nav-bg));color:#fff;font-size:12.5px;font-weight:600;
+.fz .util{background:var(--util-bg,var(--nav-bg));color:var(--util-ink,#fff);font-size:12.5px;font-weight:600;
   border-bottom:1px solid rgba(255,255,255,.25098039215686);}
 .fz .util .wrap{display:flex;align-items:center;justify-content:space-between;height:36px;}
-.fz .util-left{display:flex;align-items:center;gap:8px;color:var(--util-left-ink,#fff);}
+.fz .util-left{display:flex;align-items:center;gap:8px;color:inherit;}
 .fz .util-dot{width:5px;height:5px;border-radius:50%;background:var(--brand);}
-.fz .util-right{display:flex;align-items:center;gap:20px;color:var(--util-right-ink,#fff);}
+.fz .util-right{display:flex;align-items:center;gap:20px;color:inherit;}
 .fz .util-right a{display:flex;align-items:center;gap:6px;}
 .fz .util-right a:hover{opacity:.72;}
 
@@ -968,7 +968,7 @@
 .fz .ft-contact-row{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--footer-soft,var(--ink-mute));margin:0;}
 .fz .ft-contact-row svg{flex-shrink:0;margin-top:2px;color:var(--footer-soft,var(--ink-soft));}
 .fz .ft-contact-row a{color:inherit;transition:color .15s;}
-.fz .ft-contact-row a:hover{color:var(--footer-ink,var(--brand-dark));}
+.fz .ft-contact-row a:hover{color:var(--footer-ink,var(--brand-dark));opacity:.75;}
 /* Payment marks. The brand SVGs (/public/finence-logos, mirrored to R2 under
    branding/payments/) are cropped to their ink, so the tile sets the size on its
    own. Tiles stay white on every footer colour — the artwork is drawn for a
@@ -1007,7 +1007,7 @@
 }
 .fz .ft-col h4{font-size:13px;font-weight:700;letter-spacing:.02em;margin:0 0 16px;color:var(--footer-ink,var(--ink));}
 .fz .ft-col a{display:block;font-size:13.5px;color:var(--footer-soft,var(--ink-mute));margin-bottom:11px;transition:color .15s;}
-.fz .ft-col a:hover{color:var(--footer-ink,var(--brand-dark));}
+.fz .ft-col a:hover{color:var(--footer-ink,var(--brand-dark));opacity:.75;}
 .fz .ft-bot{border-top:1px solid var(--footer-line,var(--line));padding:20px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
 .fz .ft-bot span{font-size:12.5px;color:var(--footer-soft,var(--ink-mute));}
 .fz .ft-social{display:flex;gap:8px;}
