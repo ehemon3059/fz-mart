@@ -14,10 +14,17 @@ export class SelfServiceError extends Error {
 }
 
 async function findOwnedOrder(orderNo: string, phone: string) {
-  const order = await prisma.order.findUnique({
-    where: { orderNo: orderNo.trim().toUpperCase() },
+  // Ownership belongs in the `where`, not in a comparison after the fetch: a
+  // wrong phone must return no row at all, so no later edit can drop the check
+  // and leave the order reachable. Both inputs are normalised the same way they
+  // are on the way in (order numbers are stored upper-case).
+  const order = await prisma.order.findFirst({
+    where: {
+      orderNo: orderNo.trim().toUpperCase(),
+      customerPhone: phone.trim(),
+    },
   });
-  if (!order || order.customerPhone !== phone.trim()) {
+  if (!order) {
     throw new SelfServiceError("We couldn't match that order to this phone number.");
   }
   return order;
