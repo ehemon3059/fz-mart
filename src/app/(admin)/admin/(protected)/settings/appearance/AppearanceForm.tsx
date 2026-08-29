@@ -275,14 +275,14 @@ export default function AppearanceForm({
           {/* masthead: top bar + header, each independently overridable */}
           <div className="mt-4 overflow-hidden rounded-xl border border-stone-200">
             <div
-              className="flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold text-white"
+              className="flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold"
               style={{
                 backgroundColor: effective("utilBg"),
                 borderBottom: "1px solid rgba(255,255,255,.25)",
               }}
             >
-              <span>Track Order</span>
-              <span>Help Center</span>
+              <span style={{ color: effective("utilLeftInk") }}>Free delivery</span>
+              <span style={{ color: effective("utilRightInk") }}>Track Order · Help Center</span>
             </div>
             <div
               className="flex items-center gap-2 px-3 py-3"

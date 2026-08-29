@@ -15,6 +15,28 @@ interface Suggestion {
   price: string;
 }
 
+// Split a product name so the parts matching the typed keywords can be shown
+// in red. Each whitespace-separated term is matched case-insensitively; regex
+// metacharacters in the term are escaped so a stray "(" can't break the match.
+function highlight(name: string, term: string) {
+  const words = term.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return name;
+  const pattern = words
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .sort((a, b) => b.length - a.length)
+    .join("|");
+  const parts = name.split(new RegExp(`(${pattern})`, "gi"));
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <mark key={i} className="search-suggest-hit">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
 // Header search: a GET form to /search (shareable URLs, works without JS)
 // enhanced with a debounced typeahead dropdown. The category scope from
 // CategorySelect rides along as a hidden `category` input.
@@ -99,7 +121,7 @@ export default function HeaderSearch({ categories }: { categories: Cat[] }) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={s.image ?? "/placeholder.svg"} alt="" className="search-suggest-thumb" />
-              <span className="search-suggest-name">{s.name}</span>
+              <span className="search-suggest-name">{highlight(s.name, query)}</span>
               <span className="search-suggest-price">{s.price}</span>
             </button>
           ))}

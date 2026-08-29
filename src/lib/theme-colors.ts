@@ -167,6 +167,9 @@ export function derivePalette(base: string): BrandPalette {
 /** Masthead colour when the admin hasn't overridden it — matches storefront.css. */
 export const NAV_BG_DEFAULT = "#0d0625";
 
+/** Utility-bar text colour when unset — white, as storefront.css has it. */
+export const UTIL_INK_DEFAULT = "#ffffff";
+
 /** Footer colour when unset — the card surface, as storefront.css has it. */
 export const FOOTER_BG_DEFAULT = "#ffffff";
 
@@ -192,6 +195,18 @@ export const ELEMENT_COLOR_SLOTS = [
     label: "Top bar background",
     help: "Thin strip above the header (Track Order / Help Center).",
     fallback: () => NAV_BG_DEFAULT,
+  },
+  {
+    key: "utilLeftInk",
+    label: "Top bar text (left)",
+    help: "Text in the left side of the thin top strip — the free-delivery note (.util-left).",
+    fallback: () => UTIL_INK_DEFAULT,
+  },
+  {
+    key: "utilRightInk",
+    label: "Top bar text (right)",
+    help: "Language switcher, Track Order and Help Center links on the right of the top strip (.util-right).",
+    fallback: () => UTIL_INK_DEFAULT,
   },
   {
     key: "btnPrimary",
@@ -251,6 +266,8 @@ export type ElementColors = Record<ElementColorKey, string | null>;
 export const DEFAULT_ELEMENT_COLORS: ElementColors = {
   headerBg: null,
   utilBg: null,
+  utilLeftInk: null,
+  utilRightInk: null,
   btnPrimary: null,
   badgeNew: null,
   chipBg: null,
@@ -342,6 +359,8 @@ export function elementColorVars(c: ElementColors): Record<string, string> {
   const vars: Record<string, string> = {};
   if (c.headerBg) vars["--nav-bg"] = c.headerBg;
   if (c.utilBg) vars["--util-bg"] = c.utilBg;
+  if (c.utilLeftInk) vars["--util-left-ink"] = c.utilLeftInk;
+  if (c.utilRightInk) vars["--util-right-ink"] = c.utilRightInk;
   if (c.btnPrimary) {
     vars["--btn-primary"] = c.btnPrimary;
     vars["--btn-primary-dark"] = mix(c.btnPrimary, "#000000", 0.82);
