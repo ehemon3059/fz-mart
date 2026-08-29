@@ -1,8 +1,7 @@
 "use server";
 
 import { createResetTokenForEmail } from "@/server/admin/password-reset";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 import { enqueueMailJob } from "@/jobs/enqueue";
 
 export interface ForgotPasswordResult {
@@ -28,17 +27,20 @@ export async function requestPasswordReset(
     return { error: "Please enter a valid email address." };
   }
 
-  const emailLimit = await rateLimit("admin-reset:email", email, EMAIL_LIMIT, EMAIL_WINDOW_SECONDS);
+  const emailLimit = await rateLimit(
+    "admin-reset:email",
+    email,
+    EMAIL_LIMIT,
+    EMAIL_WINDOW_SECONDS,
+    "closed",
+  );
   if (!emailLimit.allowed) {
     return { error: "Too many reset requests. Please try again later." };
   }
 
-  const ip = await getClientIp();
-  if (ip) {
-    const ipLimit = await rateLimit("admin-reset:ip", ip, IP_LIMIT, IP_WINDOW_SECONDS);
-    if (!ipLimit.allowed) {
-      return { error: "Too many reset requests from this network. Please try again later." };
-    }
+  const ipLimit = await rateLimitByIp("admin-reset:ip", IP_LIMIT, IP_WINDOW_SECONDS, "closed");
+  if (!ipLimit.allowed) {
+    return { error: "Too many reset requests from this network. Please try again later." };
   }
 
   const issued = await createResetTokenForEmail(email);

@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { toggleWishlist } from "@/server/wishlist";
 import { subscribeStockNotification, StockNotifyError } from "@/server/products/stock-notify";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 export interface WishlistResult {
   error?: string;
@@ -32,11 +31,10 @@ export async function notifyMeAction(
   variantId: number | null,
   formData: FormData,
 ): Promise<NotifyResult> {
-  const ip = await getClientIp();
-  if (ip) {
-    const limit = await rateLimit("stock-notify:ip", ip, 15, 60 * 10);
-    if (!limit.allowed) return { error: "Too many requests. Please try again later." };
-  }
+  // 'open': a back-in-stock subscription is low-value to abuse and this is a
+  // browsing-path action; a Redis blip shouldn't break the product page.
+  const limit = await rateLimitByIp("stock-notify:ip", 15, 60 * 10, "open");
+  if (!limit.allowed) return { error: "Too many requests. Please try again later." };
 
   const customer = await getCurrentCustomer();
   try {

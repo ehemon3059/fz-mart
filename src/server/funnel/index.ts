@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import type { FunnelEventType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import { getClientIp } from "@/lib/client-ip";
+import { getClientIp } from "@/lib/ip";
 import { isIpBlocked } from "@/lib/ip-block";
 import { isBotUserAgent } from "@/lib/bot-detection";
 import { getCurrentCustomer } from "@/lib/customer-session";
@@ -50,6 +50,9 @@ async function recordFunnelEvent(type: FunnelEventType, opts: RecordOptions): Pr
   const ua = await safeUserAgent();
   if (isBotUserAgent(ua)) return;
 
+  // Fails open (records the event) when no trusted IP is available: this is
+  // analytics filtering, and the surrounding INVARIANT is that tracking never
+  // blocks or fails a user-facing action.
   const ip = await getClientIp();
   if (ip && (await isIpBlocked(ip))) return;
 

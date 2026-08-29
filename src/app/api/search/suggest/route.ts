@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { suggestProducts } from "@/server/products/search";
 import { formatTaka } from "@/lib/money";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 // Typeahead endpoint for the header search dropdown. Returns a short list of
 // matching products (name, slug, price, image). Kept deliberately light — the
@@ -15,12 +14,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ suggestions: [] });
   }
 
-  const ip = await getClientIp();
-  if (ip) {
-    const limit = await rateLimit("suggest:ip", ip, 60, 60);
-    if (!limit.allowed) {
-      return NextResponse.json({ suggestions: [] }, { status: 429 });
-    }
+  // 'open': read-only typeahead. The limiter is scraping hygiene here, not a
+  // security control, and search must not break over a Redis blip.
+  const limit = await rateLimitByIp("suggest:ip", 60, 60, "open", request);
+  if (!limit.allowed) {
+    return NextResponse.json({ suggestions: [] }, { status: 429 });
   }
 
   const suggestions = await suggestProducts(q, 6);

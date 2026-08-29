@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import localFont from "next/font/local";
 import TopProgressBar from "@/components/TopProgressBar";
 import { isIpBlocked } from "@/lib/ip-block";
-import { getClientIp } from "@/lib/client-ip";
+import { getClientIp } from "@/lib/ip";
 import { SITE_NAME, SITE_TAGLINE, siteUrl } from "@/lib/seo";
 import { primeSiteUrl } from "@/server/settings/site";
 import "./globals.css";
@@ -102,6 +102,12 @@ export default async function RootLayout({
   // can't run there — same constraint that applies to admin session checks.
   // This layout runs in the Node runtime for every request, before any page
   // content renders, so it gives the same practical effect.
+  // Deliberately fails OPEN, unlike the per-IP rate limiters (which deny on a
+  // null IP). This is a DENYlist: an unidentifiable IP is simply not on it, and
+  // denying every request we can't attribute would take the entire storefront
+  // down on a TRUSTED_PROXY misconfiguration. The blocklist is a targeted
+  // ban-this-abuser tool, not the primary abuse gate — the rate limiters are,
+  // and those fail closed.
   const ip = await getClientIp();
   const blocked = ip ? await isIpBlocked(ip) : false;
 

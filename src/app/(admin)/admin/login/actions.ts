@@ -13,8 +13,7 @@ import {
   PENDING_2FA_COOKIE,
 } from "@/lib/auth";
 import { verifyLoginCode, verifyBackupCode } from "@/server/admin/twofactor";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 
 export interface LoginResult {
   error?: string;
@@ -60,17 +59,15 @@ export async function login(formData: FormData): Promise<LoginResult> {
     username,
     USERNAME_LIMIT,
     USERNAME_WINDOW_SECONDS,
+    "closed",
   );
   if (!usernameLimit.allowed) {
     return { error: "Too many login attempts. Please try again later." };
   }
 
-  const ip = await getClientIp();
-  if (ip) {
-    const ipLimit = await rateLimit("login:ip", ip, IP_LIMIT, IP_WINDOW_SECONDS);
-    if (!ipLimit.allowed) {
-      return { error: "Too many login attempts from this network. Please try again later." };
-    }
+  const ipLimit = await rateLimitByIp("login:ip", IP_LIMIT, IP_WINDOW_SECONDS, "closed");
+  if (!ipLimit.allowed) {
+    return { error: "Too many login attempts from this network. Please try again later." };
   }
 
   const admin = await verifyAdminCredentials(username, password);
@@ -115,7 +112,7 @@ export async function verifyTwoFactorLogin(formData: FormData): Promise<LoginRes
   }
 
   // Rate-limit code guesses per pending login.
-  const limit = await rateLimit("login:2fa", String(adminId), 6, 5 * 60);
+  const limit = await rateLimit("login:2fa", String(adminId), 6, 5 * 60, "closed");
   if (!limit.allowed) {
     return {
       error: "Too many attempts. Please wait before trying again.",

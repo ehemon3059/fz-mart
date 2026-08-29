@@ -1,8 +1,7 @@
 "use server";
 
 import { trackOrder } from "@/server/orders/getOrder";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 export interface TrackResult {
   error?: string;
@@ -22,12 +21,9 @@ export async function lookupOrder(formData: FormData): Promise<TrackResult> {
     return { error: "Please enter both your order number and phone number." };
   }
 
-  const ip = await getClientIp();
-  if (ip) {
-    const limit = await rateLimit("track:ip", ip, LOOKUP_LIMIT, LOOKUP_WINDOW_SECONDS);
-    if (!limit.allowed) {
-      return { error: "Too many lookups. Please wait a few minutes and try again." };
-    }
+  const limit = await rateLimitByIp("track:ip", LOOKUP_LIMIT, LOOKUP_WINDOW_SECONDS, "closed");
+  if (!limit.allowed) {
+    return { error: "Too many lookups. Please wait a few minutes and try again." };
   }
 
   const order = await trackOrder(orderNo, phone);

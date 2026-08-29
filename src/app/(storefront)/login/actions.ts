@@ -2,8 +2,7 @@
 
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 import { enqueueMailJob } from "@/jobs/enqueue";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 
@@ -27,17 +26,20 @@ export async function requestMagicLink(formData: FormData): Promise<RequestMagic
     return { error: "Please enter a valid email address." };
   }
 
-  const emailLimit = await rateLimit("login:email", email, EMAIL_LIMIT, EMAIL_WINDOW_SECONDS);
+  const emailLimit = await rateLimit(
+    "login:email",
+    email,
+    EMAIL_LIMIT,
+    EMAIL_WINDOW_SECONDS,
+    "closed",
+  );
   if (!emailLimit.allowed) {
     return { error: "Too many login attempts. Please try again later." };
   }
 
-  const ip = await getClientIp();
-  if (ip) {
-    const ipLimit = await rateLimit("login:ip", ip, IP_LIMIT, IP_WINDOW_SECONDS);
-    if (!ipLimit.allowed) {
-      return { error: "Too many login attempts from this network. Please try again later." };
-    }
+  const ipLimit = await rateLimitByIp("login:ip", IP_LIMIT, IP_WINDOW_SECONDS, "closed");
+  if (!ipLimit.allowed) {
+    return { error: "Too many login attempts from this network. Please try again later." };
   }
 
   const token = randomBytes(32).toString("hex");

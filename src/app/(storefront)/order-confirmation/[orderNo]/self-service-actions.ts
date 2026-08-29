@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cancelOwnOrder, requestReturn, SelfServiceError } from "@/server/orders/self-service";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 export interface SelfServiceResult {
   error?: string;
@@ -11,9 +10,7 @@ export interface SelfServiceResult {
 }
 
 async function ipGuard(): Promise<boolean> {
-  const ip = await getClientIp();
-  if (!ip) return true;
-  const limit = await rateLimit("self-service:ip", ip, 20, 60 * 10);
+  const limit = await rateLimitByIp("self-service:ip", 20, 60 * 10, "closed");
   return limit.allowed;
 }
 

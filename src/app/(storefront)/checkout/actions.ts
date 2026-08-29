@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { createOrder, CheckoutError, type CheckoutItemInput } from "@/server/orders/createOrder";
 import { enqueueMailJob } from "@/jobs/enqueue";
 import { getFraudCheck } from "@/server/fraud";
-import { rateLimit } from "@/lib/rate-limit";
-import { getClientIp } from "@/lib/client-ip";
+import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
 import { getCurrentCustomer } from "@/lib/customer-session";
 import { initiateOnlinePayment } from "@/server/payments";
 import {
@@ -61,13 +60,10 @@ export async function requestCheckoutOtp(phone: string): Promise<OtpResult> {
   if (await isRepeatBuyer(phone)) return { verified: true }; // trusted buyer
 
   // Rate-limit code requests per phone and per IP.
-  const perPhone = await rateLimit("otp:phone", phone, 5, 60 * 15);
+  const perPhone = await rateLimit("otp:phone", phone, 5, 60 * 15, "closed");
   if (!perPhone.allowed) return { error: "Too many code requests. Try again later." };
-  const ip = await getClientIp();
-  if (ip) {
-    const perIp = await rateLimit("otp:ip", ip, 15, 60 * 15);
-    if (!perIp.allowed) return { error: "Too many code requests from this network." };
-  }
+  const perIp = await rateLimitByIp("otp:ip", 15, 60 * 15, "closed");
+  if (!perIp.allowed) return { error: "Too many code requests from this network." };
 
   try {
     const { cooldownSeconds } = await sendOtp(phone);
@@ -81,6 +77,14 @@ export async function requestCheckoutOtp(phone: string): Promise<OtpResult> {
 
 /** Verify the OTP the customer entered. */
 export async function confirmCheckoutOtp(phone: string, code: string): Promise<OtpResult> {
+  // verifyOtp caps guesses per PHONE, but that cap is keyed per phone number —
+  // an attacker rotating phone numbers gets a fresh allowance each time. This
+  // per-IP limit bounds the total guess rate from one source regardless of how
+  // many numbers it cycles through. 'closed': unlimited guessing against a
+  // 6-digit code is the attack this exists to stop.
+  const perIp = await rateLimitByIp("otp-verify:ip", 30, 60 * 15, "closed");
+  if (!perIp.allowed) return { error: "Too many attempts from this network." };
+
   try {
     await verifyOtp(phone, code);
     return { verified: true };
@@ -207,19 +211,22 @@ export async function placeOrder(
     provider = providerRaw;
   }
 
-  const phoneLimit = await rateLimit("checkout:phone", customerPhone, PHONE_LIMIT, PHONE_WINDOW_SECONDS);
+  const phoneLimit = await rateLimit(
+    "checkout:phone",
+    customerPhone,
+    PHONE_LIMIT,
+    PHONE_WINDOW_SECONDS,
+    "closed",
+  );
   if (!phoneLimit.allowed) {
     return {
       error: "Too many orders from this phone number recently. Please try again later.",
     };
   }
 
-  const ip = await getClientIp();
-  if (ip) {
-    const ipLimit = await rateLimit("checkout:ip", ip, IP_LIMIT, IP_WINDOW_SECONDS);
-    if (!ipLimit.allowed) {
-      return { error: "Too many orders from this network recently. Please try again later." };
-    }
+  const ipLimit = await rateLimitByIp("checkout:ip", IP_LIMIT, IP_WINDOW_SECONDS, "closed");
+  if (!ipLimit.allowed) {
+    return { error: "Too many orders from this network recently. Please try again later." };
   }
 
   // Phone OTP gate for COD (anti-fraud). Online/partial payment already proves

@@ -53,7 +53,16 @@ export async function getFraudCheck(phone: string): Promise<FraudResult> {
     return result;
   }
 
-  const limit = await rateLimit("fraud:api", "global", FRAUD_API_LIMIT, FRAUD_API_WINDOW_SECONDS);
+  // 'closed': this caps spend on a PAID third-party API. Failing open during a
+  // Redis outage means unbounded billable calls, so a degraded fraud check
+  // (which callers already handle) beats an unbounded invoice.
+  const limit = await rateLimit(
+    "fraud:api",
+    "global",
+    FRAUD_API_LIMIT,
+    FRAUD_API_WINDOW_SECONDS,
+    "closed",
+  );
   if (!limit.allowed) {
     throw new Error("Fraud API rate limit exceeded — too many checks in the last minute.");
   }
