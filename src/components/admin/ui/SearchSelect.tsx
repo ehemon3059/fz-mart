@@ -42,6 +42,33 @@ interface Props {
   className?: string;
 }
 
+/**
+ * Splits a label around every occurrence of the query so the matched run can be
+ * painted red. Case-insensitive, but the original casing is what gets rendered.
+ */
+function highlight(text: string, query: string) {
+  const q = query.trim();
+  if (!q) return text;
+  const lower = text.toLowerCase();
+  const needle = q.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let from = 0;
+  for (;;) {
+    const at = lower.indexOf(needle, from);
+    if (at === -1) break;
+    if (at > from) parts.push(text.slice(from, at));
+    parts.push(
+      <mark key={at} className="bg-transparent p-0 font-semibold text-red-600">
+        {text.slice(at, at + needle.length)}
+      </mark>,
+    );
+    from = at + needle.length;
+  }
+  if (parts.length === 0) return text;
+  if (from < text.length) parts.push(text.slice(from));
+  return parts;
+}
+
 export default function SearchSelect({
   options,
   value,
@@ -194,8 +221,10 @@ export default function SearchSelect({
                   o.value === value ? "font-semibold text-accent" : "text-stone-700",
                 ].join(" ")}
               >
-                <span className="text-[13.5px] leading-snug">{o.label}</span>
-                {o.hint && <span className="text-[11.5px] text-stone-400">{o.hint}</span>}
+                <span className="text-[13.5px] leading-snug">{highlight(o.label, query)}</span>
+                {o.hint && (
+                  <span className="text-[11.5px] text-stone-400">{highlight(o.hint, query)}</span>
+                )}
               </button>
             </li>
           ))}
