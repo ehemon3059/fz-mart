@@ -167,6 +167,9 @@ export function derivePalette(base: string): BrandPalette {
 /** Masthead colour when the admin hasn't overridden it — matches storefront.css. */
 export const NAV_BG_DEFAULT = "#0d0625";
 
+/** Account/cart pill text + icons when unset — white, as storefront.css has it. */
+export const HDR_ACTION_INK_DEFAULT = "#ffffff";
+
 /** Utility-bar text colour when unset — white, as storefront.css has it. */
 export const UTIL_INK_DEFAULT = "#ffffff";
 
@@ -192,6 +195,12 @@ export const ELEMENT_COLOR_SLOTS = [
     label: "Header background",
     help: "Main masthead bar — logo, search and cart row.",
     fallback: () => NAV_BG_DEFAULT,
+  },
+  {
+    key: "headerActionInk",
+    label: "Header account & cart text",
+    help: "The Account and Cart pills on the masthead — their icons and both lines of text (.hdr-account, .cart-btn).",
+    fallback: () => HDR_ACTION_INK_DEFAULT,
   },
   {
     key: "utilBg",
@@ -268,6 +277,7 @@ export type ElementColors = Record<ElementColorKey, string | null>;
 
 export const DEFAULT_ELEMENT_COLORS: ElementColors = {
   headerBg: null,
+  headerActionInk: null,
   utilBg: null,
   utilInk: null,
   btnPrimary: null,
@@ -361,6 +371,7 @@ export function coerceElementColors(raw: Record<string, string | undefined>): El
 export function elementColorVars(c: ElementColors): Record<string, string> {
   const vars: Record<string, string> = {};
   if (c.headerBg) vars["--nav-bg"] = c.headerBg;
+  if (c.headerActionInk) vars["--hdr-action-ink"] = c.headerActionInk;
   if (c.utilBg) vars["--util-bg"] = c.utilBg;
   if (c.utilInk) vars["--util-ink"] = c.utilInk;
   if (c.btnPrimary) {

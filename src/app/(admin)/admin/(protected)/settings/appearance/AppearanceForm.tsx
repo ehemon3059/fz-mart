@@ -293,7 +293,9 @@ export default function AppearanceForm({
                 FZ<span style={{ color: palette.brand }}>Mart</span>
               </span>
               <span className="h-6 flex-1 rounded-full bg-white" />
-              <span className="text-[10px] font-semibold text-white">Cart</span>
+              <span className="text-[10px] font-semibold" style={{ color: effective("headerActionInk") }}>
+                Cart
+              </span>
             </div>
           </div>
 

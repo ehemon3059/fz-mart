@@ -149,10 +149,14 @@
 .fz .icon-btn .ib-txt{display:flex;flex-direction:column;line-height:1.15;}
 .fz .icon-btn .ib-txt small{font-size:11px;color:var(--ink-mute);}
 .fz .icon-btn .ib-txt b{font-size:13.5px;font-weight:600;}
-/* Account/Cart pills on the dark masthead: invert the text + hover wash. */
+/* Account/Cart pills on the dark masthead: invert the text + hover wash.
+   One admin-picked ink drives the whole pill — the icon (via currentColor),
+   the small caption and the bold label. The caption keeps its quieter look
+   through opacity rather than a hard-coded white, so any hue works. */
+.fz .hdr .icon-btn{color:var(--hdr-action-ink,#fff);}
 .fz .hdr .icon-btn:hover{background:rgba(255,255,255,.10);}
-.fz .hdr .icon-btn .ib-txt small{color:rgba(255,255,255,.66);}
-.fz .hdr .icon-btn .ib-txt b{color:#fff;}
+.fz .hdr .icon-btn .ib-txt small{color:inherit;opacity:.66;}
+.fz .hdr .icon-btn .ib-txt b{color:inherit;}
 /* Search field reads as a clean white pill against the dark masthead. */
 .fz .hdr .search{background:#fff;border-color:transparent;}
 .fz .cart-btn{position:relative;}
