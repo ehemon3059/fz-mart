@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getOrderByOrderNo } from "@/server/orders/getOrder";
+import { getOrderForViewer } from "@/server/orders/getOrder";
+import { getCurrentCustomer } from "@/lib/customer-session";
 import { returnWindowOpen } from "@/server/orders/self-service";
 import { formatTaka } from "@/lib/money";
 import { ORDER_STATUS_LABELS } from "@/config/order-status";
@@ -13,7 +14,13 @@ export default async function OrderConfirmationPage({
   params: Promise<{ orderNo: string }>;
 }) {
   const { orderNo } = await params;
-  const order = await getOrderByOrderNo(orderNo);
+
+  // A2-01: never fetch by orderNo alone. The viewer must either own the order
+  // (signed in) or hold the grant issued when they placed it. notFound() covers
+  // both "no such order" and "not yours" so the page cannot be used to confirm
+  // that a guessed number is real.
+  const customer = await getCurrentCustomer();
+  const order = await getOrderForViewer(orderNo, { customerId: customer?.customerId });
   if (!order) notFound();
 
   const canReturn = order.status === "DELIVERED" ? await returnWindowOpen(order.id) : false;
@@ -59,7 +66,6 @@ export default async function OrderConfirmationPage({
       <div className="text-left">
         <CustomerOrderActions
           orderNo={order.orderNo}
-          phone={order.customerPhone}
           status={order.status}
           returnWindowOpen={canReturn}
         />

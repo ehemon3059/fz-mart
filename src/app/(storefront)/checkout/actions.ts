@@ -1,5 +1,6 @@
 "use server";
 
+import { grantOrderAccess } from "@/lib/order-access";
 import { redirect } from "next/navigation";
 import { createOrder, CheckoutError, type CheckoutItemInput } from "@/server/orders/createOrder";
 import { enqueueMailJob } from "@/jobs/enqueue";
@@ -349,6 +350,12 @@ export async function placeOrder(
   if (currentCustomer) {
     markCartOrdered(currentCustomer.customerId).catch(() => {});
   }
+
+  // A2-01: authorise THIS browser to read THIS order's confirmation page. Must
+  // happen before either redirect — redirect() throws to unwind, so anything
+  // after it never runs. Issued for the gateway path too: the customer comes
+  // back through /payment/return and lands on the same page.
+  await grantOrderAccess(orderNo);
 
   if (gatewayUrl) {
     redirect(gatewayUrl);

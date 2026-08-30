@@ -13,17 +13,19 @@ const CANCEL_REASONS = [
   "No longer need the item",
 ] as const;
 
-// Self-service controls shown on a customer's order view. The phone on the
-// order authorises the action (the customer confirms it), matching the guest
-// order-tracking model.
+// Self-service controls shown on a customer's order view.
+//
+// The phone is deliberately NOT a prop any more (A2-02). It used to be passed
+// down and handed back to the server action as the ownership proof, which meant
+// the browser named whose order it was acting on. The action now derives the
+// phone server-side from the order the caller's grant authorises, so this
+// component never sees or sends it.
 export default function CustomerOrderActions({
   orderNo,
-  phone,
   status,
   returnWindowOpen,
 }: {
   orderNo: string;
-  phone: string;
   status: string;
   returnWindowOpen: boolean;
 }) {
@@ -46,7 +48,7 @@ export default function CustomerOrderActions({
     const reason = isOther ? otherReason.trim() : cancelReason!;
     setMsg(null);
     startTransition(async () => {
-      const res = await cancelOrderAction(orderNo, phone, reason);
+      const res = await cancelOrderAction(orderNo, reason);
       if (res.error) setMsg({ type: "err", text: res.error });
       else {
         setMsg({ type: "ok", text: res.success! });
@@ -58,7 +60,7 @@ export default function CustomerOrderActions({
   function submitReturn(formData: FormData) {
     setMsg(null);
     startTransition(async () => {
-      const res = await requestReturnAction(orderNo, phone, formData);
+      const res = await requestReturnAction(orderNo, formData);
       if (res.error) setMsg({ type: "err", text: res.error });
       else {
         setMsg({ type: "ok", text: res.success! });

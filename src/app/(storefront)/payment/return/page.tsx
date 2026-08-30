@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { hasOrderAccess } from "@/lib/order-access";
 
 // Where the customer lands after the gateway round-trip. Success sends them
 // straight to the normal order-confirmation page; failure/abandonment
@@ -13,7 +14,15 @@ export default async function PaymentReturnPage({
 }) {
   const { orderNo, result } = await searchParams;
 
-  if (orderNo && result === "success") {
+  // A2-03: only redirect a caller who is actually authorised for this order.
+  // Without the grant check this page is a bounce: guess an orderNo, get sent
+  // to the confirmation page. It cannot ISSUE a grant — a Server Component may
+  // not set cookies — but it doesn't need to: checkout issued one before
+  // handing off to the gateway, and the customer returns with it. If they came
+  // back in a different browser (an in-app bKash webview, say) they fall
+  // through to the message below and reach the order via /track, which is the
+  // correct place to prove identity with a phone number.
+  if (orderNo && result === "success" && (await hasOrderAccess(orderNo))) {
     // Double-check against the DB rather than the query string.
     const order = await prisma.order.findUnique({ where: { orderNo } });
     if (order && order.paidAmount > 0 && order.status !== "PENDING_PAYMENT") {
