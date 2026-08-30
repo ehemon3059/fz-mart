@@ -75,3 +75,49 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # Proves the E2E safety guard actually ABORTS on production-looking config.
+  #
+  # A guard nobody watches fail is indistinguishable from a guard that has
+  # silently stopped working. tests/e2e/helpers/guard.spec.ts unit-tests the
+  # logic; this job tests the thing that matters operationally — that a run
+  # launched against a hosted database and Redis DIES instead of proceeding.
+  #
+  # Inverted assertion: the step SUCCEEDS only when the suite exits non-zero.
+  guard-aborts-on-production-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: E2E must refuse to run against production-looking infrastructure
+        env:
+          # Deliberately hostile values. If any of these is ever accepted, the
+          # guard has regressed and a real run could hit real customer data.
+          DATABASE_URL: "mysql://u:p@gateway01.eu-central-1.prod.aws.tidbcloud.com:4000/fzmart"
+          REDIS_URL: "rediss://default:token@apn1-live-12345.upstash.io:6379"
+          R2_BUCKET: "fz-mart-uploads"
+          MAIL_DELIVERY: "inline"
+          SMS_PROVIDER: "twilio"
+        run: |
+          if npx playwright test --list > guard-output.txt 2>&1; then
+            echo "::error::E2E guard did NOT abort on production-looking config."
+            echo "A real test run could reach live customer data. See tests/e2e/helpers/guard.ts."
+            cat guard-output.txt
+            exit 1
+          fi
+
+          # Non-zero alone isn't enough — a typo would also exit non-zero and
+          # look like a pass. Require the guard's own banner in the output.
+          if ! grep -q "E2E ABORTED" guard-output.txt; then
+            echo "::error::Run failed, but NOT via the guard — check for an unrelated error."
+            cat guard-output.txt
+            exit 1
+          fi
+
+          echo "✓ Guard aborted the run as required."
+          grep -m1 "E2E ABORTED" -A4 guard-output.txt
