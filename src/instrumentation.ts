@@ -1,17 +1,34 @@
+import { assertStartupConfig, warnOnRemoteDevConnections } from "@/lib/startup-config";
+
 // Runs once when a new server instance starts, before it serves any request.
 //
-// Two jobs:
+// Three jobs:
+//   0. Validate critical config and REFUSE TO START without it (see below).
 //   1. Rebuild the Redis IP-block set from the DB (without this a Redis flush
 //      would silently unblock every blocked IP until someone re-saved one).
 //   2. Initialise Sentry on the server/edge runtimes — ONLY when SENTRY_DSN is
 //      set, so error reporting is entirely opt-in per environment.
 export async function register() {
-  // NOTHING in here may throw. Next aborts the whole server instance when this
-  // hook rejects ("Failed to prepare server: An error occurred while loading
-  // instrumentation hook"), and every dynamic route — pages AND API routes,
-  // /api/health included — then answers 500 with only static files still
-  // served. A transient Redis or database blip at cold start must degrade a
-  // feature, never take the site down, so each job is isolated below.
+  // Config validation is the ONE thing here that is ALLOWED to throw, and it
+  // must run first.
+  //
+  // The rule below ("nothing may throw") is about TRANSIENT failures: a Redis
+  // blip at cold start must degrade a feature, not take the site down. Missing
+  // critical config is the opposite kind of failure — permanent, and silent in
+  // the worst way. With TRUSTED_PROXY unset the site serves every page
+  // perfectly while denying every login and every order, because the per-IP
+  // limiters fail closed. Aborting the boot is the correct, loud outcome: an
+  // instance that won't start gets noticed, an instance that takes no orders
+  // does not.
+  assertStartupConfig();
+  warnOnRemoteDevConnections();
+
+  // From here on, NOTHING may throw. Next aborts the whole server instance when
+  // this hook rejects ("Failed to prepare server: An error occurred while
+  // loading instrumentation hook"), and every dynamic route — pages AND API
+  // routes, /api/health included — then answers 500 with only static files
+  // still served. A transient Redis or database blip at cold start must degrade
+  // a feature, never take the site down, so each job is isolated below.
   if (process.env.NEXT_RUNTIME === "nodejs") {
     try {
       const { rebuildIpBlockSet } = await import("@/lib/ip-block");

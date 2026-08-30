@@ -42,7 +42,8 @@ export interface RateLimitResult {
 type FallbackReason = "redis-unavailable" | "no-client-ip";
 
 /**
- * Report a limiter fallback to Sentry, always at warning level.
+ * Report a limiter fallback to Sentry — warning for an outage, error for a
+ * misconfiguration (see the level note in the body).
  *
  * This is the half that makes an explicit failure mode safe to run. Failing
  * closed without alerting converts a Redis blip into a silent checkout outage;
@@ -62,7 +63,29 @@ function reportLimiterFallback(
 ): void {
   const outcome = failureMode === "closed" ? "DENYING requests" : "ALLOWING requests unlimited";
   const detail = err instanceof Error ? ` (${err.message})` : "";
+
+  // 'no-client-ip' is reported at ERROR, not warning, and carries its own tag.
+  //
+  // The two reasons are not equally severe. 'redis-unavailable' is an outage:
+  // real, transient, and usually already paging someone. 'no-client-ip' is a
+  // MISCONFIGURATION — TRUSTED_PROXY wrong or absent — which never recovers on
+  // its own and, on a 'closed' scope, means every login and every checkout is
+  // being denied. assertStartupConfig() in lib/startup-config.ts now refuses to
+  // boot on the obvious form of this, so anything still reaching here is the
+  // subtle form: TRUSTED_PROXY is set to a valid mode, but the proxy in front
+  // isn't actually supplying the header that mode trusts (e.g. "cloudflare"
+  // without the nginx config in docs/deploy-cloudflare.md). That is a total
+  // outage wearing the costume of a rate limit, and it must not sit in Sentry
+  // at the same level as ordinary limiter noise.
+  const level = reason === "no-client-ip" ? "error" : "warning";
   console.error(`[rate-limit] ${reason} for scope "${scope}" — ${outcome}.${detail}`);
+  if (reason === "no-client-ip") {
+    console.error(
+      "[rate-limit] MISCONFIGURATION: no trusted client IP could be derived. " +
+        `TRUSTED_PROXY=${process.env.TRUSTED_PROXY ?? "unset"}. ` +
+        "See lib/ip.ts and docs/deploy-cloudflare.md.",
+    );
+  }
 
   if (!process.env.SENTRY_DSN) return;
 
@@ -86,11 +109,14 @@ function reportLimiterFallback(
       }
 
       Sentry.withScope((sentryScope) => {
-        sentryScope.setLevel("warning");
+        sentryScope.setLevel(level);
         sentryScope.setTags({
           rate_limit_scope: scope,
           rate_limit_fallback: reason,
           rate_limit_failure_mode: failureMode,
+          // Distinct, greppable tag so a misconfigured deployment is one
+          // Sentry search away and never buried in limiter noise.
+          ...(reason === "no-client-ip" ? { config_error: "trusted-proxy" } : {}),
         });
         sentryScope.setContext("rate_limit", {
           scope,
@@ -104,8 +130,10 @@ function reportLimiterFallback(
         // sustained outage is one issue per affected scope, not thousands.
         sentryScope.setFingerprint(["rate-limit-fallback", reason, scope, failureMode]);
         Sentry.captureMessage(
-          `Rate limiter fell back to '${failureMode}' for "${scope}" (${reason})`,
-          "warning",
+          reason === "no-client-ip"
+            ? `MISCONFIGURED TRUSTED_PROXY — no client IP; "${scope}" is ${outcome}`
+            : `Rate limiter fell back to '${failureMode}' for "${scope}" (${reason})`,
+          level,
         );
       });
     })
