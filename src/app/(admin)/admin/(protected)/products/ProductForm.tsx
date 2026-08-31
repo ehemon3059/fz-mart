@@ -73,6 +73,10 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
   const baseline = useMemo(() => initialFromProduct(product), [product]);
   const [form, setForm] = useState<FormState>(baseline);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Target gross margin, as typed. Held outside `form` because it is an INPUT
+  // METHOD for the price rather than a field of its own — nothing persists it,
+  // and clearing it must not clear the price it produced.
+  const [marginTarget, setMarginTarget] = useState("");
   const [pending, startSave] = useTransition();
 
   // Crash protection: mirrors the form into localStorage as it's typed and
@@ -263,6 +267,44 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
     sellingPrice > 0 && form.purchaseCost !== "" && Number(form.purchaseCost) >= 0
       ? Math.round(((sellingPrice - Number(form.purchaseCost)) / sellingPrice) * 100)
       : null;
+
+  // Cost basis in PAISA. On edit the figure is owned by purchase-order receipts
+  // (rendered read-only above) rather than by this form, so read it from the
+  // product; on create it is whatever the admin has typed so far.
+  const costPaisa = isEdit
+    ? (product?.purchaseCost ?? 0)
+    : form.purchaseCost === ""
+      ? 0
+      : Number(form.purchaseCost);
+
+  // Margin for a product sold by option.
+  //
+  // Previously this was simply not shown: margin was computed against the
+  // single product price, which an option product doesn't meaningfully have, so
+  // the whole readout was hidden behind `!hasOptions`. For a catalogue that is
+  // entirely option products that meant the calculator never appeared at all.
+  //
+  // Each option carries its own price, so the honest answer is a RANGE across
+  // them rather than one number. NOTE the unit change: option prices are taka
+  // strings (see form/variant-utils.ts) while `costPaisa` is paisa, so the two
+  // are reconciled here rather than compared directly.
+  const optionMargins =
+    hasOptions && costPaisa > 0
+      ? form.variants
+          .map((v) => {
+            const price = Number(v.price) || 0;
+            const disc = Number(v.discountPrice) || 0;
+            const effTaka = disc > 0 && disc < price ? disc : price;
+            const effPaisa = Math.round(effTaka * 100);
+            return effPaisa > 0 ? Math.round(((effPaisa - costPaisa) / effPaisa) * 100) : null;
+          })
+          .filter((m): m is number => m != null)
+      : [];
+  const optionMarginLo = optionMargins.length ? Math.min(...optionMargins) : null;
+  const optionMarginHi = optionMargins.length ? Math.max(...optionMargins) : null;
+  // Options priced at or below what the goods cost — every sale loses money,
+  // which is worth catching while pricing rather than in a monthly report.
+  const optionsBelowCost = optionMargins.filter((m) => m <= 0).length;
 
   const removeImage = (idx: number) => setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== idx) }));
   // Promote a photo to the front of the list — the first image is the cover/thumbnail.
@@ -745,6 +787,36 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                     />
                   </FieldShell>
                   <ErrorText>{errors.price}</ErrorText>
+                  {/* Price from margin, the other way round.
+                      price = cost / (1 − margin/100), the inverse of the gross
+                      margin shown under Sourcing cost, so typing 40 here and
+                      reading the margin back gives 40. Only offered once a cost
+                      exists — without one the sum has no meaning. Margins of
+                      100%+ are rejected: the formula divides by zero at 100 and
+                      goes negative above it. */}
+                  {costPaisa > 0 && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[12px] text-stone-400">or price at</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="99"
+                        step="1"
+                        value={marginTarget}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setMarginTarget(raw);
+                          const m = Number(raw);
+                          if (raw === "" || !Number.isFinite(m) || m < 0 || m >= 100) return;
+                          set("price", Math.round(costPaisa / (1 - m / 100)));
+                        }}
+                        placeholder="40"
+                        aria-label="Target margin percent"
+                        className="w-16 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[13px] tabular-nums text-stone-800 outline-none focus:border-brand-500"
+                      />
+                      <span className="text-[12px] text-stone-400">% margin</span>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label hint="optional">Discount price</Label>
@@ -852,12 +924,53 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                       <ErrorText>{errors.purchaseCost}</ErrorText>
                     </>
                   )}
-                  {/* Margin is against the single price, which an option product
-                      doesn't have — each row is priced on its own. */}
+                  {/* Simple product: one cost, one price, one margin. */}
                   {marginPct != null && !hasOptions && !errors.purchaseCost && (
-                    <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-emerald-600">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      {marginPct}% margin per unit
+                    <p
+                      className={`mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold ${
+                        marginPct > 0 ? "text-emerald-600" : "text-red-600"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${
+                          marginPct > 0 ? "bg-emerald-500" : "bg-red-500"
+                        }`}
+                      />
+                      {marginPct > 0
+                        ? `${marginPct}% margin per unit`
+                        : `Selling at or below cost (${marginPct}%)`}
+                    </p>
+                  )}
+
+                  {/* Option product: each row is priced on its own, so margin is
+                      a range across them. This used to be hidden entirely, which
+                      meant a catalogue of option products never saw a margin. */}
+                  {hasOptions && optionMarginLo != null && optionMarginHi != null && (
+                    <p
+                      className={`mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold ${
+                        optionsBelowCost > 0 ? "text-red-600" : "text-emerald-600"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${
+                          optionsBelowCost > 0 ? "bg-red-500" : "bg-emerald-500"
+                        }`}
+                      />
+                      {optionMarginLo === optionMarginHi
+                        ? `${optionMarginLo}% margin per unit`
+                        : `${optionMarginLo}–${optionMarginHi}% margin across options`}
+                    </p>
+                  )}
+                  {hasOptions && optionsBelowCost > 0 && (
+                    <p className="mt-1 text-[12px] text-red-600">
+                      {optionsBelowCost} option{optionsBelowCost === 1 ? " sells" : "s sell"} at or
+                      below the {fmtTaka(costPaisa)} it cost to buy.
+                    </p>
+                  )}
+                  {hasOptions && costPaisa === 0 && (
+                    <p className="mt-1.5 text-[12px] text-stone-400">
+                      No sourcing cost on record yet, so margin can&apos;t be worked out. It is set
+                      when a purchase order is received.
                     </p>
                   )}
                 </div>

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateOrderNo } from "./orderNo";
 import { redeemCoupon, type CouponCartLine } from "@/server/coupons";
 import { lineageIds } from "@/server/categories/tree";
-import { reserveUnits } from "@/server/inventory/reservations";
+import { availableOf, reserveUnits } from "@/server/inventory/reservations";
 import { resolveDeliveryLocation, LocationError } from "@/server/settings/locations";
 
 // Checkout is the riskiest code in the app. Everything the browser sends
@@ -123,8 +123,9 @@ export async function createOrder(input: CreateOrderInput) {
         const labelSuffix = variantLabel ? ` (${variantLabel})` : "";
 
         // Availability, not raw stock: units promised to other unshipped orders
-        // are on the shelf but not sellable.
-        const variantAvailable = variant.stock - variant.reserved;
+        // are on the shelf but not sellable, and so are units the admin has not
+        // listed for sale. availableOf() applies both limits.
+        const variantAvailable = availableOf(variant);
         if (variantAvailable < item.quantity) {
           throw new CheckoutError(
             `${product.name}${labelSuffix} only has ${Math.max(0, variantAvailable)} unit(s) left in stock.`,
@@ -175,8 +176,9 @@ export async function createOrder(input: CreateOrderInput) {
         continue;
       }
 
-      // Unsized product: original product-level price + stock path.
-      const available = product.stock - product.reserved;
+      // Unsized product: original product-level price + stock path. Same two
+      // limits as the variant branch above — shelf and listing.
+      const available = availableOf(product);
       if (available < item.quantity) {
         throw new CheckoutError(
           `${product.name} only has ${Math.max(0, available)} unit(s) left in stock.`,

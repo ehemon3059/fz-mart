@@ -119,6 +119,23 @@ model Product {
   // sell against. Never negative: every path that raises it is a conditional
   // update guarded on sufficient availability.
   reserved           Int                       @default(0)
+  // LISTED — how many of the units on hand the admin has authorised for sale.
+  // A CATALOGUE decision, not a physical one: it never moves goods and never
+  // writes a StockMovement, so the ledger stays the sole authority on what is
+  // actually in the warehouse.
+  //
+  //   null  uncapped — every available unit is sellable. THE DEFAULT, and what
+  //         every product created before this column existed keeps, so adding
+  //         it changed no product's behaviour.
+  //   N     N units still authorised. Decremented as orders reserve them and
+  //         credited back when an order dies, exactly like `reserved` — so it
+  //         reads as "how many more may still be sold".
+  //
+  // WEBSITE AVAILABLE = min(stock − reserved, listedQty ?? ∞). Both halves
+  // matter: the cap can never conjure units the shelf doesn't have, and the
+  // shelf can never sell units the admin hasn't listed. Held per stock row for
+  // the same reason `stock` is — a sized product lists per option.
+  listedQty          Int?
   // Low-stock alert threshold (Phase 5). When 0 < stock <= this, the product
   // surfaces in the admin low-stock alert + daily digest. 0 disables it.
   lowStockThreshold  Int                       @default(0)
@@ -260,6 +277,10 @@ model ProductVariant {
   // the authoritative pair for a sized product. AVAILABLE = stock − reserved.
   stock              Int                 @default(0)
   reserved           Int                 @default(0)
+  // Units of THIS option authorised for sale. Same meaning and lifecycle as
+  // Product.listedQty — see the long note there. Null = uncapped, which is what
+  // every option had before the column existed.
+  listedQty          Int?
   // Whether the "X in stock" count is shown on the storefront for this variant.
   // Availability (sold-out disabling) is unaffected — this only hides the number.
   showStock          Boolean             @default(true)

@@ -45,6 +45,31 @@ export function draftKey(productId: number | null) {
   return `fzmart:product-draft:${productId ?? "new"}`;
 }
 
+/**
+ * Is there a draft worth offering back under this key?
+ *
+ * The create screen keeps the blank form behind a choice (supplier first, new
+ * product second), and a form that is not on screen never mounts this hook —
+ * so an admin who reloaded mid-typing would be shown a supplier picker with no
+ * hint that twenty minutes of work is still recoverable. This runs the same
+ * version and freshness test the hook runs on mount, minus the comparison
+ * against a baseline that does not exist until the form is built.
+ *
+ * Browser-only: call it from an effect, never during render.
+ */
+export function hasStoredDraft(key: string): boolean {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as Envelope<unknown>;
+    return parsed.v === VERSION && Date.now() - parsed.savedAt < MAX_AGE_MS;
+  } catch {
+    // Corrupt, or storage unavailable. The hook itself cleans up in that case;
+    // here it simply means "nothing to rescue".
+    return false;
+  }
+}
+
 interface Options<T> {
   /** localStorage key — see draftKey(). */
   key: string;

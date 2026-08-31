@@ -71,42 +71,81 @@ export async function recordMovement(
     throw new LedgerError("A stock movement must have a non-zero whole delta.");
   }
 
-  // Apply the change with a CONDITIONAL, atomic increment. The `stock: { gte }`
-  // guard is what makes this safe under concurrency: it both prevents a
-  // negative result and tells us the write actually happened, without a
-  // separate read that another transaction could invalidate. This is the same
-  // pattern checkout already uses to prevent overselling.
-  const where =
-    delta < 0
-      ? { id: variantId ?? productId, stock: { gte: -delta } }
-      : { id: variantId ?? productId };
+  const id = variantId ?? productId;
+  const target = variantId != null ? `variant ${variantId}` : `product ${productId}`;
 
-  const updated =
-    variantId != null
-      ? await tx.productVariant.updateMany({ where, data: { stock: { increment: delta } } })
-      : await tx.product.updateMany({ where, data: { stock: { increment: delta } } });
+  // Either way the stock level below comes from the WRITE, not from a prior
+  // read. Deriving `before` by subtraction (rather than reading it first) is
+  // what keeps the pair honest: whatever else raced us, this row's own change
+  // is exactly `delta`, so after − delta is the level this movement actually
+  // started from.
+  let afterQty: number;
 
-  if (updated.count === 0) {
-    throw new LedgerError(
-      `Stock movement rejected: ${type} of ${delta} would take ` +
-        `${variantId != null ? `variant ${variantId}` : `product ${productId}`} below zero.`,
-    );
+  if (delta > 0) {
+    // A credit cannot drive stock negative, so it needs no conditional guard —
+    // and that lets a plain `update` apply the increment AND return the
+    // resulting row in ONE round trip. Worth doing rather than mirroring the
+    // decrement path: this runs inside an interactive transaction against a
+    // remote database, a goods receipt calls it once per line, and every saved
+    // round trip is transaction budget that is no longer at risk of running out
+    // half way through a delivery.
+    try {
+      afterQty =
+        variantId != null
+          ? (
+              await tx.productVariant.update({
+                where: { id },
+                data: { stock: { increment: delta } },
+                select: { stock: true },
+              })
+            ).stock
+          : (
+              await tx.product.update({
+                where: { id },
+                data: { stock: { increment: delta } },
+                select: { stock: true },
+              })
+            ).stock;
+    } catch (err) {
+      // P2025 = the row is gone. Anything else (a dropped connection, an
+      // expired transaction) is not ours to reinterpret — rethrow it as-is so
+      // the real fault is not disguised as a missing product.
+      if ((err as { code?: string }).code !== "P2025") throw err;
+      throw new LedgerError(`Stock movement rejected: ${target} no longer exists.`);
+    }
+  } else {
+    // Removing stock DOES need the CONDITIONAL, atomic guard. `stock: { gte }`
+    // is what makes this safe under concurrency: it both prevents a negative
+    // result and tells us the write actually happened, without a separate read
+    // that another transaction could invalidate. This is the same pattern
+    // checkout already uses to prevent overselling.
+    const where = { id, stock: { gte: -delta } };
+    const updated =
+      variantId != null
+        ? await tx.productVariant.updateMany({ where, data: { stock: { increment: delta } } })
+        : await tx.product.updateMany({ where, data: { stock: { increment: delta } } });
+
+    if (updated.count === 0) {
+      throw new LedgerError(
+        `Stock movement rejected: ${type} of ${delta} would take ${target} below zero.`,
+      );
+    }
+
+    afterQty =
+      variantId != null
+        ? (
+            await tx.productVariant.findUniqueOrThrow({
+              where: { id: variantId },
+              select: { stock: true },
+            })
+          ).stock
+        : (
+            await tx.product.findUniqueOrThrow({
+              where: { id: productId },
+              select: { stock: true },
+            })
+          ).stock;
   }
-
-  // Read back the authoritative level AFTER the write. Deriving `before` by
-  // subtraction (rather than reading it first) is what keeps the pair honest:
-  // whatever else raced us, this row's own change is exactly `delta`, so
-  // after − delta is the level this movement actually started from.
-  const afterQty =
-    variantId != null
-      ? (await tx.productVariant.findUniqueOrThrow({
-          where: { id: variantId },
-          select: { stock: true },
-        })).stock
-      : (await tx.product.findUniqueOrThrow({
-          where: { id: productId },
-          select: { stock: true },
-        })).stock;
 
   await tx.stockMovement.create({
     data: {

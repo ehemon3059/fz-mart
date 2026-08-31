@@ -20,10 +20,12 @@
  * and every listing calls it out of stock while the shelf is full.
  */
 
-/** One option row — only the two columns that matter for availability. */
+/** One option row — only the columns that matter for availability. */
 export interface StockRowLike {
   stock?: number | null;
   reserved?: number | null;
+  /** Units authorised for sale. Null/undefined = uncapped. */
+  listedQty?: number | null;
 }
 
 /**
@@ -35,6 +37,8 @@ export interface StockRowLike {
 export interface WithStock {
   stock?: number | null;
   reserved?: number | null;
+  /** Units authorised for sale. Null/undefined = uncapped. */
+  listedQty?: number | null;
   variants?: StockRowLike[] | null;
 }
 
@@ -52,6 +56,17 @@ export function variantsCarryStock(product: WithStock): boolean {
 /**
  * Units a shopper can actually buy right now.
  *
+ * Two limits apply and the smaller wins: what the shelf can ship
+ * (stock − reserved) and what the admin listed for sale (listedQty; null =
+ * uncapped). See server/inventory/reservations.ts availableOf(), which is the
+ * same rule for a single row — this function is that rule summed across a
+ * product's options.
+ *
+ * The cap is read from the SAME row that owns the stock, which is what keeps
+ * Product.listedQty and ProductVariant.listedQty from ever contradicting each
+ * other: on a product whose options carry stock, the product-level cap is
+ * vestigial and never consulted, exactly as Product.stock already is.
+ *
  * Per-option figures are clamped at zero so one oversold size can't eat the
  * availability of the others. The simple-product path is deliberately NOT
  * clamped — a negative there means stock and reservations have drifted apart,
@@ -60,12 +75,16 @@ export function variantsCarryStock(product: WithStock): boolean {
  */
 export function availableUnits(product: WithStock): number {
   if (variantsCarryStock(product)) {
-    return (product.variants ?? []).reduce(
-      (sum, v) => sum + Math.max(0, (v.stock ?? 0) - (v.reserved ?? 0)),
-      0,
-    );
+    return (product.variants ?? []).reduce((sum, v) => sum + sellableOf(v), 0);
   }
-  return (product.stock ?? 0) - (product.reserved ?? 0);
+  const onShelf = (product.stock ?? 0) - (product.reserved ?? 0);
+  return product.listedQty == null ? onShelf : Math.min(onShelf, Math.max(0, product.listedQty));
+}
+
+/** One option's sellable count: shelf and listing, whichever is tighter. */
+function sellableOf(v: StockRowLike): number {
+  const onShelf = Math.max(0, (v.stock ?? 0) - (v.reserved ?? 0));
+  return v.listedQty == null ? onShelf : Math.min(onShelf, Math.max(0, v.listedQty));
 }
 
 /**

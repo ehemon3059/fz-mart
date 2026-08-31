@@ -21,6 +21,20 @@ export class PurchasingError extends Error {
 /** Statuses whose outstanding lines count as INCOMING stock. */
 const INCOMING_STATUSES: PurchaseOrderStatus[] = ["ORDERED"];
 
+/**
+ * Transaction budget for the write paths below.
+ *
+ * Prisma's defaults are maxWait 2s / timeout 5s, and every one of these
+ * transactions does work that GROWS WITH THE NUMBER OF LINES on the order — a
+ * receipt alone is several round trips per line. The database is remote, so a
+ * five-line delivery can spend more than five seconds in round trips alone and
+ * Prisma then closes the transaction underneath the loop; the next query fails
+ * with "Transaction not found", having already applied part of the receipt's
+ * work only to roll it back. Nothing here holds a lock long enough for a
+ * generous ceiling to hurt, and the same ceiling is already used by checkout.
+ */
+const TX_OPTIONS = { maxWait: 8000, timeout: 20000 } as const;
+
 // ── Suppliers ───────────────────────────────────────────────────────────────
 
 export interface SupplierInput {
@@ -195,7 +209,7 @@ export async function createPurchaseOrder(input: PurchaseOrderInput) {
       },
       include: { lines: true },
     });
-  });
+  }, TX_OPTIONS);
 }
 
 export async function listPurchaseOrders(status?: PurchaseOrderStatus) {
@@ -409,7 +423,7 @@ export async function receivePurchaseOrder(
     }
 
     return [...new Set(touched)];
-  });
+  }, TX_OPTIONS);
 
   // Restock alerts, outside the transaction — a notification failure must never
   // roll back goods that physically arrived.
@@ -658,7 +672,7 @@ export async function updatePurchaseOrder(id: number, input: PurchaseOrderInput)
       },
       include: { lines: true },
     });
-  });
+  }, TX_OPTIONS);
 }
 
 /**
