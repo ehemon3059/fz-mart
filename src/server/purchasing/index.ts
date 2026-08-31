@@ -123,7 +123,7 @@ async function resolveLines(tx: Prisma.TransactionClient, input: PurchaseOrderLi
     input.map(async (line) => {
       const product = await tx.product.findUnique({
         where: { id: line.productId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, _count: { select: { variants: true } } },
       });
       if (!product) throw new PurchasingError("A product on this order no longer exists.");
 
@@ -137,6 +137,17 @@ async function resolveLines(tx: Prisma.TransactionClient, input: PurchaseOrderLi
           throw new PurchasingError("A chosen option no longer belongs to its product.");
         }
         variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ") || null;
+      } else if (product._count.variants > 0) {
+        // A product with options keeps its units ON those options —
+        // `Product.stock` is vestigial for it, and every storefront path sums
+        // availability from the variants instead (lib/product-stock.ts). So an
+        // option-less line here would receive real, paid-for goods into a
+        // column nothing can ever sell from. Refused at the door rather than
+        // absorbed: there is no correct guess as to WHICH size was ordered.
+        throw new PurchasingError(
+          `Choose which option of ${product.name} is being ordered — it is sold by option, ` +
+            `and stock received against no option can never be sold.`,
+        );
       }
 
       if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
@@ -284,6 +295,29 @@ export async function receivePurchaseOrder(
 
     const byId = new Map(po.lines.map((l) => [l.id, l]));
 
+    // Which of the products on THIS receipt are sold by option. Resolved in one
+    // query up front rather than per line: this runs inside the transaction,
+    // and on a remote database a round trip per line is latency the 5s
+    // transaction budget can't spare. Only variant-less lines need the answer,
+    // so a normal receipt asks nothing extra at all.
+    const variantlessProductIds = [
+      ...new Set(
+        receipts
+          .map((r) => byId.get(r.lineId))
+          .filter((l) => l != null && l.variantId == null)
+          .map((l) => l!.productId),
+      ),
+    ];
+    const optionBacked = new Set<number>();
+    if (variantlessProductIds.length > 0) {
+      const rows = await tx.productVariant.findMany({
+        where: { productId: { in: variantlessProductIds } },
+        select: { productId: true },
+        distinct: ["productId"],
+      });
+      for (const r of rows) optionBacked.add(r.productId);
+    }
+
     // Total value of the ORDER, used to apportion the shipment costs. Based on
     // the full ordered quantity rather than this delivery, so two part-deliveries
     // of the same PO carry consistent per-unit overhead instead of the first one
@@ -302,6 +336,21 @@ export async function receivePurchaseOrder(
       if (receipt.quantity > outstanding) {
         throw new PurchasingError(
           `${line.productName}: only ${outstanding} unit(s) are still outstanding.`,
+        );
+      }
+
+      // Last line of defence before the goods actually move. resolveLines
+      // refuses to WRITE an option-less line for a product sold by option, but
+      // that is not enough on its own: PurchaseOrderLine.variantId is SetNull,
+      // so deleting a variant silently nulls it on orders already placed, and a
+      // simple product may have gained options since the order was written.
+      // Either way the credit below would land on the vestigial `Product.stock`
+      // and the units would be unsellable, so the receipt stops here instead.
+      if (line.variantId == null && optionBacked.has(line.productId)) {
+        throw new PurchasingError(
+          `${line.productName} is sold by option, but this line names none — receiving it ` +
+            `would add stock that can never be sold. Edit the order and pick the option ` +
+            `these units belong to.`,
         );
       }
 

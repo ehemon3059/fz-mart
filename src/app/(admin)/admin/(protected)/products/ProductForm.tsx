@@ -430,7 +430,13 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
       if (cleanVariants().length === 0) {
         clientErrors.variants = "Add at least one option with a colour or size and a price.";
       } else if (optionSummary.missingPrice > 0) {
-        clientErrors.variants = `${optionSummary.missingPrice} option${optionSummary.missingPrice === 1 ? "" : "s"} still need a price.`;
+        // Name the way out. A product ordered from a purchase order arrives
+        // with every option unpriced, so this is the ordinary state of a draft
+        // being finished — not a typo — and typing one price into the bulk box
+        // clears the whole matrix at once.
+        clientErrors.variants =
+          `${optionSummary.missingPrice} option${optionSummary.missingPrice === 1 ? "" : "s"} still need a price. ` +
+          `Type one above and press “Fill blanks” to price them all at once.`;
       } else if (optionSummary.duplicateSkus.length > 0) {
         clientErrors.variants = `Duplicate SKU: ${optionSummary.duplicateSkus.join(", ")}.`;
       }

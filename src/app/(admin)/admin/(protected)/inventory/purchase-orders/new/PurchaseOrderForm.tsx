@@ -150,6 +150,21 @@ export default function PurchaseOrderForm({
 
   function submit(formData: FormData) {
     setError(null);
+
+    // A product sold by option holds its units on those options, so a line that
+    // names no option would receive stock nothing can sell. The server refuses
+    // it too — this only saves the round trip, and names the products so the
+    // admin knows which rows to fix.
+    const missingOption = lines
+      .filter((l) => l.productId && !l.variantId)
+      .map((l) => byId.get(l.productId))
+      .filter((p): p is ProductOption => !!p && p.variants.length > 0);
+    if (missingOption.length > 0) {
+      const named = [...new Set(missingOption.map((p) => p.name))].join(", ");
+      setError(`Choose an option for: ${named}. These are sold by option, so stock received against none of them could never be sold.`);
+      return;
+    }
+
     startTransition(async () => {
       // Both actions redirect on success, so anything returned is a failure.
       const res = order
