@@ -29,14 +29,23 @@ const TYPE_LABELS: Record<string, string> = {
 // Manual stock corrections + the full movement history for a product. The
 // history now shows EVERY change (sales and restocks included), not just hand
 // corrections — so a number that moved on its own can still be explained.
-// Product-level stock only; variant corrections can be added later.
+//
+// Corrections here are PRODUCT-LEVEL: adjustStockAction writes to Product.stock
+// without a variantId. On a sized product that column is vestigial — the units
+// live on the option rows — so applying a correction would mint phantom stock
+// that no storefront path can ever sell. The form is therefore disabled for
+// those products and points at the per-option tools instead. The count above it
+// stays honest either way: it is summed from the options.
 export default function StockPanel({
   productId,
   currentStock,
+  variantBacked,
   history,
 }: {
   productId: number;
   currentStock: number;
+  /** Units live on the option rows, so product-level corrections don't apply. */
+  variantBacked: boolean;
   history: HistoryRow[];
 }) {
   const [stock, setStock] = useState(currentStock);
@@ -64,6 +73,20 @@ export default function StockPanel({
         For manual corrections only (received shipment, damage, stock-take). Every change is logged.
       </p>
 
+      {variantBacked ? (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-900">
+          This product holds its stock on each size/colour option, so the total above is the sum of
+          those rows. Correct them individually from{" "}
+          <a href="/admin/inventory" className="font-semibold underline">
+            Inventory
+          </a>{" "}
+          or with a{" "}
+          <a href="/admin/inventory/stock-takes" className="font-semibold underline">
+            stock take
+          </a>{" "}
+          — a correction applied here would credit the product row, which nothing sells from.
+        </div>
+      ) : (
       <form action={submit} className="mt-4 flex flex-wrap items-end gap-2">
         <div>
           <label className="mb-1 block text-[12px] font-semibold text-stone-600">Direction</label>
@@ -84,6 +107,7 @@ export default function StockPanel({
           Apply
         </button>
       </form>
+      )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
       {history.length > 0 && (

@@ -5,6 +5,7 @@ import CardAddButton from "./CardAddButton";
 import { HeartIcon, ArrowRight } from "./icons";
 import { priceColorStyle } from "@/lib/money";
 import { resolvePrimaryImage } from "@/lib/product-images";
+import { availableUnits as getAvailableUnits } from "@/lib/product-stock";
 
 type Badge = "sale" | "new";
 
@@ -95,21 +96,10 @@ export default function ProductCard({
     : 0;
   // The cheapest variant's colour wins for a "from" price; else the product's.
   const priceStyle = priceColorStyle(cheapestVariant?.priceColor, product.priceColor);
-  // Availability, not raw stock: units reserved by live orders are on the shelf
-  // but already spoken for. Computed here rather than at each call site so no
-  // listing can accidentally advertise reserved units as buyable.
-  // A product WITH options keeps its units on those options -- its own stock
-  // column is vestigial and goes stale the moment a purchase order is received
-  // against a single size. So availability is summed from the options whenever
-  // they carry stock, and only falls back to the product row for a simple
-  // product (or a data source too lean to select it).
-  const variantsCarryStock = (product.variants ?? []).some((v) => v.stock != null);
-  const availableUnits = variantsCarryStock
-    ? (product.variants ?? []).reduce(
-        (sum, v) => sum + Math.max(0, (v.stock ?? 0) - (v.reserved ?? 0)),
-        0,
-      )
-    : product.stock - (product.reserved ?? 0);
+  // Availability, not raw stock — and summed from the options when the product
+  // has them. Both corrections live in lib/product-stock.ts so the admin list
+  // and this card can't drift apart again.
+  const availableUnits = getAvailableUnits(product);
   const outOfStock = availableUnits <= 0;
   // A required size/color/variant choice can't be made from a card, so those
   // products link to the detail page instead of quick-adding.

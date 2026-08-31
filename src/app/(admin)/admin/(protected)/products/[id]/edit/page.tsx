@@ -3,6 +3,7 @@ import { getProductById } from "@/server/products/admin";
 import { listAllCategories } from "@/server/categories/admin";
 import { listStockHistory } from "@/server/inventory";
 import { listActiveSizeGuides } from "@/server/size-guides";
+import { onHandUnits, variantsCarryStock } from "@/lib/product-stock";
 import ProductForm from "../../ProductForm";
 import StockPanel from "./StockPanel";
 
@@ -41,7 +42,8 @@ export default async function EditProductPage({
       <div className="w-full px-5 lg:px-8">
         <StockPanel
           productId={product.id}
-          currentStock={product.stock}
+          currentStock={onHandUnits(product)}
+          variantBacked={variantsCarryStock(product)}
           history={history.map((h) => ({
             id: h.id,
             delta: h.delta,

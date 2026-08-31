@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { Thumb, PriceDisplay, StockDisplay, StatusPill, PromoBadge } from "./badges";
+import { availableUnits } from "@/lib/product-stock";
 import { DeleteBtn } from "./DeleteBtn";
 import type { AdminProduct } from "./ProductsListClient";
 import { resolvePrimaryImage } from "@/lib/product-images";
@@ -49,7 +50,7 @@ export function ProductRow({ p, isConfirm, onDeleteFirst, onDeleteConfirm, onDel
         <PriceDisplay price={p.price} discountPrice={p.discountPrice} />
       </td>
       <td className="px-5 py-3.5 whitespace-nowrap">
-        <StockDisplay stock={p.stock} />
+        <StockDisplay stock={availableUnits(p)} />
       </td>
       <td className="px-5 py-3.5 whitespace-nowrap">
         <StatusPill status={p.status} />

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { Thumb, PriceDisplay, StockDisplay, StatusPill, PromoBadge } from "./badges";
+import { availableUnits } from "@/lib/product-stock";
 import type { AdminProduct } from "./ProductsListClient";
 import { resolvePrimaryImage } from "@/lib/product-images";
 
@@ -47,7 +48,7 @@ export function ProductMobileCard({ p, isConfirm, onDeleteFirst, onDeleteConfirm
       <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-4 py-3">
         <PriceDisplay price={p.price} discountPrice={p.discountPrice} />
         <span className="h-3 w-px bg-stone-200" />
-        <StockDisplay stock={p.stock} />
+        <StockDisplay stock={availableUnits(p)} />
         <span className="h-3 w-px bg-stone-200" />
         <StatusPill status={p.status} />
       </div>

@@ -87,7 +87,15 @@ export async function listAllProducts() {
       // Photos can live on a variant row or a colour swatch instead of the
       // gallery, so the list thumbnail needs them to fall back on
       // (resolvePrimaryImage) — a variant product often has an empty gallery.
-      variants: { select: { imageUrl: true }, orderBy: { sortOrder: "asc" } },
+      //
+      // stock/reserved come along because a sized product holds its units on
+      // these rows, not on Product.stock. Without them the list read the
+      // vestigial product column and showed every variant product as out of
+      // stock — see lib/product-stock.ts.
+      variants: {
+        select: { imageUrl: true, stock: true, reserved: true },
+        orderBy: { sortOrder: "asc" },
+      },
       colors: { select: { imageUrl: true }, orderBy: { sortOrder: "asc" } },
       category: true,
     },

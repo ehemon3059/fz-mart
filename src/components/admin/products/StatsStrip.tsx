@@ -1,4 +1,5 @@
 import type { AdminProduct } from "./ProductsListClient";
+import { isOutOfStock } from "@/lib/product-stock";
 
 interface Props {
   products: AdminProduct[];
@@ -7,7 +8,10 @@ interface Props {
 export function StatsStrip({ products }: Props) {
   const total = products.length;
   const active = products.filter((p) => p.status === "ACTIVE").length;
-  const oos = products.filter((p) => p.stock <= 0).length;
+  // Availability, summed from the options when the product has them — counting
+  // the vestigial Product.stock column here made every sized product a
+  // restocking alert. See lib/product-stock.ts.
+  const oos = products.filter(isOutOfStock).length;
 
   const stats = [
     { label: "Total products", value: total, sub: "in catalog", tone: "neutral" as const },

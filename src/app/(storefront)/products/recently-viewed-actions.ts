@@ -34,6 +34,11 @@ export async function resolveRecentlyViewed(slugs: string[]): Promise<ProductCar
       discountPrice: v.discountPrice,
       priceColor: v.priceColor,
       imageUrl: v.imageUrl,
+      // Dropping these made the card fall back to the vestigial Product.stock,
+      // so every sized product showed "Out of stock" here — see
+      // lib/product-stock.ts.
+      stock: v.stock,
+      reserved: v.reserved,
     })),
     colors: p.colors.map((c) => ({ imageUrl: c.imageUrl })),
     _count: p._count,
