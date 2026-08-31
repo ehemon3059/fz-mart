@@ -28,7 +28,7 @@ import "server-only";
  * outage for a boot loop, which is not an improvement.
  */
 
-const VALID_PROXY_MODES = ["vercel", "cloudflare", "none"] as const;
+const VALID_PROXY_MODES = ["vercel", "cloudflare", "direct", "none"] as const;
 
 /** Length of a hex-encoded AES-256 key. Mirrors KEY_LENGTH in lib/crypto.ts. */
 const ENCRYPTION_KEY_HEX_LENGTH = 64;
@@ -47,8 +47,9 @@ function checkTrustedProxy(problems: Problem[]): void {
       detail:
         "not set. Every per-IP rate limit fails closed, so LOGIN AND CHECKOUT " +
         `WILL DENY EVERY REQUEST. Set one of: ${VALID_PROXY_MODES.join(" | ")}. ` +
-        'Use "none" only where no proxy sits in front (local dev); note that ' +
-        "it still yields no client IP, so 'closed' limiters deny.",
+        'For local dev or a direct-to-Node deployment use "direct". Note that ' +
+        "\"none\" derives no client IP at all, so 'closed' limiters deny every " +
+        "request — it locks the door rather than guarding it.",
     });
     return;
   }
@@ -61,6 +62,22 @@ function checkTrustedProxy(problems: Problem[]): void {
         `${VALID_PROXY_MODES.join(" | ")}. lib/ip.ts treats an unknown value as ` +
         '"none", so this silently disables client-IP derivation.',
     });
+    return;
+  }
+
+  // "none" is a legitimate choice but almost never the intended one, because it
+  // makes every 'closed' per-IP limiter deny unconditionally: nobody can log
+  // in, check out, request an OTP or reset a password. That is indistinguishable
+  // from an outage while every other page returns 200 — exactly the silent
+  // failure this module exists to prevent. Not fatal (a deployment may really
+  // want those routes shut), but it must never pass unremarked.
+  if (raw === "none") {
+    console.warn(
+      '[startup-config] TRUSTED_PROXY="none": no client IP will be derived, so ' +
+        "every 'closed' per-IP rate limit DENIES EVERY REQUEST — login, checkout, " +
+        'OTP and password reset are all shut. Use "direct" if this host is ' +
+        "reachable without a proxy and you want those routes to work.",
+    );
   }
 }
 

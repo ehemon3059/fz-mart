@@ -41,8 +41,28 @@ import { isIpInCloudflareRange } from "@/lib/cloudflare-ranges";
  *                             vouches for it; see CF_VERIFIED_HEADER below and
  *                             docs/deploy-cloudflare.md.
  *
- *   TRUSTED_PROXY=none        No proxy in front (local dev, direct-to-Node).
+ *   TRUSTED_PROXY=direct      No proxy in front, and we accept the socket peer
+ *                             address as the client. Next fills X-Forwarded-For
+ *                             from socket.remoteAddress ONLY when the client
+ *                             sent none (base-server.js), so a SINGLE-entry
+ *                             header is the real peer — unless the client
+ *                             forged exactly one entry, which is why this mode
+ *                             must be opted into rather than inferred.
+ *
+ *                             Forging is not a meaningful escape here: whatever
+ *                             value a client supplies still buckets it SOMEWHERE,
+ *                             so it can move between buckets but never exceed a
+ *                             bucket, and it cannot evict another client's. That
+ *                             is strictly better than the alternative below.
+ *
+ *   TRUSTED_PROXY=none        No proxy in front, and no IP is derived at all.
  *                             X-Forwarded-For is entirely untrusted and ignored.
+ *
+ *                             NOTE this makes every 'closed' per-IP limiter deny
+ *                             UNCONDITIONALLY — login, checkout, OTP, password
+ *                             reset. That is a locked door, not a safe default,
+ *                             so it is reserved for a deployment that genuinely
+ *                             wants those routes shut. Local dev wants 'direct'.
  *
  * Unset/unknown values are treated as "none": an unconfigured deployment gets
  * the SAFE behaviour (no IP) rather than the permissive one.
@@ -55,15 +75,15 @@ import { isIpInCloudflareRange } from "@/lib/cloudflare-ranges";
  * deny-on-null decision once so no call site can get it wrong.
  */
 
-export type TrustedProxyMode = "vercel" | "cloudflare" | "none";
+export type TrustedProxyMode = "vercel" | "cloudflare" | "direct" | "none";
 
 export function trustedProxyMode(): TrustedProxyMode {
   const raw = process.env.TRUSTED_PROXY?.trim().toLowerCase();
-  if (raw === "vercel" || raw === "cloudflare" || raw === "none") return raw;
+  if (raw === "vercel" || raw === "cloudflare" || raw === "direct" || raw === "none") return raw;
   if (raw) {
     console.error(
       `[ip] Unknown TRUSTED_PROXY=${JSON.stringify(raw)}; treating as "none". ` +
-        "Per-IP limits will deny until this is set to vercel|cloudflare|none.",
+        "Per-IP limits will deny until this is set to vercel|cloudflare|direct|none.",
     );
   }
   return "none";
@@ -185,12 +205,34 @@ export async function getClientIp(
     return connecting;
   }
 
+  if (mode === "direct") {
+    // Nothing in front of us. Next sets XFF from the socket's remote address
+    // when the client sent no such header (base-server.js:
+    // req.headers['x-forwarded-for'] ??= socket.remoteAddress), so a header
+    // with exactly ONE entry is the real peer.
+    //
+    // A client CAN forge that single entry, and this mode accepts the trade
+    // knowingly: a forged value still buckets the caller somewhere, so it can
+    // hop between buckets but can neither exceed one nor evict another
+    // client's. Weigh that against 'none', where no IP means every 'closed'
+    // limiter denies every caller — an attacker needs no forgery at all to
+    // take login and checkout down, because they are already down.
+    //
+    // MORE than one entry means something upstream really is forwarding. In
+    // that case this mode is misconfigured (the operator should name the proxy)
+    // and the leftmost entry is attacker-controlled, so derive nothing.
+    const raw = headerList.get("x-forwarded-for") ?? "";
+    const entries = raw
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (entries.length !== 1) return null;
+    return normalizeIp(entries[0]);
+  }
+
   // mode === "none": nothing in front of us that we trust to append hops, so
-  // every X-Forwarded-For value is client input. Next itself sets XFF to the
-  // socket's remote address when the client sent no such header
-  // (base-server.js: req.headers['x-forwarded-for'] ??= socket.remoteAddress),
-  // so a SINGLE entry with no client-supplied header is the real peer — but we
-  // cannot distinguish that from a client that sent exactly one forged entry.
-  // Treat it as untrusted and return null.
+  // every X-Forwarded-For value is client input, and we derive nothing. Note
+  // this denies every 'closed' per-IP limiter; use "direct" for a non-proxied
+  // deployment that still needs login and checkout to work.
   return null;
 }
