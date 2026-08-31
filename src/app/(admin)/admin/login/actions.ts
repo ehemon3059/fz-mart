@@ -11,9 +11,11 @@ import {
   readPending2fa,
   consumePending2fa,
   PENDING_2FA_COOKIE,
+  SESSION_ABSOLUTE_TTL_SECONDS,
 } from "@/lib/auth";
 import { verifyLoginCode, verifyBackupCode } from "@/server/admin/twofactor";
 import { rateLimit, rateLimitByIp } from "@/lib/rate-limit";
+import { secureCookieOptions } from "@/lib/cookie-security";
 
 export interface LoginResult {
   error?: string;
@@ -23,17 +25,17 @@ export interface LoginResult {
   retryAfterSeconds?: number;
 }
 
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // matches Redis TTL in lib/auth.ts
+// The cookie tracks the ABSOLUTE cap, not the idle window: the server slides
+// the Redis TTL on activity, and a cookie that expired at the idle mark would
+// log out an active admin whose session Redis still considers live.
+const SESSION_MAX_AGE_SECONDS = SESSION_ABSOLUTE_TTL_SECONDS;
 const PENDING_2FA_MAX_AGE_SECONDS = 5 * 60;
 
 async function startSession(adminId: number, username: string, role: string): Promise<void> {
   const sessionId = await createSession({ adminId, username, role });
   const store = await cookies();
   store.set(SESSION_COOKIE, sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
+    ...(await secureCookieOptions()),
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
 }
@@ -85,10 +87,7 @@ export async function login(formData: FormData): Promise<LoginResult> {
     const token = await createPending2fa(admin.id);
     const store = await cookies();
     store.set(PENDING_2FA_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+      ...(await secureCookieOptions()),
       maxAge: PENDING_2FA_MAX_AGE_SECONDS,
     });
     return { twoFactorRequired: true };

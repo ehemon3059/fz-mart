@@ -96,6 +96,10 @@ export async function validateCoupon(
     throw new CouponError("This coupon doesn't apply to any item in your cart.");
   }
 
+  // Both usage checks below are ADVISORY — they give a fast, friendly "already
+  // used up" message on the cart preview, but they are check-then-act and MUST
+  // NOT be relied on for correctness. redeemCoupon re-enforces both under a row
+  // lock at write time; that is where the limits are actually binding.
   if (coupon.usageLimit != null && coupon.timesUsed >= coupon.usageLimit) {
     throw new CouponError("This coupon has reached its usage limit.");
   }
@@ -119,8 +123,27 @@ export async function validateCoupon(
 }
 
 /**
- * Re-validate inside the checkout transaction and record the redemption +
- * bump the usage counter atomically. Returns the snapshotted discount.
+ * Re-validate inside the checkout transaction and claim the redemption
+ * atomically. Returns the snapshotted discount.
+ *
+ * Concurrency is the whole point of this function. Two shoppers submitting the
+ * last redemption of a coupon at the same instant both pass validateCoupon's
+ * read of `timesUsed`, so the limits can only be enforced at WRITE time:
+ *
+ *  1. Lock the coupon row (`SELECT ... FOR UPDATE`). Redemptions for one coupon
+ *     are thereby serialised. Locking CouponRedemption rows instead would not
+ *     work — the first claimant for a phone has zero rows to lock.
+ *  2. Re-read `timesUsed` and the per-customer count WITH `FOR UPDATE`. On TiDB
+ *     (pessimistic, REPEATABLE READ) the lock serialises but does NOT refresh
+ *     the transaction snapshot, so a plain read after locking still returns the
+ *     stale pre-lock value. See src/server/customers/addresses.ts for the same
+ *     pattern.
+ *  3. Claim with a conditional `updateMany` guarded on the freshly-read count,
+ *     and treat `count === 0` as "someone else took the last one".
+ *
+ * The caller runs this inside the checkout transaction, so a CouponError here
+ * rolls back the order, its items and its stock reservations together — there
+ * is no state in which an order exists having consumed a limit it never got.
  */
 export async function redeemCoupon(
   tx: Prisma.TransactionClient,
@@ -130,18 +153,66 @@ export async function redeemCoupon(
   customerPhone: string,
   customerId: string | null,
 ): Promise<{ code: string; discount: number }> {
+  // Cheap pre-checks (expiry, isActive, minOrder, scope) plus the discount
+  // maths, all from server-side prices. The usage-limit checks it performs are
+  // advisory only — the binding ones are below, under the row lock.
   const { code, discount } = await validateCoupon(codeInput, lines, customerPhone, tx);
-  const coupon = await tx.coupon.findUniqueOrThrow({ where: { code } });
 
-  // Atomic guard on the total usage limit: only increment if still under it.
+  // (1) Serialise every redemption of this coupon behind a row lock, and (2)
+  // re-read the counter in the same locking statement so the value is post-lock
+  // rather than from the pinned snapshot.
+  const locked = await tx.$queryRaw<{ id: number; timesUsed: number; usageLimit: number | null; perCustomerLimit: number | null; isActive: boolean }[]>`
+    SELECT id, timesUsed, usageLimit, perCustomerLimit, isActive
+    FROM Coupon
+    WHERE code = ${code}
+    FOR UPDATE
+  `;
+  const coupon = locked[0];
+  // Deleted or deactivated between validation and the lock.
+  if (!coupon || !coupon.isActive) {
+    throw new CouponError("This coupon code is not valid.");
+  }
+
+  // Total usage limit: claim one slot conditionally. The predicate uses the
+  // freshly-locked usageLimit, so an admin lowering the limit mid-checkout is
+  // respected too.
   if (coupon.usageLimit != null) {
-    const bumped = await tx.coupon.updateMany({
+    if (coupon.timesUsed >= coupon.usageLimit) {
+      throw new CouponError("This coupon has reached its usage limit.");
+    }
+    const claimed = await tx.coupon.updateMany({
       where: { id: coupon.id, timesUsed: { lt: coupon.usageLimit } },
       data: { timesUsed: { increment: 1 } },
     });
-    if (bumped.count === 0) throw new CouponError("This coupon has reached its usage limit.");
+    if (claimed.count === 0) {
+      throw new CouponError("This coupon has reached its usage limit.");
+    }
   } else {
-    await tx.coupon.update({ where: { id: coupon.id }, data: { timesUsed: { increment: 1 } } });
+    await tx.coupon.update({
+      where: { id: coupon.id },
+      data: { timesUsed: { increment: 1 } },
+    });
+  }
+
+  // Per-customer limit, keyed on phone (customerId is null for guests, so the
+  // phone is the only identity every order has). Counted with FOR UPDATE for
+  // the same snapshot reason — a plain count() here reads pre-lock state and
+  // lets concurrent orders from one phone all pass.
+  if (coupon.perCustomerLimit != null) {
+    // Selects the ROWS, not COUNT(*): an aggregate with FOR UPDATE locks
+    // nothing useful and is not guaranteed to read past the pinned snapshot.
+    // Bounded by the limit, so this stays a couple of rows.
+    const used = await tx.$queryRaw<{ id: number }[]>`
+      SELECT id
+      FROM CouponRedemption
+      WHERE couponId = ${coupon.id} AND customerPhone = ${customerPhone}
+      LIMIT ${coupon.perCustomerLimit}
+      FOR UPDATE
+    `;
+    if (used.length >= coupon.perCustomerLimit) {
+      // Rolls back the increment above along with the rest of the checkout.
+      throw new CouponError("You've already used this coupon.");
+    }
   }
 
   await tx.couponRedemption.create({

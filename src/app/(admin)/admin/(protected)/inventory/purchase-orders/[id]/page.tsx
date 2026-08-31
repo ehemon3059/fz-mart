@@ -4,6 +4,7 @@ import {
   getPurchaseOrder,
   getUnsellableReceived,
   purchaseOrderTotal,
+  shipmentOverhead,
 } from "@/server/purchasing";
 import { formatTaka } from "@/lib/money";
 import { Badge } from "@/components/admin/ui/Badge";
@@ -34,7 +35,17 @@ export default async function PurchaseOrderDetailPage({
     : [];
 
   const goodsValue = po.lines.reduce((s, l) => s + l.unitCost * l.quantity, 0);
-  const overhead = po.shippingCost + po.customsCost;
+  const overhead = shipmentOverhead(po);
+
+  // Only the costs this shipment actually had. A delivery with no freight and
+  // no customs should not show two zero rows implying someone forgot to fill
+  // them in — the absence IS the answer.
+  const shipmentCosts = [
+    { label: "Freight", amount: po.shippingCost },
+    { label: "Customs / clearing", amount: po.customsCost },
+    { label: "Load / unload (লেবার)", amount: po.labourCost },
+    { label: "Miscellaneous (বিবিধ)", amount: po.miscCost },
+  ].filter((c) => c.amount > 0);
   const orderedUnits = po.lines.reduce((s, l) => s + l.quantity, 0);
   const receivedUnits = po.lines.reduce((s, l) => s + l.receivedQty, 0);
   const outstanding = orderedUnits - receivedUnits;
@@ -121,18 +132,12 @@ export default async function PurchaseOrderDetailPage({
             <span>Goods</span>
             <span className="nums">{formatTaka(goodsValue)}</span>
           </div>
-          {po.shippingCost > 0 && (
-            <div className="flex justify-between text-stone-600">
-              <span>Freight</span>
-              <span className="nums">{formatTaka(po.shippingCost)}</span>
+          {shipmentCosts.map((c) => (
+            <div key={c.label} className="flex justify-between text-stone-600">
+              <span>{c.label}</span>
+              <span className="nums">{formatTaka(c.amount)}</span>
             </div>
-          )}
-          {po.customsCost > 0 && (
-            <div className="flex justify-between text-stone-600">
-              <span>Customs / clearing</span>
-              <span className="nums">{formatTaka(po.customsCost)}</span>
-            </div>
-          )}
+          ))}
           <div className="flex justify-between border-t border-stone-100 pt-1.5 text-base font-bold text-stone-900">
             <span>Total</span>
             <span className="nums">{formatTaka(goodsValue + overhead)}</span>
@@ -141,9 +146,9 @@ export default async function PurchaseOrderDetailPage({
 
         {overhead > 0 && (
           <p className="mt-3 rounded-md bg-stone-50 px-3 py-2 text-[11.5px] leading-relaxed text-stone-500">
-            Freight and customs are spread across the lines by value when you receive them, so each
-            product&rsquo;s landed cost — and therefore its profit margin — reflects what it really
-            cost to get here, not just the supplier&rsquo;s invoice price.
+            These shipment costs are spread across the lines by value when you receive them, so
+            each product&rsquo;s landed cost — and therefore its profit margin — reflects what it
+            really cost to get here, not just the supplier&rsquo;s invoice price.
           </p>
         )}
       </div>

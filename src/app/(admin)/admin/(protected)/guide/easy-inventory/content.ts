@@ -338,9 +338,9 @@ export const MISTAKES: { wrong: string; effect: string; right: string }[] = [
     right: "প্রতিটি চালান PO দিয়ে রিসিভ করুন",
   },
   {
-    wrong: "PO-তে ভাড়া না লেখা",
+    wrong: "PO-তে চালানের খরচ না লেখা",
     effect: "প্রতি পিসে লাভ বাস্তবের চেয়ে বেশি দেখায়",
-    right: "Freight ও Customs ঘর দুটো পূরণ করুন",
+    right: "ভাড়া, কাস্টমস, লেবার ও বিবিধ — যেটা এই চালানে লেগেছে সেটাই লিখুন",
   },
   {
     wrong: "দেরিতে Delivered চিহ্ন দেওয়া",

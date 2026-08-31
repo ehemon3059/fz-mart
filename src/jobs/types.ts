@@ -114,3 +114,22 @@ export interface LowStockDigestJob {
 }
 
 export type MaintenanceJob = LowStockDigestJob;
+
+// Retry of a session revocation that failed at the moment it mattered — see
+// revokeOtherAdminSessions in lib/auth.ts. `keepId` is the session that must
+// SURVIVE (the one that just changed the password); every other session for
+// the subject is destroyed. Omitted for a password reset, where nothing is
+// spared.
+//
+// `subject` distinguishes the two key spaces; the id is a string in both
+// because customer ids are strings and BullMQ payloads are JSON anyway.
+export interface RevokeSessionsJob {
+  type: "revoke-sessions";
+  subject: "admin" | "customer";
+  subjectId: string;
+  keepId?: string;
+  /** Why the revocation was requested, carried into logs and Sentry. */
+  reason: string;
+}
+
+export type SecurityJob = RevokeSessionsJob;

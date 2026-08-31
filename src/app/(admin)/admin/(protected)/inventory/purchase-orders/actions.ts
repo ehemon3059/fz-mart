@@ -134,6 +134,8 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<Act
       expectedOn,
       shippingCost: takaToPaisa(Number(formData.get("shippingCost")) || 0),
       customsCost: takaToPaisa(Number(formData.get("customsCost")) || 0),
+      labourCost: takaToPaisa(Number(formData.get("labourCost")) || 0),
+      miscCost: takaToPaisa(Number(formData.get("miscCost")) || 0),
       note: String(formData.get("note") ?? ""),
       lines,
     });
@@ -168,6 +170,8 @@ export async function updatePurchaseOrderAction(
       expectedOn: parseDate(formData.get("expectedOn")),
       shippingCost: takaToPaisa(Number(formData.get("shippingCost")) || 0),
       customsCost: takaToPaisa(Number(formData.get("customsCost")) || 0),
+      labourCost: takaToPaisa(Number(formData.get("labourCost")) || 0),
+      miscCost: takaToPaisa(Number(formData.get("miscCost")) || 0),
       note: String(formData.get("note") ?? ""),
       lines,
     });

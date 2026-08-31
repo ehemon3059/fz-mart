@@ -93,6 +93,8 @@ export interface PurchaseOrderInput {
   expectedOn?: Date | null;
   shippingCost?: number;
   customsCost?: number;
+  labourCost?: number;
+  miscCost?: number;
   note?: string | null;
   lines: PurchaseOrderLineInput[];
 }
@@ -175,6 +177,8 @@ export async function createPurchaseOrder(input: PurchaseOrderInput) {
         expectedOn: input.expectedOn ?? null,
         shippingCost: Math.max(0, Math.round(input.shippingCost ?? 0)),
         customsCost: Math.max(0, Math.round(input.customsCost ?? 0)),
+        labourCost: Math.max(0, Math.round(input.labourCost ?? 0)),
+        miscCost: Math.max(0, Math.round(input.miscCost ?? 0)),
         note: input.note?.trim() || null,
         lines: { createMany: { data: lines } },
       },
@@ -280,12 +284,12 @@ export async function receivePurchaseOrder(
 
     const byId = new Map(po.lines.map((l) => [l.id, l]));
 
-    // Total value of the ORDER, used to apportion freight/customs. Based on the
-    // full ordered quantity rather than this delivery, so two part-deliveries of
-    // the same PO carry consistent per-unit overhead instead of the first one
+    // Total value of the ORDER, used to apportion the shipment costs. Based on
+    // the full ordered quantity rather than this delivery, so two part-deliveries
+    // of the same PO carry consistent per-unit overhead instead of the first one
     // absorbing everything.
     const orderValue = po.lines.reduce((sum, l) => sum + l.unitCost * l.quantity, 0);
-    const overhead = po.shippingCost + po.customsCost;
+    const overhead = shipmentOverhead(po);
 
     const touched: number[] = [];
 
@@ -301,7 +305,7 @@ export async function receivePurchaseOrder(
         );
       }
 
-      // Landed cost = supplier price + this line's share of freight/customs.
+      // Landed cost = supplier price + this line's share of the shipment costs.
       // Apportioned by value: a ৳2,000 item carries more of the freight than a
       // ৳200 one, which is the convention that matches how shipping is priced.
       const lineValue = line.unitCost * line.quantity;
@@ -577,6 +581,8 @@ export async function updatePurchaseOrder(id: number, input: PurchaseOrderInput)
         lines,
         shippingCost: Math.max(0, Math.round(input.shippingCost ?? 0)),
         customsCost: Math.max(0, Math.round(input.customsCost ?? 0)),
+        labourCost: Math.max(0, Math.round(input.labourCost ?? 0)),
+        miscCost: Math.max(0, Math.round(input.miscCost ?? 0)),
       });
       if (newTotal < alreadyPaid) {
         const taka = (paisa: number) => (paisa / 100).toLocaleString("en-BD");
@@ -596,6 +602,8 @@ export async function updatePurchaseOrder(id: number, input: PurchaseOrderInput)
         expectedOn: input.expectedOn ?? null,
         shippingCost: Math.max(0, Math.round(input.shippingCost ?? 0)),
         customsCost: Math.max(0, Math.round(input.customsCost ?? 0)),
+        labourCost: Math.max(0, Math.round(input.labourCost ?? 0)),
+        miscCost: Math.max(0, Math.round(input.miscCost ?? 0)),
         note: input.note?.trim() || null,
         lines: { createMany: { data: lines } },
       },
@@ -654,9 +662,29 @@ export function purchaseOrderTotal(po: {
   lines: { quantity: number; unitCost: number }[];
   shippingCost: number;
   customsCost: number;
+  labourCost: number;
+  miscCost: number;
 }): number {
   const goods = po.lines.reduce((sum, l) => sum + l.unitCost * l.quantity, 0);
-  return goods + po.shippingCost + po.customsCost;
+  return goods + shipmentOverhead(po);
+}
+
+/**
+ * The shipment-level costs on an order, added up.
+ *
+ * One place rather than four additions scattered about, because the set is
+ * open: freight and customs were the first two, labour and miscellaneous the
+ * next, and a fifth would otherwise mean hunting down every sum that has to
+ * learn about it. Every one of them is optional — a domestic delivery pays
+ * labour and nothing else — so this is usually a sum over mostly zeroes.
+ */
+export function shipmentOverhead(po: {
+  shippingCost: number;
+  customsCost: number;
+  labourCost: number;
+  miscCost: number;
+}): number {
+  return po.shippingCost + po.customsCost + po.labourCost + po.miscCost;
 }
 
 /**
@@ -680,6 +708,8 @@ export async function recordSupplierPayment(input: PaymentInput) {
         status: true,
         shippingCost: true,
         customsCost: true,
+        labourCost: true,
+        miscCost: true,
         lines: { select: { quantity: true, unitCost: true } },
         payments: { select: { amount: true } },
       },
@@ -747,6 +777,8 @@ export async function getSupplierBalances(): Promise<SupplierBalance[]> {
         select: {
           shippingCost: true,
           customsCost: true,
+          labourCost: true,
+          miscCost: true,
           lines: { select: { quantity: true, unitCost: true } },
           payments: { select: { amount: true } },
         },

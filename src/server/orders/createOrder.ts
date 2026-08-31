@@ -303,5 +303,9 @@ export async function createOrder(input: CreateOrderInput) {
     // is the moment `stock` actually falls.
 
     return created;
-  });
+  },
+  // Coupon redemption takes a row lock on the Coupon, so concurrent checkouts
+  // using one coupon queue up. Prisma's default 2s maxWait rejects with P2028
+  // under that burst; give the queue room rather than failing real orders.
+  { maxWait: 8000, timeout: 15000 });
 }

@@ -41,6 +41,7 @@ export const QUEUE_NAMES = {
   payments: "payments",
   carts: "carts",
   maintenance: "maintenance",
+  security: "security",
 } as const;
 
 const queues = globalForQueue.queues ?? new Map<string, Queue>();

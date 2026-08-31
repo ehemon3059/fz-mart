@@ -1,6 +1,6 @@
 import { getQueue, isQueueEnabled, QUEUE_NAMES } from "@/lib/queue";
 import { sendMailNow } from "./mail-send";
-import type { CartJob, MailJob, PaymentJob, SmsJob } from "./types";
+import type { CartJob, MailJob, PaymentJob, SecurityJob, SmsJob } from "./types";
 
 // Producer-side enqueue helpers. Called from server/orders/* — never
 // awaited as part of the user-facing response; the order save completes
@@ -56,4 +56,28 @@ export async function enqueueCartJob(job: CartJob, delayMs: number): Promise<voi
   await safeEnqueue(`carts:${job.type}`, () =>
     getQueue(QUEUE_NAMES.carts).add(job.type, job, { delay: delayMs }),
   );
+}
+
+/**
+ * Queue a security job. Deliberately does NOT use safeEnqueue: every other
+ * producer here drops its job on failure because a missed notification is a
+ * cosmetic loss, but this queue exists to retry a FAILED SESSION REVOCATION.
+ * Silently dropping it would leave an attacker's session alive — the exact
+ * outcome the retry was added to prevent. The caller reports the failure.
+ *
+ * More attempts and a longer backoff than the queue default: a Redis outage
+ * that breaks revocation may last minutes, and the job stays cheap to hold.
+ */
+export async function enqueueSecurityJob(job: SecurityJob): Promise<void> {
+  if (!isQueueEnabled()) {
+    throw new Error("Queue is not enabled (REDIS_URL unset); security job cannot be retried.");
+  }
+  await getQueue(QUEUE_NAMES.security).add(job.type, job, {
+    attempts: 10,
+    backoff: { type: "exponential", delay: 5000 },
+    removeOnComplete: 1000,
+    // Keep failures around far longer than other queues: a job that exhausted
+    // its attempts is an unrevoked session and needs to be findable.
+    removeOnFail: false,
+  });
 }

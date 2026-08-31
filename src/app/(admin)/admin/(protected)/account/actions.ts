@@ -5,12 +5,21 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireAdminUser } from "@/server/admin/guard";
 import { logActivity } from "@/server/admin/audit";
-import { getCurrentAdmin, updateSession, SESSION_COOKIE } from "@/lib/auth";
+import {
+  getCurrentAdmin,
+  updateSession,
+  createSession,
+  destroySession,
+  revokeOtherAdminSessions,
+  SESSION_COOKIE,
+  SESSION_ABSOLUTE_TTL_SECONDS,
+} from "@/lib/auth";
 import {
   changeOwnUsername,
   changeOwnPassword,
   CredentialError,
 } from "@/server/admin/credentials";
+import { secureCookieOptions } from "@/lib/cookie-security";
 import {
   beginEnrollment,
   confirmEnrollment,
@@ -18,6 +27,37 @@ import {
   generateBackupCodes,
   TwoFactorError,
 } from "@/server/admin/twofactor";
+
+/**
+ * Re-issue the caller's session under a fresh id and drop every other session
+ * this admin has. Used by the credential-change flows: rotating defeats anyone
+ * holding the old id, revoking defeats anyone holding a different one.
+ *
+ * The cookie is rewritten with the same attributes login uses, so the two
+ * places that mint this cookie stay in step.
+ */
+async function rotateCurrentSessionAndRevokeOthers(
+  adminId: number,
+  username: string,
+  role: string,
+  reason: string,
+): Promise<void> {
+  const store = await cookies();
+  const currentId = store.get(SESSION_COOKIE)?.value;
+
+  const newId = await createSession({ adminId, username, role });
+  store.set(SESSION_COOKIE, newId, {
+    ...(await secureCookieOptions()),
+    maxAge: SESSION_ABSOLUTE_TTL_SECONDS,
+  });
+
+  // Revoke everything except the session just minted. The old id is included
+  // in that sweep, but destroy it explicitly too: it may predate the index.
+  await revokeOtherAdminSessions(adminId, newId, reason);
+  if (currentId && currentId !== newId) {
+    await destroySession(currentId, adminId);
+  }
+}
 
 export async function changeUsernameAction(formData: FormData): Promise<ActionResult> {
   const admin = await requireAdminUser();
@@ -72,11 +112,21 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
     throw err;
   }
 
+  // A password change is how someone evicts an intruder, so every OTHER
+  // session for this account dies here, and this one is re-issued under a new
+  // id — the pre-change id is worthless to anyone who copied it.
+  await rotateCurrentSessionAndRevokeOthers(
+    admin.id,
+    admin.username,
+    admin.role,
+    "password-change",
+  );
+
   await logActivity({
     adminId: admin.id,
     actorName: admin.username,
     action: "admin.password_change",
-    detail: "Changed own password",
+    detail: "Changed own password; other sessions signed out",
   });
   revalidatePath("/admin/account");
   return { success: "Your password has been updated." };
@@ -124,9 +174,18 @@ export async function disableTwoFactorSetup(formData: FormData): Promise<ActionR
     if (err instanceof TwoFactorError) return { error: err.message };
     throw err;
   }
+  // Dropping a factor weakens the account, so treat it like a credential
+  // change: other sessions go, this one is re-issued.
+  await rotateCurrentSessionAndRevokeOthers(
+    admin.id,
+    admin.username,
+    admin.role,
+    "2fa-disabled",
+  );
+
   await logActivity({ adminId: admin.id, actorName: admin.username, action: "admin.2fa_disabled" });
   revalidatePath("/admin/account");
-  return { success: "Two-factor authentication disabled." };
+  return { success: "Two-factor authentication disabled. Other sessions were signed out." };
 }
 
 export interface BackupCodesResult {

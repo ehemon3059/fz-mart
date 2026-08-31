@@ -48,9 +48,11 @@ export interface ExistingOrder {
   supplierId: number;
   /** "yyyy-mm-dd" for the date input, or "". */
   expectedOn: string;
-  /** Taka, as strings for the inputs. */
+  /** Taka, as strings for the inputs. "" for a cost this shipment never had. */
   shippingCost: string;
   customsCost: string;
+  labourCost: string;
+  miscCost: string;
   note: string;
   lines: {
     productId: string;
@@ -88,6 +90,8 @@ export default function PurchaseOrderForm({
   const [creatingFor, setCreatingFor] = useState<number | null>(null);
   const [shipping, setShipping] = useState(order?.shippingCost ?? "");
   const [customs, setCustoms] = useState(order?.customsCost ?? "");
+  const [labour, setLabour] = useState(order?.labourCost ?? "");
+  const [misc, setMisc] = useState(order?.miscCost ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -138,7 +142,11 @@ export default function PurchaseOrderForm({
     const cost = Number(l.unitCost) || 0;
     return sum + qty * cost * 100;
   }, 0);
-  const overhead = (Number(shipping) || 0) * 100 + (Number(customs) || 0) * 100;
+  // Every shipment cost is optional and independent — a local delivery pays
+  // labour and nothing else — so a blank box is a real answer ("none"), not a
+  // missing one, and simply contributes zero.
+  const overhead =
+    [shipping, customs, labour, misc].reduce((sum, v) => sum + (Number(v) || 0), 0) * 100;
 
   function submit(formData: FormData) {
     setError(null);
@@ -291,40 +299,49 @@ export default function PurchaseOrderForm({
         <p className="mb-3 text-[12px] text-stone-500">
           Costs for the delivery as a whole. Spread across the lines by value when you receive
           them, so each product&rsquo;s landed cost reflects what it really cost to get here.
+          Fill in only the ones this shipment actually had — leave the rest blank.
         </p>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <CostField
+            name="shippingCost"
+            label="Freight ৳"
+            hint="Transport for the goods"
+            value={shipping}
+            onChange={setShipping}
+          />
+          <CostField
+            name="customsCost"
+            label="Customs / clearing ৳"
+            hint="Duty and clearing agent"
+            value={customs}
+            onChange={setCustoms}
+          />
+          <CostField
+            name="labourCost"
+            label="Load / unload ৳"
+            hint="লেবার খরচ"
+            value={labour}
+            onChange={setLabour}
+          />
+          <CostField
+            name="miscCost"
+            label="Miscellaneous ৳"
+            hint="বিবিধ খরচ"
+            value={misc}
+            onChange={setMisc}
+          />
+        </div>
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-lg bg-stone-50 px-3 py-2">
           <div>
-            <label className={label}>Freight ৳</label>
-            <input
-              name="shippingCost"
-              type="number"
-              min="0"
-              step="0.01"
-              value={shipping}
-              onChange={(e) => setShipping(e.target.value)}
-              className={field}
-            />
+            <p className="text-[11px] uppercase tracking-wide text-stone-500">Order total</p>
+            <p className="nums text-lg font-bold text-stone-900">
+              {formatTaka(goodsValue + overhead)}
+            </p>
           </div>
-          <div>
-            <label className={label}>Customs / clearing ৳</label>
-            <input
-              name="customsCost"
-              type="number"
-              min="0"
-              step="0.01"
-              value={customs}
-              onChange={(e) => setCustoms(e.target.value)}
-              className={field}
-            />
-          </div>
-          <div className="flex items-end">
-            <div className="w-full rounded-lg bg-stone-50 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-wide text-stone-500">Order total</p>
-              <p className="nums text-lg font-bold text-stone-900">
-                {formatTaka(goodsValue + overhead)}
-              </p>
-            </div>
-          </div>
+          <p className="nums text-[12px] text-stone-500">
+            Goods {formatTaka(goodsValue)}
+            {overhead > 0 && <> + shipment costs {formatTaka(overhead)}</>}
+          </p>
         </div>
       </div>
 
@@ -355,5 +372,48 @@ export default function PurchaseOrderForm({
           : "Saved as a draft. Nothing counts as incoming until you place it."}
       </p>
     </form>
+  );
+}
+
+/**
+ * One shipment-cost box.
+ *
+ * Deliberately not required and deliberately not pre-filled with 0: most
+ * deliveries incur only some of these, and an empty box reads as "this shipment
+ * had none of that" where a 0 someone had to type reads as a chore. Blank and
+ * zero mean the same thing to the server either way.
+ */
+function CostField({
+  name,
+  label: text,
+  hint,
+  value,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className={label} htmlFor={name}>
+        {text}
+      </label>
+      <input
+        id={name}
+        name={name}
+        type="number"
+        min="0"
+        step="0.01"
+        inputMode="decimal"
+        placeholder="0"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={field}
+      />
+      <p className="mt-1 text-[11px] text-stone-400">{hint}</p>
+    </div>
   );
 }

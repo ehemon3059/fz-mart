@@ -87,9 +87,14 @@ export default async function EditPurchaseOrderPage({
           id: po.id,
           supplierId: po.supplierId,
           expectedOn: isoDate(po.expectedOn),
-          // Money is stored in paisa and typed in taka.
+          // Money is stored in paisa and typed in taka. A cost that was never
+          // incurred comes back blank rather than as "0", so the form keeps
+          // saying "this shipment had none of that" instead of implying a
+          // figure was entered.
           shippingCost: po.shippingCost ? String(po.shippingCost / 100) : "",
           customsCost: po.customsCost ? String(po.customsCost / 100) : "",
+          labourCost: po.labourCost ? String(po.labourCost / 100) : "",
+          miscCost: po.miscCost ? String(po.miscCost / 100) : "",
           note: po.note ?? "",
           lines: po.lines.map((l) => ({
             productId: String(l.productId),

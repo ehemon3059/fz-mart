@@ -1425,11 +1425,24 @@ model PurchaseOrder {
   // When the goods are expected. The single most useful field on this model:
   // it turns "we ordered more" into "cover until the 20th".
   expectedOn   DateTime?
-  // Costs that apply to the SHIPMENT rather than to any one line (freight,
-  // customs, clearing). Apportioned across lines by value when receiving, so
-  // landed cost reflects what the goods really cost to get here.
+  // Costs that apply to the SHIPMENT rather than to any one line. Apportioned
+  // across lines by value when receiving, so landed cost reflects what the
+  // goods really cost to get here.
+  //
+  // All four are optional and independent, because a real shipment rarely
+  // carries all of them: a local pickup has labour but no freight and no
+  // customs, an imported container has every one. Zero therefore means "this
+  // shipment did not incur that cost", not "we haven't found out yet" — the
+  // admin decides which lines apply to each delivery.
+  //
+  //   shippingCost   — freight paid to move the goods.
+  //   customsCost    — customs duty and clearing agent fees.
+  //   labourCost     — load/unload labour at either end (লেবার খরচ).
+  //   miscCost       — anything else the delivery cost (বিবিধ খরচ).
   shippingCost Int                 @default(0)
   customsCost  Int                 @default(0)
+  labourCost   Int                 @default(0)
+  miscCost     Int                 @default(0)
   note         String?             @db.Text
   // Set once the PO reaches a terminal state, for lead-time reporting.
   orderedAt    DateTime?

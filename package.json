@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
+    "test:coupon-race": "tsx --env-file=.env.test scripts/test-coupon-race.ts",
     "db:migrate": "prisma migrate dev",
     "db:migrate:test": "node scripts/test-db.mjs migrate deploy",
     "db:reset:test": "node scripts/test-db.mjs migrate reset --force",

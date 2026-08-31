@@ -9,6 +9,7 @@ import { createSmsWorker } from "./sms.worker";
 import { createPaymentsWorker } from "./payments.worker";
 import { createCartsWorker } from "./carts.worker";
 import { createMaintenanceWorker, scheduleMaintenance } from "./maintenance.worker";
+import { createSecurityWorker } from "./security.worker";
 
 // Opt-in error reporting for the worker process (separate from the Next app,
 // so it needs its own init). No-op unless SENTRY_DSN is set.
@@ -30,6 +31,7 @@ const smsWorker = createSmsWorker({ url: redisUrl });
 const paymentsWorker = createPaymentsWorker({ url: redisUrl });
 const cartsWorker = createCartsWorker({ url: redisUrl });
 const maintenanceWorker = createMaintenanceWorker({ url: redisUrl });
+const securityWorker = createSecurityWorker({ url: redisUrl });
 // Register the daily repeatable schedule (idempotent).
 scheduleMaintenance({ url: redisUrl }).catch((err) =>
   console.error("[maintenance] failed to schedule digest:", err),
@@ -53,13 +55,32 @@ paymentsWorker.on("failed", (job, err) =>
 );
 
 // Report worker job failures to Sentry (no-op when unconfigured).
-for (const worker of [mailWorker, smsWorker, paymentsWorker, cartsWorker, maintenanceWorker]) {
+for (const worker of [
+  mailWorker,
+  smsWorker,
+  paymentsWorker,
+  cartsWorker,
+  maintenanceWorker,
+  securityWorker,
+]) {
   worker.on("failed", (job, err) => {
     if (process.env.SENTRY_DSN) {
       Sentry.captureException(err, { extra: { jobId: job?.id, jobName: job?.name } });
     }
   });
 }
+
+// A security job that exhausts its attempts means a revocation never
+// happened — the loudest failure this process can have. Logged distinctly so
+// it is greppable, on top of the shared Sentry handler above.
+securityWorker.on("failed", (job, err) => {
+  const exhausted = job ? job.attemptsMade >= (job.opts.attempts ?? 1) : false;
+  console.error(
+    `[security] ${exhausted ? "GAVE UP on" : "retrying"} ${job?.data.type} for ` +
+      `${job?.data.subject}:${job?.data.subjectId} -`,
+    err.message,
+  );
+});
 
 cartsWorker.on("completed", (job) =>
   console.log(`[carts] processed: ${job.id} (${job.data.type})`),

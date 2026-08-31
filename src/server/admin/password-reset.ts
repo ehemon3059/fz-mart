@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth";
+import { hashPassword, revokeOtherAdminSessions } from "@/lib/auth";
 
 // Admin password-reset core. Mirrors the customer magic-link model: a random,
 // single-use, short-lived token, kept after use for audit rather than deleted.
@@ -67,6 +67,13 @@ export async function resetPasswordWithToken(
       data: { usedAt: new Date() },
     }),
   ]);
+
+  // A reset is the "I've lost control of this account" path, so nothing that
+  // was signed in beforehand stays signed in. No session is spared: this flow
+  // is unauthenticated, and the admin signs in again with the new password.
+  // Runs after the transaction commits — a Redis failure must not roll back a
+  // password the admin has already been told to use.
+  await revokeOtherAdminSessions(row.adminId, undefined, "password-reset");
 
   return true;
 }

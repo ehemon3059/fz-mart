@@ -54,3 +54,7 @@ next-env.d.ts
 
 # local-only archive of unused/reference material
 /Extra/
+
+# Local database dumps — contain real customer PII, never commit
+backups/
+*.sql.gz
