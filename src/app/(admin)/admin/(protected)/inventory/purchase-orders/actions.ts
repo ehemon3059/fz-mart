@@ -191,7 +191,15 @@ export async function updatePurchaseOrderAction(
   redirect(`/admin/inventory/purchase-orders/${id}`);
 }
 
-export async function deletePurchaseOrderAction(id: number): Promise<ActionResult> {
+export async function deletePurchaseOrderAction(
+  id: number,
+  /**
+   * Where the caller is standing. From the detail page the order being deleted
+   * IS the page, so it has to leave; from the list the row simply disappears
+   * and a redirect would throw away the tab and page number the admin is on.
+   */
+  options: { stayOnPage?: boolean } = {},
+): Promise<ActionResult> {
   const admin = await requirePermission("inventory");
   try {
     await deletePurchaseOrder(id);
@@ -206,6 +214,7 @@ export async function deletePurchaseOrderAction(id: number): Promise<ActionResul
     detail: `#${id}`,
   });
   revalidatePath("/admin/inventory/purchase-orders");
+  if (options.stayOnPage) return { success: "Purchase order deleted." };
   redirect("/admin/inventory/purchase-orders");
 }
 

@@ -1,6 +1,6 @@
 import type { ProductStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { PurchasingError, nextPoNo } from "./index";
+import { PurchasingError, TX_OPTIONS, nextPoNo } from "./index";
 
 /**
  * Buy & Sell Equal — pairing what the shop SELLS against what it BOUGHT.
@@ -255,15 +255,28 @@ export async function recordHistoricalPurchase(input: HistoricalPurchaseInput) {
     });
     if (!supplier) throw new PurchasingError("Choose the supplier this was bought from.");
 
+    // Every option this backfill touches, read in ONE round trip rather than
+    // one per line: the database is remote, and a per-line lookup is what puts
+    // this transaction anywhere near its ceiling in the first place.
+    const variantIds = entered
+      .map((l) => l.variantId)
+      .filter((id): id is number => id != null);
+    const variants = variantIds.length
+      ? await tx.productVariant.findMany({
+          where: { id: { in: variantIds }, productId: product.id },
+          select: { id: true, size: true, colorName: true, purchaseCost: true },
+        })
+      : [];
+    const variantById = new Map(variants.map((v) => [v.id, v]));
+
     const lines = [];
     for (const line of entered) {
       let variantLabel: string | null = null;
       if (line.variantId != null) {
-        const variant = await tx.productVariant.findUnique({
-          where: { id: line.variantId },
-          select: { productId: true, size: true, colorName: true },
-        });
-        if (!variant || variant.productId !== product.id) {
+        // Scoped to this product in the `where` above, so a missing row means
+        // either gone or never ours — the same answer either way.
+        const variant = variantById.get(line.variantId);
+        if (!variant) {
           throw new PurchasingError("An option no longer belongs to this product.");
         }
         variantLabel = [variant.colorName, variant.size].filter(Boolean).join(" / ") || null;
@@ -317,20 +330,29 @@ export async function recordHistoricalPurchase(input: HistoricalPurchaseInput) {
       });
     }
 
+    // Same fill-only rule per option, grouped by the cost being written so the
+    // whole loop costs one statement per distinct cost instead of two per line.
+    // `purchaseCost: 0` stays in the `where`: the guard against overwriting a
+    // known cost is enforced by the database, not by the value read earlier.
+    const fills = new Map<number, number[]>();
     for (const line of lines) {
       if (line.variantId == null || line.unitCost <= 0) continue;
-      const variant = await tx.productVariant.findUnique({
-        where: { id: line.variantId },
-        select: { purchaseCost: true },
+      if (variantById.get(line.variantId)?.purchaseCost !== 0) continue;
+      const ids = fills.get(line.unitCost);
+      if (ids) ids.push(line.variantId);
+      else fills.set(line.unitCost, [line.variantId]);
+    }
+    for (const [unitCost, ids] of fills) {
+      await tx.productVariant.updateMany({
+        where: { id: { in: ids }, purchaseCost: 0 },
+        data: { purchaseCost: unitCost },
       });
-      if (variant && variant.purchaseCost === 0) {
-        await tx.productVariant.update({
-          where: { id: line.variantId },
-          data: { purchaseCost: line.unitCost },
-        });
-      }
     }
 
     return po;
-  });
+    // A backfill is several round trips deep against a remote database, which
+    // is exactly the shape that outruns Prisma's default five-second ceiling
+    // and fails mid-write with "Transaction not found". Same ceiling the rest
+    // of purchasing uses; nothing here holds a lock long enough for it to hurt.
+  }, TX_OPTIONS);
 }

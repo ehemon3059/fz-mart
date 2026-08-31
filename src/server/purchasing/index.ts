@@ -33,7 +33,7 @@ const INCOMING_STATUSES: PurchaseOrderStatus[] = ["ORDERED"];
  * work only to roll it back. Nothing here holds a lock long enough for a
  * generous ceiling to hurt, and the same ceiling is already used by checkout.
  */
-const TX_OPTIONS = { maxWait: 8000, timeout: 20000 } as const;
+export const TX_OPTIONS = { maxWait: 8000, timeout: 20000 } as const;
 
 // ── Suppliers ───────────────────────────────────────────────────────────────
 
@@ -212,15 +212,87 @@ export async function createPurchaseOrder(input: PurchaseOrderInput) {
   }, TX_OPTIONS);
 }
 
-export async function listPurchaseOrders(status?: PurchaseOrderStatus) {
-  return prisma.purchaseOrder.findMany({
-    where: status ? { status } : {},
-    orderBy: [{ status: "asc" }, { expectedOn: "asc" }, { id: "desc" }],
-    include: {
-      supplier: { select: { name: true } },
-      lines: { select: { quantity: true, receivedQty: true, unitCost: true } },
-    },
+export const PURCHASE_ORDERS_PAGE_SIZE = 20;
+
+export type PurchaseOrderRow = Prisma.PurchaseOrderGetPayload<{
+  include: {
+    supplier: { select: { name: true } };
+    lines: { select: { quantity: true; receivedQty: true; unitCost: true } };
+  };
+}>;
+
+export interface PurchaseOrderListResult {
+  orders: PurchaseOrderRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}
+
+/**
+ * One page of purchase orders, newest activity first.
+ *
+ * Ordered by updatedAt rather than by status or expected date: this list is a
+ * work queue, and the order you touched last is the one you are still thinking
+ * about. Placing, receiving, editing or paying an order all bump updatedAt, so
+ * the row you just worked on comes back to the top instead of sinking into the
+ * middle of its status group. `id` breaks ties so the page boundary is stable
+ * for rows written in the same instant — without it, two orders sharing a
+ * timestamp could swap places between page 1 and page 2 and hide a row.
+ */
+export async function listPurchaseOrders(
+  filter: { status?: PurchaseOrderStatus; page?: number; pageSize?: number } = {},
+): Promise<PurchaseOrderListResult> {
+  const pageSize = filter.pageSize ?? PURCHASE_ORDERS_PAGE_SIZE;
+  const page = Math.max(1, filter.page ?? 1);
+  const where: Prisma.PurchaseOrderWhereInput = filter.status ? { status: filter.status } : {};
+
+  const [orders, total] = await Promise.all([
+    prisma.purchaseOrder.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      include: {
+        supplier: { select: { name: true } },
+        lines: { select: { quantity: true, receivedQty: true, unitCost: true } },
+      },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.purchaseOrder.count({ where }),
+  ]);
+
+  return {
+    orders,
+    total,
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+/**
+ * How many orders sit in each status, for the filter tabs.
+ *
+ * Counted in one grouped query rather than four, and every status is present in
+ * the returned record even when it has no rows — a tab that reads "Cancelled 0"
+ * tells the admin the filter works and there is nothing there, where a missing
+ * number reads as a bug.
+ */
+export async function countPurchaseOrdersByStatus(): Promise<
+  Record<PurchaseOrderStatus, number>
+> {
+  const groups = await prisma.purchaseOrder.groupBy({
+    by: ["status"],
+    _count: { _all: true },
   });
+  const counts: Record<PurchaseOrderStatus, number> = {
+    DRAFT: 0,
+    ORDERED: 0,
+    RECEIVED: 0,
+    CANCELLED: 0,
+  };
+  for (const g of groups) counts[g.status] = g._count._all;
+  return counts;
 }
 
 export async function getPurchaseOrder(id: number) {

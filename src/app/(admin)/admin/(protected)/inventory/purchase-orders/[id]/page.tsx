@@ -30,9 +30,16 @@ export default async function PurchaseOrderDetailPage({
 
   // Goods that arrived against this order but still cannot be sold. Nothing to
   // compute until something has actually been received.
-  const unsellable = po.lines.some((l) => l.receivedQty > 0)
-    ? await getUnsellableReceived(po.id)
-    : [];
+  //
+  // Never shown on a CANCELLED order. The card is a to-do list — "finish this
+  // product so you can sell it" — and a cancelled order is not work anyone is
+  // being asked to finish. Any units it did receive before cancellation are
+  // still on the shelf and are still chased by the same card on the open orders
+  // that carry them, so nothing is lost by staying quiet here.
+  const unsellable =
+    po.status !== "CANCELLED" && po.lines.some((l) => l.receivedQty > 0)
+      ? await getUnsellableReceived(po.id)
+      : [];
 
   const goodsValue = po.lines.reduce((s, l) => s + l.unitCost * l.quantity, 0);
   const overhead = shipmentOverhead(po);
