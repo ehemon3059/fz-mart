@@ -253,6 +253,24 @@ function imageRowsFromInput(input: ProductInput): ProductImageInput[] | undefine
 }
 
 /**
+ * Transaction budget for the two product write paths.
+ *
+ * Prisma's defaults are maxWait 2s / timeout 5s, and both transactions below do
+ * work that GROWS WITH THE NUMBER OF OPTIONS: a save rewrites the images,
+ * colours, specs, features and accordion panels, then reconciles the variants
+ * one row at a time, and each of those is a round trip to a database that is
+ * not on this machine. A product with a handful of options exceeds five seconds
+ * in latency alone, and Prisma then closes the transaction underneath the loop —
+ * the save fails half-applied and rolls back, which is what
+ * "Transaction already closed" means here.
+ *
+ * Same ceiling, and the same reasoning, as the purchasing write paths
+ * (server/purchasing/index.ts). Nothing here holds a lock long enough for a
+ * generous budget to hurt.
+ */
+const TX_OPTIONS = { maxWait: 8000, timeout: 20000 } as const;
+
+/**
  * Create a product, with its opening stock written through the ledger.
  *
  * Every row is created at ZERO and then credited by an OPENING movement, rather
@@ -398,7 +416,7 @@ export async function createProduct(input: ProductInput, actorName = "system") {
     }
 
     return created;
-  });
+  }, TX_OPTIONS);
 
   await invalidateProductCaches({
     productId: product.id,
@@ -422,6 +440,41 @@ function variantKey(v: { sku?: string | null; colorName?: string | null; size?: 
   const sku = v.sku?.trim().toUpperCase();
   if (sku) return `sku:${sku}`;
   return `cs:${(v.colorName ?? "").trim().toLowerCase()}|${(v.size ?? "").trim().toLowerCase()}`;
+}
+
+/** The catalogue fields syncVariants writes, as compared for equality below. */
+type VariantFields = {
+  size: string | null;
+  colorName: string | null;
+  price: number;
+  discountPrice: number | null;
+  showStock: boolean;
+  priceColor: string | null;
+  imageUrl: string | null;
+  sku: string | null;
+  sortOrder: number;
+};
+
+/**
+ * Whether a saved variant actually differs from what the form submitted.
+ *
+ * Every key of `fields` is compared — miss one and an edit to it would be
+ * silently dropped, which is a far worse failure than a redundant write. Listed
+ * explicitly rather than derived from Object.keys so that adding a field to
+ * `fields` without adding it here is a type error, not a lost edit.
+ */
+function variantFieldsDiffer(existing: VariantFields, fields: VariantFields): boolean {
+  return (
+    existing.size !== fields.size ||
+    existing.colorName !== fields.colorName ||
+    existing.price !== fields.price ||
+    existing.discountPrice !== fields.discountPrice ||
+    existing.showStock !== fields.showStock ||
+    existing.priceColor !== fields.priceColor ||
+    existing.imageUrl !== fields.imageUrl ||
+    existing.sku !== fields.sku ||
+    existing.sortOrder !== fields.sortOrder
+  );
 }
 
 /** Human label for an option, for error messages: "Navy / M". */
@@ -475,7 +528,7 @@ async function syncVariants(
 
     // Catalogue fields only. `stock` and `reserved` are deliberately absent:
     // from the moment a row exists, its level belongs to the ledger.
-    const fields = {
+    const fields: VariantFields = {
       size: v.size ?? null,
       colorName: v.colorName ?? null,
       price: v.price,
@@ -493,7 +546,13 @@ async function syncVariants(
     // instead of being created.
     if (match && !keptIds.has(match.id)) {
       keptIds.add(match.id);
-      await tx.productVariant.update({ where: { id: match.id }, data: fields });
+      // Most saves touch one field of one option, leaving every other row
+      // byte-identical. Writing them anyway costs a round trip each against a
+      // remote database, which is the bulk of what pushed this transaction past
+      // its budget. An unchanged row is skipped rather than rewritten.
+      if (variantFieldsDiffer(match, fields)) {
+        await tx.productVariant.update({ where: { id: match.id }, data: fields });
+      }
     } else {
       const created = await tx.productVariant.create({
         data: { productId, ...fields, stock: 0 },
@@ -660,7 +719,7 @@ export async function updateProduct(id: number, input: ProductInput, actorName =
     }
 
     return updated;
-  });
+  }, TX_OPTIONS);
 
   const categorySlugs = await categorySlugsForInvalidation(input.categoryId);
   // If the product moved to a different node, also clear the old node's chain.

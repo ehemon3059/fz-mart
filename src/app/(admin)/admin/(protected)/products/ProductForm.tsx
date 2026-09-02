@@ -16,6 +16,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
+import { formatTaka, priceFromMargin } from "@/lib/money";
 import { inheritedGuideId } from "@/lib/size-guide-inheritance";
 import { inheritedSellingType } from "@/lib/category-inheritance";
 import AccordionBuilder from "./AccordionBuilder";
@@ -36,6 +37,7 @@ import {
   type Category,
   type ColorRow,
   type FormState,
+  type LandedCostInfo,
   type Product,
   type SellingType,
   type VariantRow,
@@ -64,9 +66,20 @@ interface Props {
   /** Active size guides for the sizing step; omitted = none configured yet. */
   sizeGuides?: GuideOption[];
   product?: Product;
+  /**
+   * Landed cost per variant id, from the product's purchase orders. Keyed by id
+   * rather than by combination because that is what the server knows; the form
+   * re-keys it below. Absent on the create form, which has no history yet.
+   */
+  landedCosts?: Record<number, LandedCostInfo>;
 }
 
-export default function ProductForm({ categories, sizeGuides = [], product }: Props) {
+export default function ProductForm({
+  categories,
+  sizeGuides = [],
+  product,
+  landedCosts,
+}: Props) {
   const isEdit = !!product;
   // The state this form opened with. Autosave compares against it so an
   // untouched form never leaves a draft behind.
@@ -109,6 +122,22 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
     () => new Set((product?.variants ?? []).map((v) => rowKey(v.colorName ?? "", v.size ?? ""))),
     [product],
   );
+
+  /**
+   * Landed cost per option row, re-keyed from variant id to the colour/size
+   * combination the editor works in. Same reasoning as lockedStockKeys: derived
+   * from the product prop, so it describes what is SAVED rather than what is
+   * currently typed — a row renamed in the form has no landed cost until the
+   * rename is saved and its purchase history follows.
+   */
+  const landedCostKeys = useMemo(() => {
+    const byKey = new Map<string, LandedCostInfo>();
+    for (const v of product?.variants ?? []) {
+      const info = landedCosts?.[v.id];
+      if (info) byKey.set(rowKey(v.colorName ?? "", v.size ?? ""), info);
+    }
+    return byKey;
+  }, [product, landedCosts]);
 
   // Uploads land wherever they were started from: the gallery appends (capped
   // at MAX_IMAGES); a colour or a variant row replaces, since each holds one
@@ -276,6 +305,14 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
     : form.purchaseCost === ""
       ? 0
       : Number(form.purchaseCost);
+
+  /**
+   * Sell price for the margin the admin is aiming at — the whole point of the
+   * pricing bar under a single product's price. Null while there is nothing to
+   * work out (no cost, an empty box, or a margin of 100%+, where the formula
+   * has no answer), which is also what disables the button.
+   */
+  const marginPrice = marginTarget.trim() === "" ? null : priceFromMargin(costPaisa, Number(marginTarget));
 
   // Margin for a product sold by option.
   //
@@ -474,11 +511,11 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
       } else if (optionSummary.missingPrice > 0) {
         // Name the way out. A product ordered from a purchase order arrives
         // with every option unpriced, so this is the ordinary state of a draft
-        // being finished — not a typo — and typing one price into the bulk box
-        // clears the whole matrix at once.
+        // being finished — not a typo — and one profit percentage prices the
+        // whole matrix off what each option cost.
         clientErrors.variants =
           `${optionSummary.missingPrice} option${optionSummary.missingPrice === 1 ? "" : "s"} still need a price. ` +
-          `Type one above and press “Fill blanks” to price them all at once.`;
+          `Set a gross profit % above and press “Price from cost” to price them all at once.`;
       } else if (optionSummary.duplicateSkus.length > 0) {
         clientErrors.variants = `Duplicate SKU: ${optionSummary.duplicateSkus.join(", ")}.`;
       }
@@ -749,7 +786,7 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                 ? "One price and one stock for the whole product."
                 : form.sellingType === "colors"
                   ? "One option per colour, each with its own photo, price and stock."
-                  : "Sizes crossed with colours. Set a price for all, then override the odd one."
+                  : "Sizes crossed with colours. Price them off what they cost, then override the odd one."
             }
           >
             {form.sellingType !== "single" ? (
@@ -759,6 +796,7 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                 rows={form.variants}
                 baseSku={form.baseSku}
                 lockedStockKeys={lockedStockKeys}
+                landedCosts={landedCostKeys}
                 guideValues={resolvedGuide?.values ?? []}
                 guideName={resolvedGuide?.name ?? null}
                 error={errors.variants}
@@ -772,6 +810,103 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                 onBaseSkuChange={(next) => set("baseSku", next)}
               />
             ) : (
+              <>
+              {/* ── price from landed cost ── */}
+              {/* First in the card because it is the first move: you read what the
+                  goods cost, pick a margin, and the price below is filled in.
+                  The option matrix has the same bar (see OptionsBuilder), but the
+                  sum here is the OTHER one: a margin is a share of the selling
+                  price, so the cost is divided rather than multiplied. Both are
+                  spelled out beneath the field so neither can be read as the
+                  other. Only shown once a cost exists — without one there is
+                  nothing to price against. */}
+              {costPaisa > 0 && (
+                <div className="mb-4 rounded-xl border border-stone-200 bg-stone-50/60 p-3">
+                  <div className="flex flex-wrap items-end gap-2.5">
+                    <label className="min-w-0">
+                      <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
+                        Profit margin
+                      </span>
+                      <span className="flex items-center overflow-hidden rounded-lg border border-stone-200 bg-white">
+                        <input
+                          type="number"
+                          min="0"
+                          max="99"
+                          step="0.5"
+                          value={marginTarget}
+                          onChange={(e) => setMarginTarget(e.target.value)}
+                          placeholder="25"
+                          aria-label="Target profit margin percent"
+                          className="w-20 bg-transparent px-2 py-1.5 text-[13px] text-stone-800 outline-none"
+                        />
+                        <span className="border-l border-stone-200 bg-stone-50 px-2 py-1.5 text-[12.5px] font-semibold text-stone-500">
+                          %
+                        </span>
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => marginPrice != null && set("price", marginPrice)}
+                      disabled={marginPrice == null}
+                      title="Selling price = landed cost ÷ (1 − margin)"
+                      className="rounded-lg bg-brand-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40"
+                    >
+                      Set selling price
+                    </button>
+                  </div>
+
+                  {/* The three figures, stated plainly: what it cost, what is
+                      being taken, what that prices it at. The sum is spelled out
+                      underneath because the same 25% means something different
+                      on the option matrix, which marks up the cost instead. */}
+                  <dl className="mt-3 max-w-sm space-y-1.5 border-t border-stone-200 pt-2.5 text-[12.5px]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-stone-500">{isEdit ? "Landed cost" : "Cost"}</dt>
+                      <dd className="font-semibold tabular-nums text-stone-800">{formatTaka(costPaisa)}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-stone-500">Profit margin</dt>
+                      <dd className="font-semibold tabular-nums text-stone-800">
+                        {marginPrice != null ? `${marginTarget}%` : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3 border-t border-stone-200 pt-1.5">
+                      <dt className="font-semibold text-stone-700">Selling price</dt>
+                      <dd className="text-[14.5px] font-bold tabular-nums text-brand-700">
+                        {marginPrice != null ? formatTaka(marginPrice) : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <p className="mt-2 text-[11.5px] text-stone-400">
+                    {marginPrice != null ? (
+                      <>
+                        <span className="font-semibold text-stone-500">
+                          {formatTaka(costPaisa)} ÷ (1 − {marginTarget}%) = {formatTaka(marginPrice)}
+                        </span>{" "}
+                        — {formatTaka(marginPrice - costPaisa)} of every sale is profit, which is {marginTarget}% of
+                        the price rather than of the cost.
+                      </>
+                    ) : (
+                      <>
+                        Selling price = cost ÷ (1 − margin). The profit is that share of the SELLING price, so 25%
+                        on {formatTaka(costPaisa)} prices it at{" "}
+                        {formatTaka(priceFromMargin(costPaisa, 25) ?? 0)}. Margins of 100% or more have no answer.
+                      </>
+                    )}
+                    {marginPct != null && (
+                      <>
+                        {" "}
+                        Priced at{" "}
+                        <span className={marginPct > 0 ? "font-semibold text-emerald-600" : "font-semibold text-red-600"}>
+                          {marginPct}% margin
+                        </span>{" "}
+                        today.
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <Label required>Price</Label>
@@ -779,7 +914,10 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                     <input
                       type="number"
                       min="0"
-                      step="1"
+                      /* A margin-derived price lands on paisa (৳346 ÷ 0.75 =
+                         ৳461.33); a whole-taka step would fail the browser's
+                         validation and block the save. */
+                      step="0.01"
                       value={fmtTakaInput(form.price)}
                       onChange={(e) => set("price", parseTaka(e.target.value))}
                       placeholder="0"
@@ -787,36 +925,6 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                     />
                   </FieldShell>
                   <ErrorText>{errors.price}</ErrorText>
-                  {/* Price from margin, the other way round.
-                      price = cost / (1 − margin/100), the inverse of the gross
-                      margin shown under Sourcing cost, so typing 40 here and
-                      reading the margin back gives 40. Only offered once a cost
-                      exists — without one the sum has no meaning. Margins of
-                      100%+ are rejected: the formula divides by zero at 100 and
-                      goes negative above it. */}
-                  {costPaisa > 0 && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-[12px] text-stone-400">or price at</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="99"
-                        step="1"
-                        value={marginTarget}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          setMarginTarget(raw);
-                          const m = Number(raw);
-                          if (raw === "" || !Number.isFinite(m) || m < 0 || m >= 100) return;
-                          set("price", Math.round(costPaisa / (1 - m / 100)));
-                        }}
-                        placeholder="40"
-                        aria-label="Target margin percent"
-                        className="w-16 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[13px] tabular-nums text-stone-800 outline-none focus:border-brand-500"
-                      />
-                      <span className="text-[12px] text-stone-400">% margin</span>
-                    </div>
-                  )}
                 </div>
                 <div>
                   <Label hint="optional">Discount price</Label>
@@ -884,96 +992,79 @@ export default function ProductForm({ categories, sizeGuides = [], product }: Pr
                   )}
                 </div>
               </div>
+
+              </>
             )}
 
             {/* Product-level settings — these apply however it's sold. */}
             <div className="mt-5 border-t border-stone-100 pt-5">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  {/* Seeded once, then owned by purchase-order receipts, which set
-                      it to the landed cost. Checkout snapshots this onto every
-                      order line and a snapshot can't be corrected afterwards, so a
-                      stale figure retyped here would misstate profit permanently.
-                      Still SHOWN on edit — you price against it. */}
-                  <Label hint="for profit reports">Sourcing cost</Label>
-                  {isEdit ? (
-                    <>
-                      <div className="flex items-baseline gap-2 rounded-lg border border-dashed border-stone-200 bg-stone-50 px-3 py-2.5">
-                        <span className="text-[15px] font-semibold tabular-nums text-stone-800">
-                          {fmtTaka(product?.purchaseCost ?? 0)}
-                        </span>
-                        <span className="text-[12.5px] text-stone-500">per unit</span>
-                      </div>
-                      <p className="mt-1.5 text-[12px] text-stone-400">
-                        Set by the last purchase order received, including its share of freight.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <FieldShell prefix="৳" error={errors.purchaseCost}>
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={fmtTakaInput(form.purchaseCost)}
-                          onChange={(e) => set("purchaseCost", parseTaka(e.target.value))}
-                          placeholder="0"
-                          className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-                        />
-                      </FieldShell>
-                      <ErrorText>{errors.purchaseCost}</ErrorText>
-                    </>
-                  )}
-                  {/* Simple product: one cost, one price, one margin. */}
-                  {marginPct != null && !hasOptions && !errors.purchaseCost && (
-                    <p
-                      className={`mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold ${
-                        marginPct > 0 ? "text-emerald-600" : "text-red-600"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${
-                          marginPct > 0 ? "bg-emerald-500" : "bg-red-500"
-                        }`}
+                {/* Sourcing cost is a CREATE-only field now.
+                    A hand-made product has no purchase order to price against,
+                    and a zero cost makes the profit reports read the whole sale
+                    as profit — so it still has to be typed once here. On edit it
+                    is hidden: receipts own the figure (the hidden input below
+                    still resubmits it untouched), and each option's real cost is
+                    on its own row as the landed cost, which is the number you
+                    actually price against. */}
+                {!isEdit && (
+                  <div>
+                    <Label hint="for profit reports">Sourcing cost</Label>
+                    <FieldShell prefix="৳" error={errors.purchaseCost}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={fmtTakaInput(form.purchaseCost)}
+                        onChange={(e) => set("purchaseCost", parseTaka(e.target.value))}
+                        placeholder="0"
+                        className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
                       />
-                      {marginPct > 0
-                        ? `${marginPct}% margin per unit`
-                        : `Selling at or below cost (${marginPct}%)`}
-                    </p>
-                  )}
+                    </FieldShell>
+                    <ErrorText>{errors.purchaseCost}</ErrorText>
 
-                  {/* Option product: each row is priced on its own, so margin is
-                      a range across them. This used to be hidden entirely, which
-                      meant a catalogue of option products never saw a margin. */}
-                  {hasOptions && optionMarginLo != null && optionMarginHi != null && (
-                    <p
-                      className={`mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold ${
-                        optionsBelowCost > 0 ? "text-red-600" : "text-emerald-600"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${
-                          optionsBelowCost > 0 ? "bg-red-500" : "bg-emerald-500"
+                    {/* Simple product: one cost, one price, one margin. */}
+                    {marginPct != null && !hasOptions && !errors.purchaseCost && (
+                      <p
+                        className={`mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold ${
+                          marginPct > 0 ? "text-emerald-600" : "text-red-600"
                         }`}
-                      />
-                      {optionMarginLo === optionMarginHi
-                        ? `${optionMarginLo}% margin per unit`
-                        : `${optionMarginLo}–${optionMarginHi}% margin across options`}
-                    </p>
-                  )}
-                  {hasOptions && optionsBelowCost > 0 && (
-                    <p className="mt-1 text-[12px] text-red-600">
-                      {optionsBelowCost} option{optionsBelowCost === 1 ? " sells" : "s sell"} at or
-                      below the {fmtTaka(costPaisa)} it cost to buy.
-                    </p>
-                  )}
-                  {hasOptions && costPaisa === 0 && (
-                    <p className="mt-1.5 text-[12px] text-stone-400">
-                      No sourcing cost on record yet, so margin can&apos;t be worked out. It is set
-                      when a purchase order is received.
-                    </p>
-                  )}
-                </div>
+                      >
+                        <span
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${
+                            marginPct > 0 ? "bg-emerald-500" : "bg-red-500"
+                          }`}
+                        />
+                        {marginPct > 0 ? `${marginPct}% margin per unit` : `Selling at or below cost (${marginPct}%)`}
+                      </p>
+                    )}
+
+                    {/* Option product: each row is priced on its own, so margin is
+                        a range across them. */}
+                    {hasOptions && optionMarginLo != null && optionMarginHi != null && (
+                      <p
+                        className={`mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold ${
+                          optionsBelowCost > 0 ? "text-red-600" : "text-emerald-600"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${
+                            optionsBelowCost > 0 ? "bg-red-500" : "bg-emerald-500"
+                          }`}
+                        />
+                        {optionMarginLo === optionMarginHi
+                          ? `${optionMarginLo}% margin per unit`
+                          : `${optionMarginLo}–${optionMarginHi}% margin across options`}
+                      </p>
+                    )}
+                    {hasOptions && optionsBelowCost > 0 && (
+                      <p className="mt-1 text-[12px] text-red-600">
+                        {optionsBelowCost} option{optionsBelowCost === 1 ? " sells" : "s sell"} at or below the{" "}
+                        {fmtTaka(costPaisa)} it cost to buy.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div>
                   <Label hint="0 = off">Low-stock alert at</Label>
                   <FieldShell>

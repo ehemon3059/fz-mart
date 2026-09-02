@@ -6,8 +6,7 @@
  * A cell exists only when its combination is sellable: switching one off
  * deletes that row rather than saving a zero-stock placeholder, so "this colour
  * doesn't come in 52" is expressed as absence, exactly as the storefront reads
- * it. Cells whose price differs from the bulk value are marked, so an admin can
- * see at a glance what deviates from "everything is ৳2,490".
+ * it.
  */
 
 import { Icon } from "@/components/icons";
@@ -18,8 +17,6 @@ interface Props {
   colors: ColorRow[];
   sizes: string[];
   rows: VariantRow[];
-  /** The bulk price (taka) cells are compared against; "" = no bulk price set. */
-  bulkPrice: string;
   /** Row keys whose stock is owned by the ledger and so is read-only here. */
   lockedStockKeys: Set<string>;
   onChangeCell: (color: string, size: string, patch: Partial<VariantRow>) => void;
@@ -30,7 +27,6 @@ export default function VariantMatrix({
   colors,
   sizes,
   rows,
-  bulkPrice,
   lockedStockKeys,
   onChangeCell,
   onToggleCell,
@@ -88,17 +84,10 @@ export default function VariantMatrix({
 
               {cols.map((s) => {
                 const row = byKey.get(rowKey(c?.name ?? "", s));
-                const overridden =
-                  !!row && !!bulkPrice.trim() && row.price.trim() !== "" && row.price.trim() !== bulkPrice.trim();
                 return (
                   <td key={s || "_"} className="border-t border-stone-100 px-1 py-2">
                     {row ? (
-                      <div
-                        className={[
-                          "relative rounded-lg border p-1",
-                          overridden ? "border-brand-300 bg-brand-50/40" : "border-stone-200 bg-white",
-                        ].join(" ")}
-                      >
+                      <div className="relative rounded-lg border border-stone-200 bg-white p-1">
                         <button
                           type="button"
                           onClick={() => onToggleCell(c?.name ?? "", s)}
@@ -113,7 +102,9 @@ export default function VariantMatrix({
                           <input
                             type="number"
                             min="0"
-                            step="1"
+                            /* Paisa allowed — pricing off the landed cost rarely
+                               lands on a whole taka. */
+                            step="0.01"
                             value={row.price}
                             onChange={(e) => onChangeCell(c?.name ?? "", s, { price: e.target.value })}
                             placeholder="0"

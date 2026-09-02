@@ -212,7 +212,8 @@ export async function createPurchaseOrder(input: PurchaseOrderInput) {
   }, TX_OPTIONS);
 }
 
-export const PURCHASE_ORDERS_PAGE_SIZE = 20;
+/** Rows per page — the rest are a click away on Next. */
+export const PURCHASE_ORDERS_PAGE_SIZE = 8;
 
 export type PurchaseOrderRow = Prisma.PurchaseOrderGetPayload<{
   include: {
@@ -440,19 +441,15 @@ export async function receivePurchaseOrder(
         );
       }
 
-      // Landed cost = supplier price + this line's share of the shipment costs.
-      // Apportioned by value: a ৳2,000 item carries more of the freight than a
-      // ৳200 one, which is the convention that matches how shipping is priced.
-      const lineValue = line.unitCost * line.quantity;
-      const share = orderValue > 0 ? (overhead * lineValue) / orderValue : 0;
-      const landedUnitCost = Math.round(line.unitCost + (line.quantity > 0 ? share / line.quantity : 0));
+      // Shared with the detail page's landed-cost table — see landedUnitCost.
+      const landedCost = landedUnitCost(line, orderValue, overhead);
 
       await recordMovement(tx, {
         productId: line.productId,
         variantId: line.variantId,
         type: "PURCHASE",
         delta: receipt.quantity,
-        unitCost: landedUnitCost,
+        unitCost: landedCost,
         reason: po.poNo,
         actorName,
         locationId,
@@ -469,12 +466,12 @@ export async function receivePurchaseOrder(
       if (line.variantId != null) {
         await tx.productVariant.update({
           where: { id: line.variantId },
-          data: { purchaseCost: landedUnitCost },
+          data: { purchaseCost: landedCost },
         });
       } else {
         await tx.product.update({
           where: { id: line.productId },
-          data: { purchaseCost: landedUnitCost },
+          data: { purchaseCost: landedCost },
         });
       }
 
@@ -586,6 +583,86 @@ export async function getLeadTimesByProduct(): Promise<Map<number, number>> {
 }
 
 /** A product on a PO that has received stock but can't be sold yet. */
+/** What one option most recently cost to get onto the shelf. */
+export interface VariantLandedCost {
+  /** Paisa — supplier price plus this line's share of the shipment overheads. */
+  landed: number;
+  /** Paisa — what the supplier alone charged, before overheads. */
+  unitCost: number;
+  /** The order this came from, for pointing the admin at the paperwork. */
+  poId: number;
+  poNo: string;
+  /**
+   * TRUE while the goods have not arrived. The figure is then a projection:
+   * receiving is what writes it to the ledger and onto `purchaseCost`, and an
+   * edit to the order before then will move it. Shown differently for that
+   * reason — a number that can still change must not look settled.
+   */
+  isEstimate: boolean;
+}
+
+/**
+ * The landed cost of each option of a product, from the most recent order that
+ * explains it.
+ *
+ * Read from the purchase orders rather than from `ProductVariant.purchaseCost`
+ * because that column is only written when goods are RECEIVED. An order that
+ * has been placed but not yet delivered already knows what its units will cost
+ * — that is exactly the number an admin is pricing against — and reading the
+ * column would show 0 for it.
+ *
+ * Newest order wins per option, matching "what did this last cost us". A
+ * cancelled order answers nothing and is skipped.
+ */
+export async function getVariantLandedCosts(
+  productId: number,
+): Promise<Map<number, VariantLandedCost>> {
+  // Orders carrying this product, newest first. Every line comes back, not just
+  // this product's: the overhead is apportioned across the WHOLE order, so the
+  // order's total value is needed to work out any one line's share.
+  const orders = await prisma.purchaseOrder.findMany({
+    where: { status: { not: "CANCELLED" }, lines: { some: { productId } } },
+    select: {
+      id: true,
+      poNo: true,
+      shippingCost: true,
+      customsCost: true,
+      labourCost: true,
+      miscCost: true,
+      lines: {
+        select: {
+          productId: true,
+          variantId: true,
+          quantity: true,
+          unitCost: true,
+          receivedQty: true,
+        },
+      },
+    },
+    orderBy: { id: "desc" },
+  });
+
+  const out = new Map<number, VariantLandedCost>();
+  for (const po of orders) {
+    const orderValue = po.lines.reduce((sum, l) => sum + l.unitCost * l.quantity, 0);
+    const overhead = shipmentOverhead(po);
+    for (const line of po.lines) {
+      // Option-less lines have no row in the options editor to land on.
+      if (line.productId !== productId || line.variantId == null) continue;
+      // Newest order first, so the first answer per option is the current one.
+      if (out.has(line.variantId)) continue;
+      out.set(line.variantId, {
+        landed: landedUnitCost(line, orderValue, overhead),
+        unitCost: line.unitCost,
+        poId: po.id,
+        poNo: po.poNo,
+        isEstimate: line.receivedQty === 0,
+      });
+    }
+  }
+  return out;
+}
+
 export interface UnsellableRow {
   productId: number;
   name: string;
@@ -802,6 +879,34 @@ export function purchaseOrderTotal(po: {
 }): number {
   const goods = po.lines.reduce((sum, l) => sum + l.unitCost * l.quantity, 0);
   return goods + shipmentOverhead(po);
+}
+
+/**
+ * One line's landed unit cost: what the supplier charged, plus that line's
+ * share of the shipment overheads.
+ *
+ * Apportioned by VALUE, not by unit count — a ৳2,000 item carries more of the
+ * freight than a ৳200 one, which is the convention that matches how shipping
+ * is actually priced.
+ *
+ * Exported because two callers must agree to the paisa: `receivePurchaseOrder`
+ * writes this into the ledger and onto the product's `purchaseCost`, and the
+ * purchase-order detail page shows it before any of that has happened. A second
+ * copy of the arithmetic would eventually drift and quote a number the ledger
+ * then contradicts, so both read this one.
+ *
+ * `orderValue` is the value of the WHOLE order rather than one delivery, so two
+ * part-deliveries of the same PO carry consistent per-unit overhead instead of
+ * the first absorbing everything.
+ */
+export function landedUnitCost(
+  line: { quantity: number; unitCost: number },
+  orderValue: number,
+  overhead: number,
+): number {
+  if (line.quantity <= 0) return line.unitCost;
+  const share = orderValue > 0 ? (overhead * (line.unitCost * line.quantity)) / orderValue : 0;
+  return Math.round(line.unitCost + share / line.quantity);
 }
 
 /**

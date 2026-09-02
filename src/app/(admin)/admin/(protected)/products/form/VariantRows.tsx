@@ -14,7 +14,7 @@ import { ErrorText } from "./atoms";
 import { variantLabelOf } from "./helpers";
 import { VariantPhotoField } from "./ImageUploader";
 import { rowKey } from "./variant-utils";
-import type { VariantRow } from "./types";
+import type { LandedCostInfo, VariantRow } from "./types";
 
 interface Props {
   variants: VariantRow[];
@@ -30,6 +30,8 @@ interface Props {
   isBusy: (idx: number) => boolean;
   /** Row keys whose stock is owned by the ledger and so is read-only here. */
   lockedStockKeys: Set<string>;
+  /** Landed cost per row key, from the purchase orders. Read-only throughout. */
+  landedCosts: Map<string, LandedCostInfo>;
   onChange: (idx: number, patch: Partial<VariantRow>) => void;
   onAdd: () => void;
   onRemove: (idx: number) => void;
@@ -44,6 +46,7 @@ export default function VariantRows({
   showErrors,
   isBusy,
   lockedStockKeys,
+  landedCosts,
   onChange,
   onAdd,
   onRemove,
@@ -69,14 +72,15 @@ export default function VariantRows({
           sm:min-w keeps every column at a usable width instead of clipping
           Stock off the edge. */}
       <div className="overflow-x-auto">
-        <div className="sm:min-w-[600px]">
+        <div className="sm:min-w-[700px]">
           {variants.length > 0 && (
-            <div className="mb-2 hidden grid-cols-[140px_1fr_110px_110px_90px_36px] gap-2 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400 sm:grid">
+            <div className="mb-2 hidden grid-cols-[130px_1fr_100px_100px_80px_96px_36px] gap-2 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400 sm:grid">
               <span>Colour</span>
               <span>Size / option</span>
-              <span>Price</span>
+              <span>Sell price</span>
               <span>Discount</span>
               <span>Stock</span>
+              <span>Landed cost</span>
               <span />
             </div>
           )}
@@ -87,9 +91,18 @@ export default function VariantRows({
               const discValid = v.discountPrice.trim() !== "" && discNum > 0 && discNum < priceNum;
               const discInvalid = v.discountPrice.trim() !== "" && !discValid;
               const discPct = discValid ? Math.round((1 - discNum / priceNum) * 100) : 0;
+              const landed = landedCosts.get(rowKey(v.color, v.size));
+              // Margin is measured against what the shopper actually pays, so a
+              // live discount counts against the profit rather than beside it.
+              const paid = discValid ? discNum : priceNum;
+              const landedTaka = landed ? landed.landed / 100 : 0;
+              const profit =
+                landedTaka > 0 && paid > 0
+                  ? { taka: paid - landedTaka, pct: ((paid - landedTaka) / landedTaka) * 100 }
+                  : null;
               return (
                 <div key={idx} className="rounded-lg border border-stone-200 bg-stone-50/60 p-2">
-                  <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[140px_1fr_110px_110px_90px_36px]">
+                  <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[130px_1fr_100px_100px_80px_96px_36px]">
                     {/* Colour is optional per row: just a name, matched to its
                         photo. There is no hex picker — shoppers choose from the
                         product shots in the "More Colors" strip, never a chip,
@@ -117,7 +130,9 @@ export default function VariantRows({
                       <input
                         type="number"
                         min="0"
-                        step="1"
+                        /* Cost-derived prices land on paisa (৳438.03 × 1.25 = ৳547.54);
+                           a whole-taka step would fail validation and block the save. */
+                        step="0.01"
                         value={v.price}
                         onChange={(e) => onChange(idx, { price: e.target.value })}
                         placeholder="0"
@@ -165,6 +180,35 @@ export default function VariantRows({
                         className="min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-2 text-[13.5px] text-stone-800 outline-none focus:border-brand-500"
                       />
                     )}
+                    {/* Landed cost — always a reading, never an input. It is
+                        computed when goods are received (supplier price plus
+                        that line's share of freight and duty), so typing over
+                        it here could only ever disagree with the ledger. */}
+                    {landed ? (
+                      <span
+                        title={
+                          landed.isEstimate
+                            ? `Estimated from ${landed.poNo} — supplier ৳${(landed.unitCost / 100).toLocaleString("en-BD")} plus its share of the shipment costs. Confirmed when you receive the goods.`
+                            : `From ${landed.poNo} — supplier ৳${(landed.unitCost / 100).toLocaleString("en-BD")} plus its share of the shipment costs.`
+                        }
+                        className={[
+                          "col-span-2 min-w-0 rounded-md border border-dashed px-2 py-2 text-right text-[13px] tabular-nums sm:col-span-1",
+                          landed.isEstimate
+                            ? "border-stone-200 bg-stone-50 text-stone-500"
+                            : "border-stone-300 bg-stone-50 font-medium text-stone-700",
+                        ].join(" ")}
+                      >
+                        ৳{(landed.landed / 100).toLocaleString("en-BD", { maximumFractionDigits: 2 })}
+                        {landed.isEstimate && <span className="text-stone-400">*</span>}
+                      </span>
+                    ) : (
+                      <span
+                        title="No purchase order covers this option yet — record one to see what it costs to get here."
+                        className="col-span-2 min-w-0 rounded-md border border-dashed border-stone-200 px-2 py-2 text-right text-[13px] text-stone-300 sm:col-span-1"
+                      >
+                        —
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => onRemove(idx)}
@@ -196,6 +240,23 @@ export default function VariantRows({
                         <span className="text-stone-400">No discount</span>
                       )}
                     </span>
+                    {/* What this option actually earns: the price a shopper pays
+                        less what it cost to get here. The percentage is read the
+                        same way it is typed in "Gross profit" — on the cost. */}
+                    {profit && (
+                      <span
+                        className={[
+                          "text-[12px] font-semibold tabular-nums",
+                          profit.taka >= 0 ? "text-stone-600" : "text-red-600",
+                        ].join(" ")}
+                        title="Sell price (after discount) minus this option's landed cost"
+                      >
+                        {profit.taka >= 0 ? "Profit" : "Loss"} ৳
+                        {Math.abs(profit.taka).toLocaleString("en-BD", { maximumFractionDigits: 2 })} ·{" "}
+                        {profit.pct >= 0 ? "+" : ""}
+                        {profit.pct.toFixed(1)}%
+                      </span>
+                    )}
                     <label className="flex items-center gap-1.5 text-[12px] font-medium text-stone-600">
                       SKU
                       <input

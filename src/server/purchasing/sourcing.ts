@@ -45,6 +45,15 @@ export interface SourcingRow {
   /** Units ever bought, across every non-cancelled order. */
   unitsPurchased: number;
   lastPurchase: SourcingLastPurchase | null;
+  /**
+   * When this row last CHANGED — the later of the product's own last edit and
+   * the moment its most recent purchase was written down.
+   *
+   * Deliberately not `lastPurchase.on`: that is the day the goods were bought,
+   * which a backfill can set months in the past. Recording a purchase from
+   * memory this morning is news, so it sorts as this morning.
+   */
+  lastActivity: Date;
 }
 
 /**
@@ -65,10 +74,13 @@ export async function listProductSourcing(): Promise<SourcingRow[]> {
         price: true,
         discountPrice: true,
         stock: true,
+        updatedAt: true,
         // Only the stock figure — the panel fetches full variant detail for the
         // one product it is opened on, so the list stays cheap.
         variants: { select: { stock: true } },
       },
+      // Alphabetical here only as a stable tiebreak; the rows are ordered by
+      // recency below, where the whole history is in hand.
       orderBy: { name: "asc" },
     }),
     prisma.purchaseOrderLine.findMany({
@@ -95,9 +107,14 @@ export async function listProductSourcing(): Promise<SourcingRow[]> {
 
   const latest = new Map<number, SourcingLastPurchase>();
   const units = new Map<number, number>();
+  /** Per product: when its newest purchase row was WRITTEN, not dated. */
+  const recordedAt = new Map<number, Date>();
 
   for (const line of lines) {
     units.set(line.productId, (units.get(line.productId) ?? 0) + line.quantity);
+    const wrote = line.purchaseOrder.createdAt;
+    const seen = recordedAt.get(line.productId);
+    if (!seen || wrote > seen) recordedAt.set(line.productId, wrote);
     if (latest.has(line.productId)) continue;
     const po = line.purchaseOrder;
     latest.set(line.productId, {
@@ -109,8 +126,9 @@ export async function listProductSourcing(): Promise<SourcingRow[]> {
     });
   }
 
-  return products.map((p) => {
+  const rows = products.map((p): SourcingRow => {
     const sized = p.variants.length > 0;
+    const wrote = recordedAt.get(p.id);
     return {
       productId: p.id,
       name: p.name,
@@ -122,8 +140,16 @@ export async function listProductSourcing(): Promise<SourcingRow[]> {
       sourced: latest.has(p.id),
       unitsPurchased: units.get(p.id) ?? 0,
       lastPurchase: latest.get(p.id) ?? null,
+      lastActivity: wrote && wrote > p.updatedAt ? wrote : p.updatedAt,
     };
   });
+
+  // Newest first: whatever was just touched — a purchase recorded, a price
+  // edited, a product created — is what the owner came here to look at, and a
+  // catalogue sorted A-Z buries it. Sorted server-side so page 1 is genuinely
+  // the newest rows and not just the newest of whatever the browser happens to
+  // be showing. Equal timestamps fall back to the alphabetical order above.
+  return rows.sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
 }
 
 /** One sellable option, as the Add Purchase panel needs to show it. */

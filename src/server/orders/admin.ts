@@ -14,7 +14,7 @@ import {
 } from "@/server/inventory/reservations";
 import { sendPurchaseConfirmed } from "@/server/facebook/capi";
 
-export const ORDERS_PAGE_SIZE = 20;
+export const ORDERS_PAGE_SIZE = 10;
 
 export interface OrderListFilter {
   status?: OrderStatus;

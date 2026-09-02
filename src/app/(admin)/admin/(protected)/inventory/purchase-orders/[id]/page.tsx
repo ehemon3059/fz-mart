@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import {
   getPurchaseOrder,
   getUnsellableReceived,
+  landedUnitCost,
   purchaseOrderTotal,
   shipmentOverhead,
 } from "@/server/purchasing";
@@ -105,60 +106,144 @@ export default async function PurchaseOrderDetailPage({
       {/* Lines */}
       <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
         <h2 className="mb-3 text-[13px] font-semibold text-stone-900">Products</h2>
-        <div className="divide-y divide-stone-100 text-sm">
-          {po.lines.map((l) => {
-            const remaining = l.quantity - l.receivedQty;
-            return (
-              <div key={l.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
-                <div className="min-w-0">
-                  <span className="font-medium text-stone-800">{l.productName}</span>
-                  {l.variantLabel && <span className="text-stone-500"> — {l.variantLabel}</span>}
-                  <div className="text-[11.5px] text-stone-400">
-                    {l.quantity} × {formatTaka(l.unitCost)}
-                    {l.receivedQty > 0 && (
-                      <>
-                        {" · "}
-                        <span className={remaining > 0 ? "text-warning-fg" : "text-success-fg"}>
+        {/* Its own scroll container: four numeric columns don't fit a phone, and
+            the page body must never scroll sideways as a whole. */}
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full min-w-[420px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-stone-200 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
+                <th className="pb-2 text-left font-semibold">Product</th>
+                <th className="pb-2 text-right font-semibold">Qty</th>
+                <th className="pb-2 text-right font-semibold">Price / unit</th>
+                <th className="pb-2 text-right font-semibold">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {po.lines.map((l) => {
+                const remaining = l.quantity - l.receivedQty;
+                return (
+                  <tr key={l.id} className="align-baseline">
+                    <td className="py-2.5 pr-3">
+                      {/* The option is what tells one line from the next when a
+                          product is ordered in several sizes, so it leads; six
+                          repetitions of the product name would not. */}
+                      <span className="font-medium text-stone-800">
+                        {l.variantLabel ?? l.productName}
+                      </span>
+                      {l.variantLabel && (
+                        <span className="block text-[11.5px] text-stone-400">{l.productName}</span>
+                      )}
+                      {l.receivedQty > 0 && (
+                        <span
+                          className={`block text-[11.5px] ${
+                            remaining > 0 ? "text-warning-fg" : "text-success-fg"
+                          }`}
+                        >
                           {l.receivedQty} received
                           {remaining > 0 ? `, ${remaining} outstanding` : ""}
                         </span>
-                      </>
-                    )}
-                  </div>
+                      )}
+                    </td>
+                    <td className="nums py-2.5 text-right tabular-nums text-stone-600">
+                      {l.quantity}
+                    </td>
+                    <td className="nums py-2.5 pl-3 text-right tabular-nums text-stone-600">
+                      {formatTaka(l.unitCost)}
+                    </td>
+                    <td className="nums py-2.5 pl-3 text-right font-medium tabular-nums text-stone-900">
+                      {formatTaka(l.unitCost * l.quantity)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-stone-200 text-sm">
+                <td className="pt-2.5 font-medium text-stone-700" colSpan={3}>
+                  Total goods cost
+                </td>
+                <td className="nums pt-2.5 text-right font-semibold tabular-nums text-stone-900">
+                  {formatTaka(goodsValue)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div className="mt-4 space-y-1 border-t border-stone-200 pt-3 text-sm">
+          {shipmentCosts.length > 0 && (
+            <>
+              <p className="mb-1 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
+                Extra costs
+              </p>
+              {shipmentCosts.map((c) => (
+                <div key={c.label} className="flex justify-between text-stone-600">
+                  <span>{c.label}</span>
+                  <span className="nums tabular-nums">{formatTaka(c.amount)}</span>
                 </div>
-                <span className="nums font-medium text-stone-900">
-                  {formatTaka(l.unitCost * l.quantity)}
-                </span>
+              ))}
+              <div className="flex justify-between border-t border-stone-100 pt-1.5 font-medium text-stone-700">
+                <span>Total extra cost</span>
+                <span className="nums tabular-nums">{formatTaka(overhead)}</span>
               </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-3 space-y-1 border-t border-stone-200 pt-3 text-sm">
-          <div className="flex justify-between text-stone-600">
-            <span>Goods</span>
-            <span className="nums">{formatTaka(goodsValue)}</span>
-          </div>
-          {shipmentCosts.map((c) => (
-            <div key={c.label} className="flex justify-between text-stone-600">
-              <span>{c.label}</span>
-              <span className="nums">{formatTaka(c.amount)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between border-t border-stone-100 pt-1.5 text-base font-bold text-stone-900">
-            <span>Total</span>
-            <span className="nums">{formatTaka(goodsValue + overhead)}</span>
+            </>
+          )}
+          <div className="flex justify-between border-t border-stone-200 pt-1.5 text-base font-bold text-stone-900">
+            <span>Grand total</span>
+            <span className="nums tabular-nums">{formatTaka(goodsValue + overhead)}</span>
           </div>
         </div>
-
-        {overhead > 0 && (
-          <p className="mt-3 rounded-md bg-stone-50 px-3 py-2 text-[11.5px] leading-relaxed text-stone-500">
-            These shipment costs are spread across the lines by value when you receive them, so
-            each product&rsquo;s landed cost — and therefore its profit margin — reflects what it
-            really cost to get here, not just the supplier&rsquo;s invoice price.
-          </p>
-        )}
       </div>
+
+      {/* Landed cost — only worth a card when there ARE overheads to spread.
+          With none, landed cost equals the supplier price and the table would
+          just repeat the one above. */}
+      {overhead > 0 && goodsValue > 0 && (
+        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-card">
+          <h2 className="text-[13px] font-semibold text-stone-900">Landed cost per unit</h2>
+          <p className="mt-0.5 text-[12.5px] text-stone-500">
+            The extra costs are shared out by value, so a pricier item carries more of the freight.
+            This is what each unit really costs once it is here — the figure margins should be
+            measured against.
+          </p>
+          <div className="-mx-1 mt-3 overflow-x-auto px-1">
+            <table className="w-full min-w-[380px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-stone-200 text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
+                  <th className="pb-2 text-left font-semibold">Product</th>
+                  <th className="pb-2 text-right font-semibold">Supplier cost</th>
+                  <th className="pb-2 text-right font-semibold">Landed cost</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {po.lines.map((l) => (
+                  <tr key={l.id} className="align-baseline">
+                    <td className="py-2.5 pr-3">
+                      <span className="font-medium text-stone-800">
+                        {l.variantLabel ?? l.productName}
+                      </span>
+                      {l.variantLabel && (
+                        <span className="block text-[11.5px] text-stone-400">{l.productName}</span>
+                      )}
+                    </td>
+                    <td className="nums py-2.5 pl-3 text-right tabular-nums text-stone-500">
+                      {formatTaka(l.unitCost)}
+                    </td>
+                    <td className="nums py-2.5 pl-3 text-right font-semibold tabular-nums text-stone-900">
+                      {formatTaka(landedUnitCost(l, goodsValue, overhead))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 rounded-md bg-stone-50 px-3 py-2 text-[11.5px] leading-relaxed text-stone-500">
+            {receivedUnits > 0
+              ? "These are the costs written to the stock ledger as each unit arrived."
+              : "These are applied when you receive the goods, and become each product’s sourcing cost."}
+          </p>
+        </div>
+      )}
 
       {/* Receiving */}
       {po.status === "ORDERED" && (

@@ -77,6 +77,23 @@ export type UploadTarget =
   | { kind: "variant"; idx: number }
   | { kind: "color"; idx: number };
 
+/**
+ * What one option last cost to get onto the shelf, derived from its purchase
+ * orders. Read-only in the form: it is the OUTPUT of receiving goods, never an
+ * input, so it rides beside the rows rather than inside VariantRow — nothing
+ * here is ever submitted.
+ */
+export interface LandedCostInfo {
+  /** Paisa — supplier price plus this option's share of the shipment costs. */
+  landed: number;
+  /** Paisa — what the supplier alone charged. */
+  unitCost: number;
+  poId: number;
+  poNo: string;
+  /** The goods have not arrived yet, so the figure can still move. */
+  isEstimate: boolean;
+}
+
 export interface VariantRow {
   /** Colour name for this option, or "" for none. */
   color: string;

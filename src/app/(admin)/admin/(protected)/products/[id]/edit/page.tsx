@@ -5,6 +5,7 @@ import { listStockHistory } from "@/server/inventory";
 import { listActiveSizeGuides } from "@/server/size-guides";
 import { onHandUnits, variantsCarryStock } from "@/lib/product-stock";
 import { getProductListingOverview } from "@/server/inventory/listing";
+import { getVariantLandedCosts } from "@/server/purchasing";
 import ProductForm from "../../ProductForm";
 import StockPanel from "./StockPanel";
 import ListingPanel from "./ListingPanel";
@@ -17,12 +18,13 @@ export default async function EditProductPage({
 }) {
   const { id } = await params;
   const productId = Number(id);
-  const [product, categories, history, sizeGuides, overview] = await Promise.all([
+  const [product, categories, history, sizeGuides, overview, landedCosts] = await Promise.all([
     getProductById(productId),
     listAllCategories(),
     listStockHistory(productId),
     listActiveSizeGuides(),
     getProductListingOverview(productId),
+    getVariantLandedCosts(productId),
   ]);
   if (!product) notFound();
 
@@ -52,6 +54,9 @@ export default async function EditProductPage({
       <ProductForm
         categories={categories}
         product={product}
+        // A Map can't cross the server/client boundary, so it goes as a plain
+        // object keyed by variant id; the form re-keys it by colour/size.
+        landedCosts={Object.fromEntries(landedCosts)}
       sizeGuides={sizeGuides.map((g) => ({
         id: g.id,
         name: g.name,

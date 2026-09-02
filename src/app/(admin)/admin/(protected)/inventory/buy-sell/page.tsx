@@ -35,6 +35,7 @@ export default async function BuySellPage() {
           isBackfill: r.lastPurchase.isBackfill,
         }
       : null,
+    lastUpdated: DATE.format(r.lastActivity),
   }));
 
   return (

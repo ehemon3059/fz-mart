@@ -133,11 +133,10 @@ export function initialFromProduct(p?: Product): FormState {
           // A zero price is NOT a price — it is an option nobody has priced
           // yet, which is exactly how quickCreateProductAction leaves the rows
           // it writes from a purchase order. The form distinguishes the two by
-          // blankness (see fillEmpty in OptionsBuilder: a typed 0 is a decision,
-          // an empty box is a gap), so hydrating 0 as "0" would disguise every
-          // unpriced option as deliberate and leave "Fill gaps" with nothing to
-          // do. Blank instead: the placeholder shows, the bulk controls reach
-          // these rows, and the save guard still refuses to publish them.
+          // blankness (a typed 0 is a decision, an empty box is a gap), so
+          // hydrating 0 as "0" would disguise every unpriced option as
+          // deliberate. Blank instead: the placeholder shows, "Price from cost"
+          // reaches these rows, and the save guard still refuses to publish them.
           price: v.price > 0 ? String(v.price / 100) : "",
           discountPrice: v.discountPrice != null ? String(v.discountPrice / 100) : "",
           stock: String(v.stock),

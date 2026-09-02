@@ -4,8 +4,8 @@
  * Options & pricing — the step that replaces the old "Sizes / Variants" card.
  *
  * Colours and sizes are authored as LISTS; the sellable rows are derived from
- * them, so a 7-colour × 14-size saree is two lists and a bulk price rather than
- * 98 hand-entered rows. Every list change re-syncs the matrix through
+ * them, so a 7-colour × 14-size saree is two lists and one profit percentage
+ * rather than 98 hand-entered rows. Every list change re-syncs the matrix through
  * `generateRows`, which preserves the price, stock and SKU already entered for
  * a combination and drops only what the admin removed.
  *
@@ -21,8 +21,8 @@ import SizePicker from "./SizePicker";
 import VariantMatrix from "./VariantMatrix";
 import VariantRows from "./VariantRows";
 import { ErrorText } from "./atoms";
-import { blankRow, fillSkus, generateRows, indexRows, rowKey, summarise } from "./variant-utils";
-import type { ColorRow, SellingType, VariantRow } from "./types";
+import { blankRow, fillSkus, generateRows, indexRows, priceFromCost, rowKey, summarise } from "./variant-utils";
+import type { ColorRow, LandedCostInfo, SellingType, VariantRow } from "./types";
 
 interface Props {
   sellingType: Exclude<SellingType, "single">;
@@ -37,6 +37,7 @@ interface Props {
    * this set and still takes an opening figure.
    */
   lockedStockKeys: Set<string>;
+  landedCosts: Map<string, LandedCostInfo>;
   /** Sizes offered by the resolved size guide, in the guide's order. */
   guideValues: string[];
   guideName: string | null;
@@ -51,7 +52,7 @@ interface Props {
   onBaseSkuChange: (next: string) => void;
 }
 
-const takaFmt = (taka: number) => "৳" + taka.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const takaFmt = (taka: number) => "৳" + taka.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 export default function OptionsBuilder({
   sellingType,
@@ -59,6 +60,7 @@ export default function OptionsBuilder({
   rows,
   baseSku,
   lockedStockKeys,
+  landedCosts,
   guideValues,
   guideName,
   error,
@@ -72,8 +74,7 @@ export default function OptionsBuilder({
   onBaseSkuChange,
 }: Props) {
   const [view, setView] = useState<"matrix" | "list">("matrix");
-  const [bulkPrice, setBulkPrice] = useState("");
-  const [bulkStock, setBulkStock] = useState("");
+  const [bulkProfit, setBulkProfit] = useState("");
 
   const withSizes = sellingType === "sizes";
 
@@ -152,41 +153,38 @@ export default function OptionsBuilder({
     else onRowsChange([...rows, fresh]);
   };
 
-  /* ── bulk ── */
-  // A locked row's stock is a fact about the warehouse, not a form value, so no
-  // bulk control may touch it. Everything below therefore edits price freely
-  // and stock only where the option doesn't exist in the ledger yet.
-  const canSetStock = (r: VariantRow) => !lockedStockKeys.has(rowKey(r.color, r.size));
+  /* ── price from landed cost ── */
+  // Landed cost is what the goods actually cost to get onto the shelf, so a
+  // percentage on top of it is the profit the admin keeps. Only rows the
+  // purchase orders know about can be priced this way — a brand-new option has
+  // no cost to mark up, and guessing one would invent a margin.
+  const costedRows = useMemo(
+    () => rows.filter((r) => landedCosts.has(rowKey(r.color, r.size))),
+    [rows, landedCosts],
+  );
 
-  const applyBulk = () => {
-    const price = bulkPrice.trim();
-    const stock = bulkStock.trim();
-    if (!price && !stock) return;
+  const profitPct = Number(bulkProfit);
+  const profitValid = bulkProfit.trim() !== "" && Number.isFinite(profitPct) && profitPct >= 0;
+
+  /** Cheapest and dearest price this percentage would produce, for the hint. */
+  const profitPreview = useMemo(() => {
+    if (!profitValid || costedRows.length === 0) return null;
+    const prices = costedRows.map((r) =>
+      Number(priceFromCost(landedCosts.get(rowKey(r.color, r.size))!.landed, profitPct)),
+    );
+    return { low: Math.min(...prices), high: Math.max(...prices) };
+  }, [costedRows, landedCosts, profitPct, profitValid]);
+
+  /** Each costed row gets its OWN price — same percentage, different cost. */
+  const applyProfit = () => {
+    if (!profitValid) return;
     onRowsChange(
-      rows.map((r) => ({
-        ...r,
-        price: price ? price : r.price,
-        stock: stock && canSetStock(r) ? stock : r.stock,
-      })),
+      rows.map((r) => {
+        const landed = landedCosts.get(rowKey(r.color, r.size));
+        return landed ? { ...r, price: priceFromCost(landed.landed, profitPct) } : r;
+      }),
     );
   };
-  /** Only fill the gaps — leaves every deliberate override alone. */
-  const fillEmpty = () => {
-    const price = bulkPrice.trim();
-    const stock = bulkStock.trim();
-    onRowsChange(
-      rows.map((r) => ({
-        ...r,
-        price: !r.price.trim() && price ? price : r.price,
-        // A typed 0 means "sold out", not "not filled in yet" — only a blank
-        // is a gap. New rows start blank, so generating then filling works.
-        stock: !r.stock.trim() && stock && canSetStock(r) ? stock : r.stock,
-      })),
-    );
-  };
-
-  /** Are there any rows whose opening stock can still be typed? */
-  const anyOpenStock = rows.some(canSetStock);
 
   const summary = summarise(rows);
 
@@ -213,61 +211,48 @@ export default function OptionsBuilder({
         )}
       </div>
 
-      {/* ── bulk bar ── */}
+      {/* ── pricing bar ── */}
+      {/* One flat price for every option is gone: options are priced off what
+          each one actually cost, so the same percentage still fills the whole
+          matrix in one click while respecting that a 42 costs more than a 38. */}
       <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-3">
         <div className="flex flex-wrap items-end gap-2.5">
           <label className="min-w-0">
             <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
-              Price for all
+              Gross profit
             </span>
             <span className="flex items-center overflow-hidden rounded-lg border border-stone-200 bg-white">
-              <span className="border-r border-stone-200 bg-stone-50 px-2 py-1.5 text-[12.5px] font-semibold text-stone-500">
-                ৳
-              </span>
               <input
                 type="number"
                 min="0"
-                step="1"
-                value={bulkPrice}
-                onChange={(e) => setBulkPrice(e.target.value)}
-                placeholder="0"
-                className="w-24 bg-transparent px-2 py-1.5 text-[13px] text-stone-800 outline-none"
+                step="0.5"
+                value={bulkProfit}
+                onChange={(e) => setBulkProfit(e.target.value)}
+                placeholder="25"
+                aria-label="Gross profit percentage on the landed cost"
+                className="w-20 bg-transparent px-2 py-1.5 text-[13px] text-stone-800 outline-none"
               />
+              <span className="border-l border-stone-200 bg-stone-50 px-2 py-1.5 text-[12.5px] font-semibold text-stone-500">
+                %
+              </span>
             </span>
           </label>
-          {anyOpenStock && (
-            <label className="min-w-0">
-              <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-stone-400">
-                Opening stock
-              </span>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={bulkStock}
-                onChange={(e) => setBulkStock(e.target.value)}
-                placeholder="0"
-                title="Only applies to options that aren't in the stock ledger yet"
-                className="w-20 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-[13px] text-stone-800 outline-none focus:border-brand-500"
-              />
-            </label>
+          <button
+            type="button"
+            onClick={applyProfit}
+            disabled={!profitPreview}
+            title="Sell price = landed cost + that percentage of it, per option"
+            className="rounded-lg bg-brand-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-brand-700 disabled:opacity-40"
+          >
+            Price from cost
+          </button>
+          {profitPreview && (
+            <span className="pb-1.5 text-[12.5px] font-semibold tabular-nums text-brand-700">
+              {profitPreview.low === profitPreview.high
+                ? takaFmt(profitPreview.low)
+                : `${takaFmt(profitPreview.low)} – ${takaFmt(profitPreview.high)}`}
+            </span>
           )}
-          <button
-            type="button"
-            onClick={fillEmpty}
-            disabled={rows.length === 0}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-stone-600 transition hover:bg-stone-50 disabled:opacity-40"
-          >
-            Fill blanks
-          </button>
-          <button
-            type="button"
-            onClick={applyBulk}
-            disabled={rows.length === 0}
-            className="rounded-lg bg-stone-800 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-stone-900 disabled:opacity-40"
-          >
-            Overwrite all
-          </button>
 
           <span className="ml-auto flex items-end gap-2">
             <label className="min-w-0">
@@ -285,7 +270,7 @@ export default function OptionsBuilder({
               type="button"
               onClick={() => onRowsChange(fillSkus(rows, baseSku))}
               disabled={!baseSku.trim() || rows.length === 0}
-              title="Fill in any option that has no SKU yet"
+              title="Fill in any option that has no SKU yet — ROOT-COLOUR-SIZE, never rewritten once set"
               className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-stone-600 transition hover:bg-stone-50 disabled:opacity-40"
             >
               Fill SKUs
@@ -293,14 +278,23 @@ export default function OptionsBuilder({
           </span>
         </div>
         <p className="mt-2 text-[11.5px] text-stone-400">
-          “Fill blanks” only touches options you haven&apos;t priced yet. SKUs are built as{" "}
-          <span className="font-semibold text-stone-500">ROOT-COLOUR-SIZE</span> and never rewritten once set, so
-          re-saving a product can&apos;t renumber your inventory.{" "}
-          {anyOpenStock ? (
-            <>Opening stock applies only to options that aren&apos;t in the stock ledger yet.</>
+          {costedRows.length === 0 ? (
+            <>
+              No option has a landed cost yet — receive a purchase order and each option can be priced off what it
+              actually cost.
+            </>
           ) : (
             <>
-              Stock isn&apos;t edited here — receive a purchase order, or use the Stock panel to correct a count.
+              Prices{" "}
+              <span className="font-semibold text-stone-500">
+                {costedRows.length} of {rows.length}
+              </span>{" "}
+              option{rows.length === 1 ? "" : "s"} at{" "}
+              <span className="font-semibold text-stone-500">
+                landed cost × {profitValid ? (1 + profitPct / 100).toFixed(2) : "1.25"}
+              </span>{" "}
+              — the profit sits on top of the cost, so each option gets its own price. Options with no landed cost
+              keep the price they have.
             </>
           )}
         </p>
@@ -345,7 +339,6 @@ export default function OptionsBuilder({
               colors={namedColors}
               sizes={withSizes ? sizes : []}
               rows={rows}
-              bulkPrice={bulkPrice}
               lockedStockKeys={lockedStockKeys}
               onChangeCell={changeCell}
               onToggleCell={toggleCell}
@@ -359,6 +352,7 @@ export default function OptionsBuilder({
               showErrors={false}
               isBusy={isRowBusy}
               lockedStockKeys={lockedStockKeys}
+              landedCosts={landedCosts}
               onChange={(idx, patch) => onRowsChange(rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)))}
               onAdd={() => onRowsChange([...rows, blankRow(null, "")])}
               onRemove={(idx) => onRowsChange(rows.filter((_, i) => i !== idx))}

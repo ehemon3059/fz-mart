@@ -41,6 +41,9 @@ export interface BuySellRow {
     on: string;
     isBackfill: boolean;
   } | null;
+  /** Pre-formatted on the server. When this row last changed — it is what the
+   *  list is ordered by, so it is shown rather than left to be guessed at. */
+  lastUpdated: string;
 }
 
 export interface SupplierOption {
@@ -49,6 +52,9 @@ export interface SupplierOption {
 }
 
 type Filter = "all" | "unsourced" | "sourced";
+
+/** Rows per page — the rest are a click away on Next. */
+const PAGE_SIZE = 8;
 
 const TABS: { key: Filter; label: string }[] = [
   { key: "all", label: "All products" },
@@ -66,6 +72,7 @@ export default function BuySellClient({
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [target, setTarget] = useState<BuySellRow | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -92,9 +99,19 @@ export default function BuySellClient({
     });
   }, [rows, filter, query]);
 
+  // Clamped rather than reset: narrowing a search while on page 6 should land
+  // on the last page that still has rows, never on an empty table.
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const start = (current - 1) * PAGE_SIZE;
+  const pageRows = visible.slice(start, start + PAGE_SIZE);
+
   function onRecorded(message: string) {
     setTarget(null);
     setFlash(message);
+    // Back to page 1: the product just recorded is now the most recent row, so
+    // that is where the refresh puts it, and staying on page 4 would hide it.
+    setPage(1);
     router.refresh();
   }
 
@@ -152,7 +169,10 @@ export default function BuySellClient({
             <button
               key={t.key}
               type="button"
-              onClick={() => setFilter(t.key)}
+              onClick={() => {
+                setFilter(t.key);
+                setPage(1);
+              }}
               className={
                 "rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors " +
                 (filter === t.key
@@ -174,7 +194,10 @@ export default function BuySellClient({
           </span>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search product or supplier"
             className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
           />
@@ -192,7 +215,7 @@ export default function BuySellClient({
           </tr>
         }
       >
-        {visible.map((r) => (
+        {pageRows.map((r) => (
           <Tr key={r.productId}>
             <Td>
               <Link
@@ -221,6 +244,7 @@ export default function BuySellClient({
                 ) : (
                   <span className="text-stone-400">No supplier recorded</span>
                 )}
+                <span className="text-stone-400"> · Updated {r.lastUpdated}</span>
               </div>
             </Td>
 
@@ -277,6 +301,36 @@ export default function BuySellClient({
           </TableEmpty>
         )}
       </DataTable>
+
+      {/* Hidden entirely while everything fits on one page — a lone "Page 1 of
+          1" is noise on a shop with twenty products. */}
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between text-[13px]">
+          <button
+            type="button"
+            onClick={() => setPage(current - 1)}
+            disabled={current <= 1}
+            className="rounded-lg border border-stone-200 px-3 py-1.5 font-medium text-stone-600 hover:border-stone-400 disabled:opacity-40 disabled:hover:border-stone-200"
+          >
+            ← Previous
+          </button>
+          <span className="text-stone-500">
+            Showing{" "}
+            <span className="font-medium text-stone-700">
+              {start + 1}–{start + pageRows.length}
+            </span>{" "}
+            of {visible.length} · Page {current} of {pageCount}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(current + 1)}
+            disabled={current >= pageCount}
+            className="rounded-lg border border-stone-200 px-3 py-1.5 font-medium text-stone-600 hover:border-stone-400 disabled:opacity-40 disabled:hover:border-stone-200"
+          >
+            Next →
+          </button>
+        </div>
+      )}
 
       {target && (
         <AddPurchasePanel
