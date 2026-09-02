@@ -267,31 +267,51 @@ export default function MovementsClient({ rows, products, total, page, pageCount
               </div>
             </div>
 
-            {pageCount > 1 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-stone-500">
-                  {t.pageInfo(page, pageCount, total.toLocaleString("en-BD"))}
-                </span>
-                <div className="flex gap-2">
-                  {page > 1 && (
-                    <Link
-                      href={pageHref(page - 1)}
-                      className="rounded-lg border border-stone-300 px-3 py-1.5 hover:border-stone-400"
-                    >
-                      {t.prev}
-                    </Link>
-                  )}
-                  {page < pageCount && (
-                    <Link
-                      href={pageHref(page + 1)}
-                      className="rounded-lg border border-stone-300 px-3 py-1.5 hover:border-stone-400"
-                    >
-                      {t.next}
-                    </Link>
-                  )}
-                </div>
+            {/* Always on show, so the page position and the way out of it are
+                visible even on a single page of results. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <span className="text-stone-500">
+                {t.pageInfo(page, pageCount, total.toLocaleString("en-BD"))}
+              </span>
+              <div className="flex gap-2">
+                {page > 1 ? (
+                  <Link
+                    href={pageHref(page - 1)}
+                    rel="prev"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 font-medium text-stone-700 hover:border-stone-400 hover:bg-stone-50"
+                  >
+                    <Icon name="chevronLeft" size={14} />
+                    {t.prev}
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 px-3 py-1.5 font-medium text-stone-300"
+                  >
+                    <Icon name="chevronLeft" size={14} />
+                    {t.prev}
+                  </span>
+                )}
+                {page < pageCount ? (
+                  <Link
+                    href={pageHref(page + 1)}
+                    rel="next"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 font-medium text-stone-700 hover:border-stone-400 hover:bg-stone-50"
+                  >
+                    {t.next}
+                    <Icon name="chevronRight" size={14} />
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 px-3 py-1.5 font-medium text-stone-300"
+                  >
+                    {t.next}
+                    <Icon name="chevronRight" size={14} />
+                  </span>
+                )}
               </div>
-            )}
+            </div>
           </>
         )}
 

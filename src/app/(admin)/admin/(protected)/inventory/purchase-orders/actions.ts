@@ -67,20 +67,29 @@ export async function saveSupplierAction(
 
 export async function deleteSupplierAction(id: number): Promise<ActionResult> {
   const admin = await requirePermission("inventory");
+
+  let removed;
   try {
-    await deleteSupplier(id);
+    removed = await deleteSupplier(id);
   } catch (err) {
     if (err instanceof PurchasingError) return { error: err.message };
     throw err;
   }
+
+  // The name and the order count are recorded because the row itself is gone:
+  // "#7" in the log answers nothing once there is no supplier #7 to look up.
   await logActivity({
     adminId: admin.id,
     actorName: admin.username,
     action: "supplier.delete",
-    detail: `#${id}`,
+    detail:
+      removed.deletedOrders > 0
+        ? `${removed.name} (#${id}) with ${removed.deletedOrders} purchase order(s)`
+        : `${removed.name} (#${id})`,
   });
   revalidatePath("/admin/inventory/suppliers");
-  return {};
+  revalidatePath("/admin/inventory/purchase-orders");
+  return { success: `${removed.name} deleted.` };
 }
 
 // ── Purchase orders ─────────────────────────────────────────────────────────

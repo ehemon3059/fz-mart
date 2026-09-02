@@ -434,3 +434,161 @@ export async function addOrderNote(orderId: number, body: string, author: string
     data: { orderId, body: trimmed, author },
   });
 }
+
+// ─────────────────────────────────────────────────────────────
+// Deletion
+// ─────────────────────────────────────────────────────────────
+
+/** What an order WAS, captured before the row is destroyed, for the audit log. */
+export interface DeletedOrderSummary {
+  orderNo: string;
+  status: OrderStatus;
+  total: number;
+  customerPhone: string;
+}
+
+export interface DeleteOrdersResult {
+  deleted: DeletedOrderSummary[];
+  /** Orders deliberately left alone, each with the reason to show the admin. */
+  blocked: { orderNo: string; reason: string }[];
+}
+
+/**
+ * Permanently delete ONE order. Returns either what was deleted or why it
+ * wasn't — never throws for a refusal, so a bulk run reports per-order
+ * outcomes instead of dying on the first protected order.
+ *
+ * Deletion is a real erase, not a status change: CANCELLED already exists for
+ * "this order didn't happen". This is for orders that should never have been in
+ * the book at all (test rows, junk/fake COD orders). Three things therefore have
+ * to be settled before the row can go, because nothing else would fix them:
+ *
+ *   RESERVED UNITS  an unshipped order is holding stock. Delete the row and the
+ *                   reservation is leaked — units unavailable forever with
+ *                   nothing left pointing at them. So the reservation is
+ *                   released first, inside this transaction.
+ *   COUPON COUNTER  CouponRedemption cascades away, but Coupon.timesUsed is
+ *                   denormalised and does not follow a cascade.
+ *   PAYMENT ROWS    Payment has no cascade on purpose. Unsettled attempts are
+ *                   deleted with the order; anything that moved money blocks it.
+ *
+ * StockMovement rows survive with orderId set to NULL (SetNull, by schema
+ * design): deleting an order must never erase the fact that stock moved.
+ */
+async function deleteOneOrder(
+  orderId: number,
+): Promise<{ deleted?: DeletedOrderSummary; blocked?: { orderNo: string; reason: string } }> {
+  return prisma.$transaction(async (tx) => {
+    // Lock the order row FIRST. Everything that could make this delete unsafe
+    // between the checks and the delete — a gateway IPN confirming payment
+    // (handleVerifiedPayment), a consignment being created — writes THIS row
+    // inside its own transaction, so the lock serialises against them. The
+    // columns are re-read in the same locking statement because TiDB's
+    // pessimistic REPEATABLE READ keeps the snapshot pinned after a lock, so a
+    // plain read here would still return pre-lock values.
+    const locked = await tx.$queryRaw<
+      {
+        id: number;
+        orderNo: string;
+        status: OrderStatus;
+        total: number;
+        paidAmount: number;
+        customerPhone: string;
+      }[]
+    >`
+      SELECT id, orderNo, status, total, paidAmount, customerPhone
+      FROM \`Order\`
+      WHERE id = ${orderId}
+      FOR UPDATE
+    `;
+    const order = locked[0];
+    if (!order) {
+      return { blocked: { orderNo: `#${orderId}`, reason: "it no longer exists" } };
+    }
+
+    // A consignment exists at the courier, so the parcel is out in the real
+    // world and its webhooks still key on this order. Cancel/return it through
+    // the status flow instead — that is what those statuses are for.
+    const shipment = await tx.courierShipment.findUnique({
+      where: { orderId },
+      select: { consignmentId: true },
+    });
+    if (shipment) {
+      return {
+        blocked: {
+          orderNo: order.orderNo,
+          reason: `a courier consignment (${shipment.consignmentId}) exists for it`,
+        },
+      };
+    }
+
+    // Money that actually moved is never deleted — the payment rows are the
+    // shop's evidence in a gateway dispute and the basis of cash-flow reports.
+    // Locked for the same reason the order row is: a SUCCESS arriving mid-delete
+    // must not slip past this check.
+    const payments = await tx.$queryRaw<{ id: number; status: string }[]>`
+      SELECT id, status FROM Payment WHERE orderId = ${orderId} FOR UPDATE
+    `;
+    const settled = payments.some((p) => p.status === "SUCCESS" || p.status === "REFUNDED");
+    if (settled || order.paidAmount > 0) {
+      return {
+        blocked: { orderNo: order.orderNo, reason: "money was taken online for it" },
+      };
+    }
+
+    // Put back whatever this order is still holding. Self-selecting and
+    // idempotent (claims only orders with restockedAt AND fulfilledAt null), so
+    // a shipped order — whose units left the shelf for good — is a no-op here,
+    // as is an already-cancelled one.
+    await releaseOrder(tx, orderId);
+
+    const redemption = await tx.couponRedemption.findUnique({
+      where: { orderId },
+      select: { couponId: true },
+    });
+    if (redemption) {
+      // GREATEST floors it for the same reason releaseReservationRow floors
+      // `reserved`: a counter that somehow went wrong should heal toward zero,
+      // not wrap negative and hand out unlimited redemptions.
+      await tx.$executeRaw`
+        UPDATE Coupon SET timesUsed = GREATEST(timesUsed - 1, 0) WHERE id = ${redemption.couponId}
+      `;
+    }
+
+    // Only unsettled attempts can reach here — anything that moved money was
+    // refused above.
+    await tx.payment.deleteMany({ where: { orderId } });
+
+    // Items, status logs, notes, return requests and the coupon redemption go
+    // with it (Cascade); stock movements stay, orphaned by design.
+    await tx.order.delete({ where: { id: orderId } });
+
+    return {
+      deleted: {
+        orderNo: order.orderNo,
+        status: order.status,
+        total: order.total,
+        customerPhone: order.customerPhone,
+      },
+    };
+  });
+}
+
+/**
+ * Delete many orders. Each gets its own transaction, run one at a time like
+ * bulkUpdateStatus: a protected order is reported and skipped rather than
+ * rolling back the ones that were fine, and concurrent transactions can't
+ * deadlock against each other over the same stock rows.
+ */
+export async function deleteOrders(orderIds: number[]): Promise<DeleteOrdersResult> {
+  const deleted: DeletedOrderSummary[] = [];
+  const blocked: DeleteOrdersResult["blocked"] = [];
+
+  for (const id of orderIds) {
+    const result = await deleteOneOrder(id);
+    if (result.deleted) deleted.push(result.deleted);
+    if (result.blocked) blocked.push(result.blocked);
+  }
+
+  return { deleted, blocked };
+}

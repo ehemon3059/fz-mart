@@ -2,11 +2,13 @@ import Link from "next/link";
 import type { OrderStatus } from "@prisma/client";
 import { listOrders } from "@/server/orders/admin";
 import { getExistingFraudChecksByPhones } from "@/server/fraud";
+import { requireAdminUser } from "@/server/admin/guard";
 import { formatTaka } from "@/lib/money";
 import { ORDER_STATUS_LABELS } from "@/config/order-status";
 import RiskBadge from "@/components/admin/RiskBadge";
 import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
 import BulkOrderActions from "./BulkOrderActions";
+import DeleteOrderButton from "./DeleteOrderButton";
 
 const FILTERS: Array<OrderStatus | "ALL"> = [
   "ALL",
@@ -74,6 +76,11 @@ export default async function AdminOrdersPage({
   const riskByPhone = await getExistingFraudChecksByPhones(
     Array.from(new Set(result.orders.map((o) => o.customerPhone))),
   );
+
+  // The area layout has already established that this admin may work on orders;
+  // this reads the role only to decide whether the DELETE controls are drawn.
+  // Hiding them is cosmetic — deleteOrdersAction re-checks on the server.
+  const canDelete = (await requireAdminUser()).role === "OWNER";
 
   // Common base for links so the active search/date filters survive navigation.
   const base = { status: status ?? undefined, q, from, to };
@@ -159,7 +166,7 @@ export default async function AdminOrdersPage({
           : `Showing ${firstOnPage}–${lastOnPage} of ${result.total} orders`}
       </p>
 
-      <BulkOrderActions>
+      <BulkOrderActions canDelete={canDelete}>
         <div className="border rounded-lg bg-white overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left text-gray-500">
@@ -208,9 +215,14 @@ export default async function AdminOrdersPage({
                     {order.createdAt.toLocaleDateString("en-BD")}
                   </td>
                   <td className="px-4 py-2">
-                    <Link href={`/admin/orders/${order.id}`} className="underline">
-                      View
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link href={`/admin/orders/${order.id}`} className="underline">
+                        View
+                      </Link>
+                      {canDelete && (
+                        <DeleteOrderButton id={order.id} orderNo={order.orderNo} />
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

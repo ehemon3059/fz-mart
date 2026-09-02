@@ -372,7 +372,8 @@ export interface MovementFilter {
   pageSize?: number;
 }
 
-export const MOVEMENTS_PAGE_SIZE = 50;
+/** Rows per page in the movements ledger. */
+export const MOVEMENTS_PAGE_SIZE = 20;
 
 export interface MovementRow {
   id: number;

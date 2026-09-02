@@ -55,6 +55,112 @@ export async function listSuppliers(includeInactive = false) {
   });
 }
 
+/**
+ * A purchase order whose arrival is written into the stock ledger.
+ *
+ * Received units alone are NOT the test. A backfill records goods that were
+ * already on the shelf, so its lines are created already-received and it
+ * deliberately writes no StockMovement (see recordHistoricalPurchase) — those
+ * orders explain a cost, not an arrival, and nothing in the ledger points at
+ * them. Only a real receipt leaves PURCHASE movements naming the poNo as their
+ * reason, and that is the reference deleting must never orphan.
+ */
+const LEDGER_BACKED_PO = {
+  isBackfill: false,
+  lines: { some: { receivedQty: { gt: 0 } } },
+} satisfies Prisma.PurchaseOrderWhereInput;
+
+export const SUPPLIERS_PAGE_SIZE = 10;
+
+export interface SupplierRow {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  note: string | null;
+  leadTimeDays: number | null;
+  isActive: boolean;
+  /** How many purchase orders name this supplier. */
+  orderCount: number;
+  /**
+   * TRUE when at least one of those orders actually put stock through the
+   * ledger, which is the one thing that makes a supplier undeletable. Computed
+   * here rather than in the page so the list and `deleteSupplier` cannot drift
+   * into disagreeing about which rows offer the button.
+   */
+  ledgerLocked: boolean;
+}
+
+export interface SupplierListResult {
+  suppliers: SupplierRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}
+
+/**
+ * One page of suppliers for the admin list.
+ *
+ * `id` breaks the name tie so the page boundary is stable: two suppliers
+ * sharing a name (a real thing once the same shop has been entered twice)
+ * could otherwise swap places between page 1 and page 2 and hide a row.
+ *
+ * The requested page is clamped to what exists, because deleting the last row
+ * on the last page would otherwise leave the admin staring at an empty table
+ * with no hint that the list simply got shorter.
+ */
+export async function listSuppliersPage(
+  opts: { page?: number; pageSize?: number; includeInactive?: boolean } = {},
+): Promise<SupplierListResult> {
+  const pageSize = opts.pageSize ?? SUPPLIERS_PAGE_SIZE;
+  const where: Prisma.SupplierWhereInput =
+    opts.includeInactive === false ? { isActive: true } : {};
+
+  const total = await prisma.supplier.count({ where });
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, opts.page ?? 1), pageCount);
+
+  const rows = await prisma.supplier.findMany({
+    where,
+    orderBy: [{ isActive: "desc" }, { name: "asc" }, { id: "asc" }],
+    include: { _count: { select: { purchaseOrders: true } } },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
+
+  // Asked only about the rows actually on screen, and only about those with
+  // orders at all: this is the expensive question, and answering it for every
+  // supplier in the shop in order to render ten of them is waste.
+  const ids = rows.filter((r) => r._count.purchaseOrders > 0).map((r) => r.id);
+  const locked = ids.length
+    ? await prisma.purchaseOrder.findMany({
+        where: { supplierId: { in: ids }, ...LEDGER_BACKED_PO },
+        select: { supplierId: true },
+        distinct: ["supplierId"],
+      })
+    : [];
+  const lockedIds = new Set(locked.map((po) => po.supplierId));
+
+  return {
+    suppliers: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      phone: r.phone,
+      email: r.email,
+      note: r.note,
+      leadTimeDays: r.leadTimeDays,
+      isActive: r.isActive,
+      orderCount: r._count.purchaseOrders,
+      ledgerLocked: lockedIds.has(r.id),
+    })),
+    total,
+    page,
+    pageSize,
+    pageCount,
+  };
+}
+
 export async function getSupplier(id: number) {
   return prisma.supplier.findUnique({ where: { id } });
 }
@@ -77,19 +183,66 @@ export async function saveSupplier(id: number | null, input: SupplierInput) {
     : prisma.supplier.create({ data });
 }
 
+export interface SupplierDeletion {
+  name: string;
+  /** Purchase orders removed along with the supplier. */
+  deletedOrders: number;
+}
+
 /**
- * Delete a supplier, but only while nothing references it. A supplier with
- * purchase orders is history — deactivate it instead, so the POs keep their
- * attribution.
+ * Delete a supplier, and with it the paperwork only it explains.
+ *
+ * The old rule was "any purchase order at all blocks this", which in practice
+ * meant a supplier became permanently undeletable the moment someone saved a
+ * draft order against it — including a test row typed in to try the screen
+ * out. The real constraint is narrower: PURCHASE movements name their order's
+ * poNo as the reason stock arrived, so deleting a received order would leave
+ * the ledger explaining goods on the shelf with paperwork that no longer
+ * exists. That, and only that, is refused here.
+ *
+ * Everything else goes with the supplier: drafts, orders placed but never
+ * delivered, cancelled ones, and backfills, which never moved stock by design.
+ * Their lines and payment history cascade, which is right precisely because an
+ * order that delivered nothing and is being deleted was a mistake.
+ *
+ * A supplier that IS ledger-backed keeps the honest answer it always had:
+ * deactivate it, and it holds on to its history while dropping out of every
+ * picker.
  */
-export async function deleteSupplier(id: number): Promise<void> {
-  const count = await prisma.purchaseOrder.count({ where: { supplierId: id } });
-  if (count > 0) {
+export async function deleteSupplier(id: number): Promise<SupplierDeletion> {
+  const supplier = await prisma.supplier.findUnique({
+    where: { id },
+    select: { id: true, name: true },
+  });
+  if (!supplier) throw new PurchasingError("That supplier no longer exists.");
+
+  // Four, so the message can name three and still say there are more.
+  const blocking = await prisma.purchaseOrder.findMany({
+    where: { supplierId: id, ...LEDGER_BACKED_PO },
+    select: { poNo: true },
+    orderBy: { id: "asc" },
+    take: 4,
+  });
+
+  if (blocking.length > 0) {
+    const shown = blocking.slice(0, 3).map((po) => po.poNo).join(", ");
+    const more = blocking.length > 3 ? " and others" : "";
     throw new PurchasingError(
-      `This supplier has ${count} purchase order(s). Deactivate it instead of deleting, so those orders keep their supplier.`,
+      `${supplier.name} has received stock on ${shown}${more}. The inventory ledger names ` +
+        `those orders as the reason those goods are on the shelf, so this supplier can only be ` +
+        `deactivated, not deleted.`,
     );
   }
-  await prisma.supplier.delete({ where: { id } });
+
+  // Explicit rather than left to a cascade: PurchaseOrder.supplierId is
+  // Restrict on purpose, so removing a supplier can never be a quiet way to
+  // erase orders. Here it is the stated intent, and the count goes into the
+  // audit log so the deletion records how much paperwork went with it.
+  return prisma.$transaction(async (tx) => {
+    const removed = await tx.purchaseOrder.deleteMany({ where: { supplierId: id } });
+    await tx.supplier.delete({ where: { id } });
+    return { name: supplier.name, deletedOrders: removed.count };
+  }, TX_OPTIONS);
 }
 
 // ── Purchase orders ─────────────────────────────────────────────────────────
@@ -1007,8 +1160,16 @@ export interface SupplierBalance {
  * arrive. Drafts ARE included: an order you have written but not yet placed is
  * money you are about to commit, and hiding it makes the figure optimistic.
  */
-export async function getSupplierBalances(): Promise<SupplierBalance[]> {
+export async function getSupplierBalances(
+  supplierIds?: number[],
+): Promise<SupplierBalance[]> {
+  // Scoped when the caller only needs the rows it is rendering. Every order,
+  // line and payment of every supplier is a lot of reading to answer one
+  // column of a ten-row page.
+  if (supplierIds && supplierIds.length === 0) return [];
+
   const suppliers = await prisma.supplier.findMany({
+    where: supplierIds ? { id: { in: supplierIds } } : {},
     select: {
       id: true,
       name: true,

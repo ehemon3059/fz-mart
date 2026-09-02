@@ -7,6 +7,7 @@ const PATHS: Record<string, string> = {
   externalLink: "M14 4h6v6 M20 4 11 13 M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6",
   arrowRight:   "M5 12h14 M13 6l6 6-6 6",
   chevronRight: "M9 6l6 6-6 6",
+  chevronLeft:  "M15 6l-6 6 6 6",
   arrowLeft:    "M19 12H5 M11 18l-6-6 6-6",
   file:     "M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z M14 3v5h5",
   eye:      "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",

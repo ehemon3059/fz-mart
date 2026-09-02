@@ -6,12 +6,13 @@ import {
   updateOrderStatus,
   addOrderNote,
   bulkUpdateStatus,
+  deleteOrders,
   updateOrderFinancials,
   InvalidTransitionError,
 } from "@/server/orders/admin";
-import { requirePermission } from "@/server/admin/guard";
+import { requireOwner, requirePermission } from "@/server/admin/guard";
 import { logActivity } from "@/server/admin/audit";
-import { takaToPaisa } from "@/lib/money";
+import { formatTaka, takaToPaisa } from "@/lib/money";
 import { enqueueSmsJob } from "@/jobs/enqueue";
 import { markPaymentRefunded, PaymentFlowError } from "@/server/payments";
 
@@ -169,4 +170,49 @@ export async function createOrderNote(
 
   revalidatePath(`/admin/orders/${orderId}`);
   return {};
+}
+
+export interface DeleteOrdersActionResult extends ActionResult {
+  deleted?: number;
+  /** Orders that were refused, with the reason, so the admin sees why. */
+  blocked?: { orderNo: string; reason: string }[];
+}
+
+/**
+ * Permanently delete the selected orders. Serves both the per-row Delete and
+ * the bulk one — a single delete is just a batch of one, so there is exactly
+ * one guard and one audit path.
+ *
+ * OWNER-only, unlike every other action on this page: an order carries revenue,
+ * COGS and customer history that no other screen can rebuild once the row is
+ * gone, so erasing one is an owner decision, not front-line order work. Staff
+ * still have CANCELLED for orders that fell through.
+ */
+export async function deleteOrdersAction(
+  orderIds: number[],
+): Promise<DeleteOrdersActionResult> {
+  const admin = await requireOwner();
+
+  if (orderIds.length === 0) {
+    return { error: "No orders selected." };
+  }
+
+  const { deleted, blocked } = await deleteOrders(orderIds);
+
+  // Written per order, and deliberately verbose: the row is gone, so this line
+  // is the only surviving record that the order ever existed.
+  for (const order of deleted) {
+    await logActivity({
+      adminId: admin.id,
+      actorName: admin.username,
+      action: "order.delete",
+      detail: `Order ${order.orderNo} — ${order.status}, ${formatTaka(order.total)}, ${order.customerPhone} — permanently deleted`,
+    });
+  }
+
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin/orders/cancelled");
+  // Deleting an order removes it from the P&L the finance report aggregates.
+  revalidatePath("/admin/reports/finance");
+  return { deleted: deleted.length, blocked };
 }
