@@ -92,6 +92,10 @@ export interface LandedCostInfo {
   poNo: string;
   /** The goods have not arrived yet, so the figure can still move. */
   isEstimate: boolean;
+  /** Units of this option the order has taken in so far. */
+  receivedQty: number;
+  /** Units the order asked for, so a part-delivery reads as one. */
+  orderedQty: number;
 }
 
 export interface VariantRow {

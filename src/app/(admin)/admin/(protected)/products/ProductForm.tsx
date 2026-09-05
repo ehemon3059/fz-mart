@@ -3,10 +3,20 @@
 /**
  * The product create/edit form.
  *
- * Seven steps, in the order a product is actually built: what it is → how it's
- * sold → photos → options & pricing → sizing → content → visibility. The old
- * "Single price / Variants" toggle is gone; selling type is the second step and
- * everything downstream follows it.
+ * In the order a product is actually built: what it is → how it's sold →
+ * (sizing OR photos OR neither) → options & pricing → content, with visibility
+ * and the live preview in the right rail. The old "Single price / Variants"
+ * toggle is gone; selling type is the second step and everything downstream
+ * follows it — including what step three is, and whether there is one:
+ *
+ *   sizes   → Sizing. Photos are per-colour, set on each row in options.
+ *   colors  → neither. Each colour carries its own photo, same as above, and
+ *             there are no sizes to declare — so this type has four steps.
+ *   single  → Photos. One product, one gallery, nothing to cross.
+ *
+ * A shared gallery only makes sense when there are no options to own the
+ * pictures. The steps after the third close the gap when it is absent, so the
+ * numbering an admin reads never skips (see `stepNo`).
  *
  * This file owns the form STATE and the submit payload; the pieces it renders
  * live in ./form (see form/types.ts for the exact payload contract, which must
@@ -72,6 +82,14 @@ interface Props {
    * re-keys it below. Absent on the create form, which has no history yet.
    */
   landedCosts?: Record<number, LandedCostInfo>;
+  /**
+   * TRUE when the admin arrived from a purchase order's "Finish it". The row
+   * already exists — stock was received against it — but to the admin this is
+   * the first time the product is being written, so the page calls itself a
+   * creation rather than an edit. Only the wording changes; every field, guard
+   * and submit path is the ordinary edit flow underneath.
+   */
+  fromSupplier?: boolean;
 }
 
 export default function ProductForm({
@@ -79,11 +97,12 @@ export default function ProductForm({
   sizeGuides = [],
   product,
   landedCosts,
+  fromSupplier = false,
 }: Props) {
   const isEdit = !!product;
   // The state this form opened with. Autosave compares against it so an
   // untouched form never leaves a draft behind.
-  const baseline = useMemo(() => initialFromProduct(product), [product]);
+  const baseline = useMemo(() => initialFromProduct(product, landedCosts), [product, landedCosts]);
   const [form, setForm] = useState<FormState>(baseline);
   const [errors, setErrors] = useState<Record<string, string>>({});
   // Target gross margin, as typed. Held outside `form` because it is an INPUT
@@ -107,6 +126,21 @@ export default function ProductForm({
   const set = <K extends keyof FormState>(key: K, val: FormState[K]) => setForm((f) => ({ ...f, [key]: val }));
 
   const hasOptions = form.sellingType !== "single";
+
+  /**
+   * Step 3 is whichever of Sizing and Photos this selling type calls for —
+   * sizes gets the size guide, a single item gets the shared gallery, and
+   * selling by colour gets neither, because each colour carries its own photo
+   * on its own row in the options step.
+   *
+   * So the form is five steps for two of the three types and four for the
+   * third. The numbers after step 3 have to close that gap, or an admin
+   * selling by colour reads a form that counts 1, 2, 4, 5 and hunts for the
+   * step they think they skipped.
+   */
+  const hasStepThree = form.sellingType !== "colors";
+  /** Position of a step that falls AFTER the conditional third one. */
+  const stepNo = (n: number) => (hasStepThree ? n : n - 1);
 
   /**
    * Options whose stock is already in the ledger — everything this product had
@@ -585,8 +619,10 @@ export default function ProductForm({
           Products
         </Link>
         <Icon name="chevronRight" size={13} className="text-stone-300" />
-        <span className="text-stone-800">{isEdit ? "Edit" : "New"}</span>
-        {isEdit && form.name && (
+        <span className="text-stone-800">
+          {fromSupplier ? "From supplier" : isEdit ? "Edit" : "New"}
+        </span>
+        {isEdit && !fromSupplier && form.name && (
           <>
             <Icon name="chevronRight" size={13} className="text-stone-300" />
             <span className="truncate max-w-[260px] text-stone-400">{form.name}</span>
@@ -596,9 +632,19 @@ export default function ProductForm({
 
       <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">{isEdit ? "Edit Product" : "New Product"}</h1>
+          <h1 className="text-[26px] font-extrabold tracking-tight text-stone-900">
+            {fromSupplier
+              ? "Create New Product from Supplier"
+              : isEdit
+                ? "Edit Product"
+                : "New Product"}
+          </h1>
           <p className="mt-1 text-[14px] text-stone-500">
-            {isEdit ? "Update product details, pricing, and inventory." : "Add a new product to your storefront catalog."}
+            {fromSupplier
+              ? "Set the details and price for the units you just received, then put them on sale."
+              : isEdit
+                ? "Update product details, pricing, and inventory."
+                : "Add a new product to your storefront catalog."}
           </p>
         </div>
         <div className="hidden items-center gap-2 lg:flex">
@@ -736,7 +782,7 @@ export default function ProductForm({
 
           {ready && (
           <>
-          {/* ── 3. Sizing ───────────────────────────────────── */}
+          {/* ── 3. Sizing — selling by size only ─────────────── */}
           {form.sellingType === "sizes" && (
             <Card
               icon="specGrid"
@@ -757,15 +803,18 @@ export default function ProductForm({
             </Card>
           )}
 
-          {/* ── 4. Photos ───────────────────────────────────── */}
+          {/* ── 3. Photos — single items only ────────────────── */}
+          {/* Single-item products only. As soon as a product has options, every
+              photo belongs to one of them and is set on that option's own row in
+              step 4 — a shared gallery here would be a second, competing place to
+              put pictures, answering to no particular option. The images already
+              on such a product stay in `form.images` and are still submitted:
+              this hides the editor, it does not clear the field. */}
+          {!hasOptions && (
           <Card
             icon="image"
-            title={`${form.sellingType === "sizes" ? "4" : "3"} · Photos`}
-            hint={
-              hasOptions
-                ? "The shared gallery. Each colour also carries its own photo in the next step."
-                : "Shown on the product page and in listings."
-            }
+            title="3 · Photos"
+            hint="Shown on the product page and in listings."
           >
             <GalleryGrid
               images={form.images}
@@ -776,11 +825,143 @@ export default function ProductForm({
               onMakePrimary={makePrimary}
             />
           </Card>
+          )}
+          </>
+          )}
+        </div>
 
-          {/* ── 5. Options & pricing ────────────────────────── */}
+        {/* ── right rail ── */}
+        {/* Gated with the steps on the left: these are product fields too, and
+            a live preview of a product with no category yet previews nothing. */}
+        <div className="space-y-6 lg:sticky lg:top-6 self-start">
+          {ready && (
+          <>
+          <Card icon="eye" title="Live preview" hint="How customers will see it.">
+            <LivePreview
+              form={form}
+              basePricePaisa={(() => {
+                const p = submitPriceTaka();
+                return p === "" ? "" : Math.round(Number(p) * 100);
+              })()}
+              fromPrice={hasOptions}
+            />
+            {hasOptions && form.variants.length > 0 && (
+              <p className="mt-2.5 text-[12px] text-stone-400">
+                {optionSummary.count} option{optionSummary.count === 1 ? "" : "s"} ·{" "}
+                {optionSummary.totalStock} in stock
+                {optionSummary.missingPrice > 0 && (
+                  <span className="font-semibold text-red-600"> · {optionSummary.missingPrice} unpriced</span>
+                )}
+              </p>
+            )}
+          </Card>
+
+          <Card icon="eye" title="Visibility">
+            <div className="space-y-4">
+              {/* Three states, not a switch: "not finished yet" and "finished
+                  but withdrawn" need different answers, and a draft created
+                  from a purchase order may already have stock against it. */}
+              <div>
+                <div className="grid grid-cols-3 gap-1 rounded-lg bg-stone-100 p-1">
+                  {(
+                    [
+                      ["DRAFT", "Draft"],
+                      ["ACTIVE", "Active"],
+                      ["INACTIVE", "Hidden"],
+                    ] as const
+                  ).map(([value, text]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => set("status", value)}
+                      className={[
+                        "rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition",
+                        form.status === value
+                          ? "bg-white text-stone-900 shadow-sm"
+                          : "text-stone-500 hover:text-stone-700",
+                      ].join(" ")}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[12px] text-stone-500">
+                  {form.status === "ACTIVE"
+                    ? "Visible on the storefront."
+                    : form.status === "DRAFT"
+                      ? "Not finished — needs a photo and a price before it can go live."
+                      : "Finished, but hidden from the catalog."}
+                </p>
+                <ErrorText>{errors.status}</ErrorText>
+              </div>
+              <div className="border-t border-stone-100" />
+              <Toggle
+                checked={form.isFeatured}
+                onChange={(v) => set("isFeatured", v)}
+                icon="star"
+                label="Featured on homepage"
+                sublabel="Highlight in homepage carousels"
+              />
+            </div>
+          </Card>
+
+          <Card icon="tag" title="Promo badge">
+            <Label hint="optional · max 20 chars">Badge label</Label>
+            <FieldShell>
+              <input
+                type="text"
+                value={form.promoBadge}
+                onChange={(e) => set("promoBadge", e.target.value)}
+                maxLength={20}
+                placeholder='e.g. "Best Seller", "New"'
+                className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+              />
+            </FieldShell>
+            <p className="mt-2 text-[12px] text-stone-400">Appears as a colored ribbon on the product card.</p>
+          </Card>
+
+          <Card icon="tag" title="SEO (optional)">
+            <Label hint="optional · defaults to product name">Meta title</Label>
+            <FieldShell>
+              <input
+                type="text"
+                value={form.metaTitle}
+                onChange={(e) => set("metaTitle", e.target.value)}
+                maxLength={70}
+                placeholder="Custom search-engine title"
+                className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+              />
+            </FieldShell>
+            <Label hint="optional · ~160 chars · worth writing">Meta description</Label>
+            <FieldShell>
+              <textarea
+                value={form.metaDescription}
+                onChange={(e) => set("metaDescription", e.target.value)}
+                maxLength={200}
+                rows={3}
+                placeholder="Short summary shown in Google & social previews"
+                className="w-full resize-y bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
+              />
+            </FieldShell>
+            <p className="mt-2 text-[12px] text-stone-400">
+              Leave blank and Google falls back to a generic line built from the product name.
+            </p>
+          </Card>
+          </>
+          )}
+        </div>
+        {/* ── Options & pricing (step 4, or 3 selling by colour) ── */}
+        {/* Spans both grid columns: the size×colour matrix is a wide
+            table, and boxing it into the left column forced a horizontal
+            scroll on the one step where every row has to be compared.
+            Still gated on `ready` like the steps it used to sit among —
+            pricing options before a category is chosen prices nothing. */}
+        {ready && (
+        <div className="lg:col-span-2 min-w-0">
+          {/* ── Options & pricing ───────────────────────────── */}
           <Card
             icon="grid"
-            title={`${form.sellingType === "sizes" ? "5" : "4"} · Options & pricing`}
+            title={`${stepNo(4)} · Options & pricing`}
             hint={
               form.sellingType === "single"
                 ? "One price and one stock for the whole product."
@@ -1193,11 +1374,18 @@ export default function ProductForm({
               </div>
             </div>
           </Card>
-
-          {/* ── 6. Content ──────────────────────────────────── */}
+        </div>
+        )}
+        {/* ── Content — full width, under options & pricing ── */}
+        {/* Also spans both columns so it sits directly beneath options &
+            pricing; left in the column it would jump back up beside the
+            right rail and break the 1→6 reading order. */}
+        {ready && (
+        <div className="lg:col-span-2 min-w-0">
+          {/* ── Content ─────────────────────────────────────── */}
           <Card
             icon="file"
-            title={`${form.sellingType === "sizes" ? "6" : "5"} · Content`}
+            title={`${stepNo(5)} · Content`}
             hint="The collapsible panels under “Features & Specs” on the product page."
           >
             <AccordionBuilder
@@ -1205,130 +1393,8 @@ export default function ProductForm({
               onChange={(rows) => set("accordionSections", rows)}
             />
           </Card>
-          </>
-          )}
         </div>
-
-        {/* ── right rail ── */}
-        {/* Gated with the steps on the left: these are product fields too, and
-            a live preview of a product with no category yet previews nothing. */}
-        <div className="space-y-6 lg:sticky lg:top-6 self-start">
-          {ready && (
-          <>
-          <Card icon="eye" title="Live preview" hint="How customers will see it.">
-            <LivePreview
-              form={form}
-              basePricePaisa={(() => {
-                const p = submitPriceTaka();
-                return p === "" ? "" : Math.round(Number(p) * 100);
-              })()}
-              fromPrice={hasOptions}
-            />
-            {hasOptions && form.variants.length > 0 && (
-              <p className="mt-2.5 text-[12px] text-stone-400">
-                {optionSummary.count} option{optionSummary.count === 1 ? "" : "s"} ·{" "}
-                {optionSummary.totalStock} in stock
-                {optionSummary.missingPrice > 0 && (
-                  <span className="font-semibold text-red-600"> · {optionSummary.missingPrice} unpriced</span>
-                )}
-              </p>
-            )}
-          </Card>
-
-          <Card icon="eye" title="Visibility">
-            <div className="space-y-4">
-              {/* Three states, not a switch: "not finished yet" and "finished
-                  but withdrawn" need different answers, and a draft created
-                  from a purchase order may already have stock against it. */}
-              <div>
-                <div className="grid grid-cols-3 gap-1 rounded-lg bg-stone-100 p-1">
-                  {(
-                    [
-                      ["DRAFT", "Draft"],
-                      ["ACTIVE", "Active"],
-                      ["INACTIVE", "Hidden"],
-                    ] as const
-                  ).map(([value, text]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => set("status", value)}
-                      className={[
-                        "rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition",
-                        form.status === value
-                          ? "bg-white text-stone-900 shadow-sm"
-                          : "text-stone-500 hover:text-stone-700",
-                      ].join(" ")}
-                    >
-                      {text}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-[12px] text-stone-500">
-                  {form.status === "ACTIVE"
-                    ? "Visible on the storefront."
-                    : form.status === "DRAFT"
-                      ? "Not finished — needs a photo and a price before it can go live."
-                      : "Finished, but hidden from the catalog."}
-                </p>
-                <ErrorText>{errors.status}</ErrorText>
-              </div>
-              <div className="border-t border-stone-100" />
-              <Toggle
-                checked={form.isFeatured}
-                onChange={(v) => set("isFeatured", v)}
-                icon="star"
-                label="Featured on homepage"
-                sublabel="Highlight in homepage carousels"
-              />
-            </div>
-          </Card>
-
-          <Card icon="tag" title="Promo badge">
-            <Label hint="optional · max 20 chars">Badge label</Label>
-            <FieldShell>
-              <input
-                type="text"
-                value={form.promoBadge}
-                onChange={(e) => set("promoBadge", e.target.value)}
-                maxLength={20}
-                placeholder='e.g. "Best Seller", "New"'
-                className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-              />
-            </FieldShell>
-            <p className="mt-2 text-[12px] text-stone-400">Appears as a colored ribbon on the product card.</p>
-          </Card>
-
-          <Card icon="tag" title="SEO (optional)">
-            <Label hint="optional · defaults to product name">Meta title</Label>
-            <FieldShell>
-              <input
-                type="text"
-                value={form.metaTitle}
-                onChange={(e) => set("metaTitle", e.target.value)}
-                maxLength={70}
-                placeholder="Custom search-engine title"
-                className="w-full bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-              />
-            </FieldShell>
-            <Label hint="optional · ~160 chars · worth writing">Meta description</Label>
-            <FieldShell>
-              <textarea
-                value={form.metaDescription}
-                onChange={(e) => set("metaDescription", e.target.value)}
-                maxLength={200}
-                rows={3}
-                placeholder="Short summary shown in Google & social previews"
-                className="w-full resize-y bg-transparent px-3 py-2.5 text-[14px] text-stone-800 outline-none placeholder:text-stone-400"
-              />
-            </FieldShell>
-            <p className="mt-2 text-[12px] text-stone-400">
-              Leave blank and Google falls back to a generic line built from the product name.
-            </p>
-          </Card>
-          </>
-          )}
-        </div>
+        )}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-30 flex items-center gap-2 border-t border-stone-200 bg-white p-3 shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.08)] lg:hidden">

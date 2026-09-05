@@ -284,8 +284,12 @@ export default async function PurchaseOrderDetailPage({
                 </span>
                 <span className="flex items-center gap-3">
                   <span className="text-[12.5px] text-stone-600">Needs {row.missing.join(", ")}</span>
+                  {/* ?po= carries the paperwork across. The product form reads
+                      it to show what this order paid for these units, so the
+                      price is set against the cost that is already on screen
+                      here rather than from memory. */}
                   <Link
-                    href={`/admin/products/${row.productId}/edit`}
+                    href={`/admin/products/${row.productId}/edit?po=${po.id}`}
                     className="text-[12.5px] font-semibold text-accent underline-offset-2 hover:underline"
                   >
                     Finish it

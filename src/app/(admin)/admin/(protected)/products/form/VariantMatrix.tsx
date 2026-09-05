@@ -11,7 +11,7 @@
 
 import { Icon } from "@/components/icons";
 import { indexRows, rowKey } from "./variant-utils";
-import type { ColorRow, VariantRow } from "./types";
+import type { ColorRow, LandedCostInfo, VariantRow } from "./types";
 
 interface Props {
   colors: ColorRow[];
@@ -19,6 +19,8 @@ interface Props {
   rows: VariantRow[];
   /** Row keys whose stock is owned by the ledger and so is read-only here. */
   lockedStockKeys: Set<string>;
+  /** Landed cost per row key, from the purchase orders. Read-only throughout. */
+  landedCosts: Map<string, LandedCostInfo>;
   onChangeCell: (color: string, size: string, patch: Partial<VariantRow>) => void;
   onToggleCell: (color: string, size: string) => void;
 }
@@ -28,6 +30,7 @@ export default function VariantMatrix({
   sizes,
   rows,
   lockedStockKeys,
+  landedCosts,
   onChangeCell,
   onToggleCell,
 }: Props) {
@@ -84,6 +87,7 @@ export default function VariantMatrix({
 
               {cols.map((s) => {
                 const row = byKey.get(rowKey(c?.name ?? "", s));
+                const landed = landedCosts.get(rowKey(c?.name ?? "", s));
                 return (
                   <td key={s || "_"} className="border-t border-stone-100 px-1 py-2">
                     {row ? (
@@ -136,6 +140,41 @@ export default function VariantMatrix({
                             />
                           )}
                         </label>
+                        {/* What it cost to get here — the number the price is
+                            set from. A reading, never an input: it is computed
+                            when goods are received. Absent for a combination no
+                            purchase order covers, where a blank says more than
+                            a dash would. */}
+                        {landed && (
+                          <span
+                            title={
+                              landed.isEstimate
+                                ? `Estimated from ${landed.poNo} — confirmed when you receive the goods.`
+                                : `Landed cost from ${landed.poNo} — supplier price plus its share of the shipment costs.`
+                            }
+                            className="mt-0.5 flex items-center gap-1 border-t border-stone-100 pt-0.5 text-[11px] tabular-nums text-stone-400"
+                          >
+                            <Icon name="tag" size={10} className="shrink-0 text-stone-300" />
+                            ৳{(landed.landed / 100).toLocaleString("en-BD", { maximumFractionDigits: 2 })}
+                            {landed.isEstimate && "*"}
+                          </span>
+                        )}
+                        {/* How many of these actually arrived on that order.
+                            The stock line above is the ledger's running total
+                            across every source; this is what THIS purchase put
+                            there, which is what the admin was just looking at
+                            on the order. Suppressed at zero — an order still in
+                            transit says so through the estimate marker. */}
+                        {landed && landed.receivedQty > 0 && (
+                          <span
+                            title={`${landed.receivedQty} of ${landed.orderedQty} received on ${landed.poNo}`}
+                            className="mt-0.5 flex items-center gap-1 text-[11px] tabular-nums text-emerald-700"
+                          >
+                            <Icon name="check" size={10} className="shrink-0 text-emerald-600" />
+                            {landed.receivedQty} received
+                            {landed.receivedQty < landed.orderedQty && ` / ${landed.orderedQty}`}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <button

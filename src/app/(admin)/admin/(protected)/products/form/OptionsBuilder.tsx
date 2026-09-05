@@ -73,7 +73,16 @@ export default function OptionsBuilder({
   onRowsChange,
   onBaseSkuChange,
 }: Props) {
-  const [view, setView] = useState<"matrix" | "list">("matrix");
+  /**
+   * Which view opens. An option that already has a landed cost is an option
+   * somebody bought, and the product is here to be PRICED — a job done by
+   * reading what each option cost and how many arrived, which only the list
+   * shows. That is the whole of the "Finish it" journey out of a purchase
+   * order, so it should not start behind a toggle. The matrix stays the
+   * default for authoring a fresh grid, where no cost exists yet and filling
+   * cells in bulk is the actual work.
+   */
+  const [view, setView] = useState<"matrix" | "list">(landedCosts.size > 0 ? "list" : "matrix");
   const [bulkProfit, setBulkProfit] = useState("");
 
   const withSizes = sellingType === "sizes";
@@ -88,14 +97,35 @@ export default function OptionsBuilder({
   /** Colours that can produce rows — an unnamed one is still being typed. */
   const namedColors = useMemo(() => colors.filter((c) => c.name.trim()), [colors]);
 
-  /** Rebuild the matrix from the current lists, keeping what's already entered. */
-  const sync = (nextColors: ColorRow[], nextSizes: string[], base = rows) =>
+  /**
+   * Rebuild the matrix from the current lists, keeping what's already entered.
+   *
+   * `prevColors` is the colour list as it stood before this edit, which is what
+   * tells `generateRows` which values are NEW and so may seed combinations that
+   * don't exist yet. It defaults to the list currently on screen — right for
+   * every edit except naming a blank colour, which is an addition. A rename
+   * passes the new list instead, so the renamed colour is not mistaken for one.
+   *
+   * The empty string stands in for an axis the product doesn't use, so a
+   * colour-only product doesn't read its single blank "size" as new on every
+   * rebuild and regenerate rows the admin deleted.
+   */
+  const sync = (
+    nextColors: ColorRow[],
+    nextSizes: string[],
+    base = rows,
+    prevColors: string[] = colors.map((c) => c.name),
+  ) =>
     onRowsChange(
       generateRows({
         colors: nextColors.filter((c) => c.name.trim()),
         sizes: withSizes ? nextSizes : [],
         existing: base,
         baseSku,
+        previous: {
+          colors: prevColors.some((c) => c.trim()) ? prevColors : [""],
+          sizes: withSizes && sizes.length ? sizes : [""],
+        },
       }),
     );
 
@@ -105,10 +135,13 @@ export default function OptionsBuilder({
     const next = colors.map((c, i) => (i === idx ? { ...c, ...patch } : c));
     onColorsChange(next);
     // A rename must MOVE the rows, not orphan them: regenerating on a changed
-    // name would drop the old rows and hand back blanks.
+    // name would drop the old rows and hand back blanks. Typing into a BLANK
+    // colour is not a rename but an addition — it owns no rows to move, and it
+    // is the one edit that has to seed a row for every size.
     if (patch.name !== undefined && before.name !== patch.name) {
-      const renamed = rows.map((r) => (r.color === before.name ? { ...r, color: patch.name! } : r));
-      sync(next, sizes, renamed);
+      const from = before.name.trim();
+      const renamed = from ? rows.map((r) => (r.color === before.name ? { ...r, color: patch.name! } : r)) : rows;
+      sync(next, sizes, renamed, from ? next.map((c) => c.name) : undefined);
       return;
     }
     if (patch.hexCode !== undefined || patch.imageUrl !== undefined) sync(next, sizes);
@@ -340,6 +373,7 @@ export default function OptionsBuilder({
               sizes={withSizes ? sizes : []}
               rows={rows}
               lockedStockKeys={lockedStockKeys}
+              landedCosts={landedCosts}
               onChangeCell={changeCell}
               onToggleCell={toggleCell}
             />

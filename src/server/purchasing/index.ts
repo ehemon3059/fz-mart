@@ -752,6 +752,10 @@ export interface VariantLandedCost {
    * reason — a number that can still change must not look settled.
    */
   isEstimate: boolean;
+  /** Units of this option the order has taken in so far. */
+  receivedQty: number;
+  /** Units the order asked for, so a part-delivery reads as one. */
+  orderedQty: number;
 }
 
 /**
@@ -810,6 +814,8 @@ export async function getVariantLandedCosts(
         poId: po.id,
         poNo: po.poNo,
         isEstimate: line.receivedQty === 0,
+        receivedQty: line.receivedQty,
+        orderedQty: line.quantity,
       });
     }
   }
@@ -1020,6 +1026,128 @@ export interface PaymentInput {
   method?: string | null;
   note?: string | null;
   actorName: string;
+}
+
+/**
+ * The order an admin was looking at when they clicked through to finish a
+ * product, summarised for the banner at the top of the product form.
+ *
+ * Scoped to ONE order rather than "the latest", because the whole point is to
+ * carry across the paperwork the admin just had on screen. The productId is
+ * part of the lookup, not a filter applied afterwards: an order that never
+ * carried this product has nothing to say about it and must come back null
+ * rather than showing another product's freight.
+ */
+/** One purchased option, as it was written on the order. */
+export interface FinishingSourceLine {
+  /** The option bought — a SNAPSHOT off the line, not the variant's name now. */
+  label: string;
+  quantity: number;
+  receivedQty: number;
+  /** Paisa — what the supplier charged per unit, before overheads. */
+  unitCost: number;
+  /** Paisa — unitCost × quantity. */
+  lineTotal: number;
+  /** Paisa — unitCost plus this line's share of the shipment overheads. */
+  landed: number;
+}
+
+export interface FinishingSource {
+  poId: number;
+  poNo: string;
+  supplierName: string;
+  /** The lines for THIS product, in the order they were written. */
+  lines: FinishingSourceLine[];
+  /** Paisa — the lines for THIS product only. */
+  goodsCost: number;
+  /**
+   * Paisa — what THIS product's units actually cost to get onto the shelf:
+   * its goods cost plus only its own share of the overheads. Not
+   * `goodsCost + extrasTotal`, which would charge one product for freight that
+   * the whole shipment carried.
+   */
+  landedTotal: number;
+  /** Paisa — the shipment costs, which belong to the whole order. */
+  extras: { label: string; amount: number }[];
+  extrasTotal: number;
+  /** TRUE when the order carried other products that share the overheads. */
+  sharedShipment: boolean;
+  orderedQty: number;
+  receivedQty: number;
+}
+
+export async function getFinishingSource(
+  poId: number,
+  productId: number,
+): Promise<FinishingSource | null> {
+  const po = await prisma.purchaseOrder.findFirst({
+    where: { id: poId, lines: { some: { productId } } },
+    select: {
+      id: true,
+      poNo: true,
+      shippingCost: true,
+      customsCost: true,
+      labourCost: true,
+      miscCost: true,
+      supplier: { select: { name: true } },
+      // EVERY line, not just this product's — same reason as
+      // getVariantLandedCosts: the overheads are apportioned across the whole
+      // order by value, so one line's share cannot be worked out without the
+      // order's total. The rows shown are narrowed below, after the maths.
+      lines: {
+        select: {
+          productId: true,
+          variantLabel: true,
+          productName: true,
+          quantity: true,
+          unitCost: true,
+          receivedQty: true,
+        },
+      },
+    },
+  });
+  if (!po) return null;
+
+  const orderValue = po.lines.reduce((sum, l) => sum + l.unitCost * l.quantity, 0);
+  const overhead = shipmentOverhead(po);
+  const mine = po.lines.filter((l) => l.productId === productId);
+
+  // Only the non-zero overheads are worth a row — a domestic order that paid
+  // labour and nothing else should read as one line, not four with three
+  // zeroes padding it out.
+  const extras = [
+    { label: "Freight", amount: po.shippingCost },
+    { label: "Customs / clearing", amount: po.customsCost },
+    { label: "Load / unload", amount: po.labourCost },
+    { label: "Miscellaneous", amount: po.miscCost },
+  ].filter((e) => e.amount > 0);
+
+  return {
+    poId: po.id,
+    poNo: po.poNo,
+    supplierName: po.supplier.name,
+    lines: mine.map((l) => ({
+      // The label written on the line, which is what the order shows. Falls
+      // back to the product name for an option-less line, so a simple product
+      // still gets a row rather than a blank one.
+      label: l.variantLabel || l.productName,
+      quantity: l.quantity,
+      receivedQty: l.receivedQty,
+      unitCost: l.unitCost,
+      lineTotal: l.unitCost * l.quantity,
+      landed: landedUnitCost(l, orderValue, overhead),
+    })),
+    goodsCost: mine.reduce((sum, l) => sum + l.unitCost * l.quantity, 0),
+    landedTotal: mine.reduce(
+      (sum, l) => sum + landedUnitCost(l, orderValue, overhead) * l.quantity,
+      0,
+    ),
+    extras,
+    extrasTotal: overhead,
+    sharedShipment: mine.length < po.lines.length,
+    orderedQty: mine.reduce((sum, l) => sum + l.quantity, 0),
+    receivedQty: mine.reduce((sum, l) => sum + l.receivedQty, 0),
+  };
 }
 
 /** What a purchase order costs in total: goods plus the overheads on top. */
